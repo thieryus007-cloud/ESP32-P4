@@ -50,7 +50,6 @@ static int json_get_event_id(cJSON *obj, const char *key)
     }
     if (cJSON_IsString(item) && item->valuestring) {
         const char *s = item->valuestring;
-        // trim basique
         while (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') {
             s++;
         }
@@ -72,6 +71,7 @@ void remote_event_adapter_init(event_bus_t *bus)
     memset(&s_pack_stats,  0, sizeof(s_pack_stats));
 
     // valeurs par défaut
+    s_batt_status.mqtt_ok        = false;  // sera piloté par MQTT status
     s_sys_status.wifi_connected   = false;
     s_sys_status.server_reachable = false;
     s_sys_status.storage_ok       = false;
@@ -127,19 +127,15 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     float energy_out_wh = json_get_number(data_obj, "energy_discharged_wh", 0.0f);
 
     // Heuristiques BMS/CAN proches de handleTelemetryUpdate()
-    // systemStatus.handleTelemetryUpdate:
-    //   - UART: OK si pack_voltage_v > 0, sinon WARNING
-    //   - CAN : OK si energy_* présents
     s_batt_status.bms_ok     = (pack_v > 0.0f);                                  // UART/BMS OK
     s_batt_status.can_ok     = (energy_in_wh > 0.0f || energy_out_wh > 0.0f);    // CAN énergisé
-    s_batt_status.mqtt_ok    = true;                                             // raffinement possible plus tard
+    // ⚠️ mqtt_ok N’EST PLUS TOUCHÉ ICI : il est piloté par remote_event_adapter_on_mqtt_status_json()
     s_batt_status.tinybms_ok = s_batt_status.bms_ok;
 
     // --- pack_stats_t : cellules + balancing ---
 
     memset(&s_pack_stats, 0, sizeof(s_pack_stats));
 
-    // Tableau des tensions cellules en mV (dashboard: voltagesMv = data.cell_voltage_mv)
     cJSON *cells_arr = cJSON_GetObjectItemCaseSensitive(data_obj, "cell_voltage_mv");
     if (cJSON_IsArray(cells_arr)) {
         int arr_size = cJSON_GetArraySize(cells_arr);
@@ -172,7 +168,6 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
             }
         }
 
-        // dashboard utilise aussi min_cell_mv / max_cell_mv : on priorise ces champs si présents
         float json_min = json_get_number(data_obj, "min_cell_mv", 0.0f);
         float json_max = json_get_number(data_obj, "max_cell_mv", 0.0f);
 
@@ -209,15 +204,13 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
         }
     }
 
-    // balancing_bits > 0 : équilibrage actif global (utile si tu veux un flag global)
     int balancing_bits = 0;
     cJSON *bal_bits = cJSON_GetObjectItemCaseSensitive(data_obj, "balancing_bits");
     if (cJSON_IsNumber(bal_bits)) {
         balancing_bits = bal_bits->valueint;
     }
-    (void) balancing_bits; // pour usage futur si besoin
+    (void) balancing_bits; // usage futur si besoin
 
-    // Seuils balancing → non fournis dans telemetry pour l’instant
     s_pack_stats.bal_start_mv = 0.0f;
     s_pack_stats.bal_stop_mv  = 0.0f;
 
@@ -225,14 +218,12 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
 
     // --- Publication des événements « propres » ---
 
-    // Batterie globale → Home + Pack + Power + Cells (infos pack)
     event_t evt_batt = {
         .type = EVENT_BATTERY_STATUS_UPDATED,
         .data = &s_batt_status,
     };
     event_bus_publish(s_bus, &evt_batt);
 
-    // Stats pack/cellules + balancing → Pack + Cells + Home (BAL)
     event_t evt_pack = {
         .type = EVENT_PACK_STATS_UPDATED,
         .data = &s_pack_stats,
@@ -271,88 +262,64 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
 
     int eventId = json_get_event_id(root, "event_id");
 
-    // Fallback : certains events peuvent porter directement has_error
     bool has_error_field = json_get_bool(root, "has_error", false);
 
-    // ------------------------------------------------------------------------
-    // 1) Alignement avec SystemStatus.handleEvent() pour WIFI / STORAGE
-    // ------------------------------------------------------------------------
+    // --- 1) WiFi / Storage : alignement SystemStatus.handleEvent() ---
     if (eventKey || (eventType &&
                      (!strcmp(eventType, "wifi") || !strcmp(eventType, "storage")))) {
 
-        // --- Mapping par event.key ---
         if (eventKey) {
             if (!strcmp(eventKey, "wifi_sta_start") ||
                 !strcmp(eventKey, "wifi_sta_connected")) {
-                // WIFI CONNECTING
                 s_sys_status.wifi_connected = false;
             } else if (!strcmp(eventKey, "wifi_sta_got_ip")) {
-                // WIFI OK
                 s_sys_status.wifi_connected = true;
             } else if (!strcmp(eventKey, "wifi_sta_disconnected") ||
                        !strcmp(eventKey, "wifi_sta_lost_ip") ||
                        !strcmp(eventKey, "wifi_ap_started")) {
-                // WIFI WARNING
                 s_sys_status.wifi_connected = false;
             } else if (!strcmp(eventKey, "wifi_ap_stopped") ||
                        !strcmp(eventKey, "wifi_ap_client_connected") ||
                        !strcmp(eventKey, "wifi_ap_client_disconnected")) {
-                // WIFI CONNECTING
                 s_sys_status.wifi_connected = false;
             } else if (!strcmp(eventKey, "storage_history_ready")) {
-                // STORAGE OK
                 s_sys_status.storage_ok = true;
-                // si aucune autre source d'erreur, on pourra relâcher ALM plus bas
             } else if (!strcmp(eventKey, "storage_history_unavailable")) {
-                // STORAGE ERROR
                 s_sys_status.storage_ok = false;
-                s_sys_status.has_error  = true;  // LED ALM rouge
+                s_sys_status.has_error  = true;
             }
         }
 
-        // --- Mapping par event_id (0x1300/1301/1302/1303/1304/1310/1400/1401/110x/120x) ---
         if (eventId >= 0) {
             if (eventId == 0x1300 || eventId == 0x1301) {
-                // WiFi CONNECTING
                 s_sys_status.wifi_connected = false;
             } else if (eventId == 0x1303) {
-                // WiFi OK
                 s_sys_status.wifi_connected = true;
             } else if (eventId == 0x1302 || eventId == 0x1304 || eventId == 0x1310) {
-                // WiFi WARNING
                 s_sys_status.wifi_connected = false;
             } else if (eventId == 0x1400) {
-                // STORAGE OK
                 s_sys_status.storage_ok = true;
             } else if (eventId == 0x1401) {
-                // STORAGE ERROR
                 s_sys_status.storage_ok = false;
                 s_sys_status.has_error  = true;
             } else if (eventId == 0x1100 || eventId == 0x1101 || eventId == 0x1102) {
-                // UART OK (équivalent BMS/Tiny UART actif)
-                // On pourrait l'exploiter pour un futur badge UART
+                // UART OK – exploitable plus tard
             } else if (eventId == 0x1200 || eventId == 0x1201 || eventId == 0x1202) {
-                // CAN OK
-                // Idem, exploitable plus tard
+                // CAN OK – exploitable plus tard
             }
         }
     }
 
-    // ------------------------------------------------------------------------
-    // 2) Alignement "Alarm / Error" → badge ALM global
-    //    (SystemStatus.js ne gère pas ALM, donc on étend la logique ici)
-    // ------------------------------------------------------------------------
+    // --- 2) Alarm / Error → badge ALM global ---
     if (eventType &&
         (!strcmp(eventType, "alarm") || !strcmp(eventType, "error"))) {
 
         bool active = has_error_field;
 
-        // active bool direct
         if (!active) {
             active = json_get_bool(root, "active", false);
         }
 
-        // status string : "on", "active", "error", "critical" → true
         cJSON *status_item = cJSON_GetObjectItemCaseSensitive(root, "status");
         if (cJSON_IsString(status_item) && status_item->valuestring) {
             const char *s = status_item->valuestring;
@@ -371,23 +338,60 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
         s_sys_status.has_error = active;
     }
 
-    // Fallback global : si un event porte has_error true, on le prend en compte
     if (has_error_field) {
         s_sys_status.has_error = true;
     }
 
-    // Si storage_ok est en erreur, on garde ALM à true
     if (!s_sys_status.storage_ok) {
-        // si storage est en erreur, ALM doit rester rouge
         s_sys_status.has_error = true;
     }
 
     cJSON_Delete(root);
 
-    // Publication état système → Home (WiFi + ALM), Power, etc.
     event_t evt_sys = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_sys_status,
     };
     event_bus_publish(s_bus, &evt_sys);
+}
+
+// ============================================================================
+//  MQTT STATUS  (JSON → battery_status.mqtt_ok)
+// ============================================================================
+
+void remote_event_adapter_on_mqtt_status_json(const char *json, size_t length)
+{
+    (void) length;
+    if (!s_bus || !json) {
+        return;
+    }
+
+    ESP_LOGD(TAG, "MQTT Status JSON: %s", json);
+
+    cJSON *root = cJSON_Parse(json);
+    if (!root) {
+        ESP_LOGE(TAG, "Failed to parse MQTT status JSON");
+        return;
+    }
+
+    // Alignement avec un handleMqttStatus(status) typique :
+    // - status.enabled : bool
+    // - status.connected : bool
+    bool enabled   = json_get_bool(root, "enabled", true);
+    bool connected = json_get_bool(root, "connected", false);
+
+    if (!enabled) {
+        s_batt_status.mqtt_ok = false;
+    } else {
+        s_batt_status.mqtt_ok = connected;
+    }
+
+    cJSON_Delete(root);
+
+    // On republie l’état batterie pour mettre à jour le badge MQTT sur Home
+    event_t evt_batt = {
+        .type = EVENT_BATTERY_STATUS_UPDATED,
+        .data = &s_batt_status,
+    };
+    event_bus_publish(s_bus, &evt_batt);
 }
