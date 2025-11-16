@@ -16,7 +16,8 @@ static lv_obj_t *s_label_status_bms   = NULL;
 static lv_obj_t *s_label_status_can   = NULL;
 static lv_obj_t *s_label_status_mqtt  = NULL;
 static lv_obj_t *s_label_status_wifi  = NULL;
-static lv_obj_t *s_label_status_bal   = NULL;  // 🔹 global balancing badge
+static lv_obj_t *s_label_status_bal   = NULL;  // badge BAL
+static lv_obj_t *s_label_status_alm   = NULL;  // 🔔 badge ALM
 
 // Helpers pour couleur d'état
 static lv_color_t color_ok(void)      { return lv_palette_main(LV_PALETTE_GREEN); }
@@ -115,7 +116,7 @@ void screen_home_create(lv_obj_t *parent)
     s_label_temp = lv_label_create(col_right);
     lv_label_set_text(s_label_temp, "--.- °C");
 
-    // --- Ligne statuts (BMS / CAN / MQTT / WiFi / BAL) ---
+    // --- Ligne statuts (BMS / CAN / MQTT / WiFi / BAL / ALM) ---
     lv_obj_t *row_status = lv_obj_create(cont);
     lv_obj_remove_style_all(row_status);
     lv_obj_set_width(row_status, LV_PCT(100));
@@ -129,13 +130,15 @@ void screen_home_create(lv_obj_t *parent)
     s_label_status_can  = lv_label_create(row_status);
     s_label_status_mqtt = lv_label_create(row_status);
     s_label_status_wifi = lv_label_create(row_status);
-    s_label_status_bal  = lv_label_create(row_status);   // nouveau
+    s_label_status_bal  = lv_label_create(row_status);
+    s_label_status_alm  = lv_label_create(row_status);  // nouveau
 
     set_status_label(s_label_status_bms,  "BMS",  color_neutral());
     set_status_label(s_label_status_can,  "CAN",  color_neutral());
     set_status_label(s_label_status_mqtt, "MQTT", color_neutral());
     set_status_label(s_label_status_wifi, "WiFi", color_neutral());
     set_status_label(s_label_status_bal,  "BAL",  color_neutral());
+    set_status_label(s_label_status_alm,  "ALM",  color_neutral());
 }
 
 void screen_home_update_battery(const battery_status_t *status)
@@ -203,12 +206,21 @@ void screen_home_update_system(const system_status_t *status)
         }
         set_status_label(s_label_status_wifi, text, c);
     }
+
+    // 🔔 Badge ALM : rouge si has_error, neutre sinon
+    if (s_label_status_alm) {
+        if (status->has_error) {
+            set_status_label(s_label_status_alm, "ALM", color_error());
+        } else {
+            set_status_label(s_label_status_alm, "ALM", color_neutral());
+        }
+    }
 }
 
 /**
  * @brief Badge global "BAL" sur Home :
- *        - BAL: ON (orange) si au moins une cellule en balancing
- *        - BAL: OFF (gris) sinon
+ *        - BAL : orange si au moins une cellule en balancing
+ *        - BAL : gris sinon
  */
 void screen_home_update_balancing(const pack_stats_t *stats)
 {
@@ -231,7 +243,8 @@ void screen_home_update_balancing(const pack_stats_t *stats)
     }
 
     if (any_balancing) {
-        set_status_label(s_label_status_bal, "BAL", lv_palette_main(LV_PALETTE_ORANGE));
+        set_status_label(s_label_status_bal, "BAL",
+                         lv_palette_main(LV_PALETTE_ORANGE));
     } else {
         set_status_label(s_label_status_bal, "BAL", color_neutral());
     }
