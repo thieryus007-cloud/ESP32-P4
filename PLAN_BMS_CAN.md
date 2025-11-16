@@ -1,20 +1,33 @@
 # Plan d'intégration CAN BMS sur ESP32-P4
 
 **Projet**: ESP32-P4 BMS Autonome avec interface CAN
-**Base**: Projet BMS existant (https://github.com/thieryus007-cloud/BMS)
+**Base**: Projet BMS de référence (Exemple/mac-local/BMS)
 **Objectif**: Porter la fonctionnalité CAN BMS vers ESP32-P4 en respectant EXACTEMENT l'implémentation existante
 
 ---
 
 ## 🎯 Vue d'ensemble
 
-Le projet BMS existant implémente un **gateway UART-vers-CAN** qui:
+Le projet BMS de référence (dans `Exemple/mac-local/BMS`) implémente un **gateway UART-vers-CAN** qui:
 - Communique avec TinyBMS via **UART** (115200 baud)
 - Synthétise des messages **CAN Victron Energy** à partir des données UART
 - Broadcast vers onduleurs/chargeurs compatibles Victron
 - Implémente une **state machine CVL** pour protection batterie
+- Fournit une interface web pour monitoring et configuration
 
 **Point critique**: TinyBMS **N'UTILISE PAS** CAN nativement. Toute communication CAN est générée par l'ESP32 à partir des données UART.
+
+**Architecture de référence**:
+```
+Exemple/mac-local/BMS/main/
+├── can_victron/          # Driver CAN TWAI bas niveau
+├── can_publisher/        # Orchestrateur + CVL state machine
+├── uart_bms/             # Client UART TinyBMS
+├── event_bus/            # Bus d'événements (similaire à ESP32-P4)
+├── monitoring/           # Métriques système
+├── web_server/           # Interface web
+└── app_main.c            # Orchestration globale
+```
 
 ---
 
@@ -668,52 +681,79 @@ components/
 │  TinyBMS  │◄───────►│ tinybms_client  │────────►│  event_bus   │
 │           │ 115200  │ (✅ existant)   │   Bus   │ (✅ existant)│
 └───────────┘         └─────────────────┘         └──────────────┘
-                                                          │
-                                                          ▼
-                      ┌──────────────────────────────────────────┐
-                      │        EVENT_TINYBMS_DATA_UPDATED        │
-                      └──────────────────────────────────────────┘
-                                                          │
-                                  ┌───────────────────────┴───────────────┐
-                                  ▼                                       ▼
-                      ┌─────────────────────┐              ┌──────────────────┐
-                      │   can_publisher     │              │  gui_lvgl        │
-                      │   (🔴 NOUVEAU)      │              │  (✅ existant)   │
-                      │  - CVL state machine│              │  + 3 new screens │
-                      │  - Message encoders │              └──────────────────┘
-                      └─────────────────────┘
-                                  ▼
-                      ┌─────────────────────┐
-                      │    can_victron      │  CAN   ┌──────────────┐
-                      │   (🔴 NOUVEAU)      │───────►│   Victron    │
-                      │   TWAI driver       │ 500kbps│   GX Device  │
-                      └─────────────────────┘        └──────────────┘
-                            GPIO 22/21
+   GPIO 26/27                 │                            │
+                              ▼                            ▼
+                   ┌──────────────────┐       ┌──────────────────────────┐
+                   │  tinybms_model   │       │ EVENT_TINYBMS_REGISTER_  │
+                   │  (✅ existant)   │       │ UPDATED / CONFIG_CHANGED │
+                   │  Cache registres │       └──────────────────────────┘
+                   └──────────────────┘                    │
+                              │                            │
+                              └────────────┬───────────────┘
+                                           │
+                   ┌───────────────────────┴────────────────────────┐
+                   ▼                                                ▼
+       ┌─────────────────────────┐                    ┌──────────────────┐
+       │   tinybms_adapter       │                    │  gui_lvgl        │
+       │   (🔴 NOUVEAU)          │                    │  (✅ existant)   │
+       │ Convertit tinybms_model │                    │  + 3 new screens │
+       │ → uart_bms_live_data_t  │                    └──────────────────┘
+       └─────────────────────────┘
+                   │
+                   ▼
+       ┌─────────────────────────┐
+       │   can_publisher         │
+       │   (🔴 NOUVEAU)          │
+       │ - CVL state machine     │
+       │ - Message encoders      │
+       │ - Conversion table      │
+       └─────────────────────────┘
+                   │
+                   ▼
+       ┌─────────────────────────┐
+       │    can_victron          │  CAN   ┌──────────────┐
+       │   (🔴 NOUVEAU)          │───────►│   Victron    │
+       │   TWAI driver ESP32-P4  │ 500kbps│   GX Device  │
+       └─────────────────────────┘        └──────────────┘
+             GPIO 22/21
 ```
+
+**Légende**:
+- ✅ Modules déjà implémentés dans ESP32-P4
+- 🔴 Modules à copier/adapter depuis Exemple/mac-local/BMS
+- GPIO 26/27: UART TinyBMS (inchangé)
+- GPIO 22/21: CAN Bus (nouveau)
 
 ---
 
 ## 🛠️ Fichiers à copier EXACTEMENT du projet BMS
 
-### Fichiers critiques (NE PAS MODIFIER)
+### Fichiers critiques (depuis Exemple/mac-local/BMS)
 
-| Fichier source (BMS repo) | Destination (ESP32-P4) | Adaptations |
-|---------------------------|------------------------|-------------|
-| `main/can_victron/can_victron.c` | `components/can_victron/can_victron.c` | GPIO 7→22, 6→21 |
-| `main/can_victron/can_victron.h` | `components/can_victron/can_victron.h` | Aucune |
-| `main/can_publisher/conversion_table.c` | `components/can_publisher/conversion_table.c` | ✅ IDENTIQUE |
-| `main/can_publisher/conversion_table.h` | `components/can_publisher/conversion_table.h` | ✅ IDENTIQUE |
-| `main/can_publisher/cvl_logic.c` | `components/can_publisher/cvl_logic.c` | ✅ IDENTIQUE |
-| `main/can_publisher/cvl_logic.h` | `components/can_publisher/cvl_logic.h` | ✅ IDENTIQUE |
-| `main/can_publisher/cvl_types.h` | `components/can_publisher/cvl_types.h` | ✅ IDENTIQUE |
-| `main/can_publisher/cvl_controller.c` | `components/can_publisher/cvl_controller.c` | ✅ IDENTIQUE |
+| Fichier source (local) | Destination (ESP32-P4) | Adaptations |
+|------------------------|------------------------|-------------|
+| `Exemple/mac-local/BMS/main/can_victron/can_victron.c` | `components/can_victron/can_victron.c` | GPIO adaptés (voir ci-dessous) |
+| `Exemple/mac-local/BMS/main/can_victron/can_victron.h` | `components/can_victron/can_victron.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_victron/CMakeLists.txt` | `components/can_victron/CMakeLists.txt` | Adapter dépendances |
+| `Exemple/mac-local/BMS/main/can_publisher/can_publisher.c` | `components/can_publisher/can_publisher.c` | Adapter interfaces |
+| `Exemple/mac-local/BMS/main/can_publisher/can_publisher.h` | `components/can_publisher/can_publisher.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/conversion_table.c` | `components/can_publisher/conversion_table.c` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/conversion_table.h` | `components/can_publisher/conversion_table.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/cvl_controller.c` | `components/can_publisher/cvl_controller.c` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/cvl_controller.h` | `components/can_publisher/cvl_controller.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/cvl_logic.c` | `components/can_publisher/cvl_logic.c` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/cvl_logic.h` | `components/can_publisher/cvl_logic.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/cvl_types.h` | `components/can_publisher/cvl_types.h` | ✅ IDENTIQUE |
+| `Exemple/mac-local/BMS/main/can_publisher/CMakeLists.txt` | `components/can_publisher/CMakeLists.txt` | Adapter dépendances |
 
-### Seules modifications GPIO
+### Adaptations nécessaires
+
+#### 1. GPIO CAN (can_victron.c)
 
 ```c
-// Dans can_victron.c
-// AVANT (BMS original):
-#define CONFIG_TINYBMS_CAN_VICTRON_TX_GPIO 7
+// AVANT (BMS référence):
+// GPIO définis via menuconfig ou defines
+#define CONFIG_TINYBMS_CAN_VICTRON_TX_GPIO 7   // Exemple
 #define CONFIG_TINYBMS_CAN_VICTRON_RX_GPIO 6
 
 // APRÈS (ESP32-P4):
@@ -721,7 +761,34 @@ components/
 #define CONFIG_TINYBMS_CAN_VICTRON_RX_GPIO 21
 ```
 
-**Tout le reste = COPIE EXACTE !**
+#### 2. Interface UART BMS
+
+Le projet BMS de référence utilise `uart_bms.cpp/h` (C++) avec la structure:
+```c
+typedef struct {
+    float pack_voltage_v;
+    float pack_current_a;
+    float pack_temp_c;
+    uint16_t cell_voltages_mv[16];
+    // ... autres champs
+} uart_bms_live_data_t;
+```
+
+ESP32-P4 utilise déjà `tinybms_client` + `tinybms_model` (C pur). Il faut créer un **adaptateur** dans `can_publisher.c`:
+
+```c
+// Nouveau fichier: components/can_publisher/tinybms_adapter.c
+// Convertit tinybms_model → uart_bms_live_data_t pour compatibilité
+void tinybms_to_uart_bms_data(const tinybms_model_t *src, uart_bms_live_data_t *dst);
+```
+
+#### 3. EventBus
+
+Le projet BMS utilise un EventBus similaire, mais avec des IDs différents. Adapter:
+- `event_bus_publish_fn_t` → Compatible (déjà identique)
+- Event IDs → Mapper vers `event_types.h` d'ESP32-P4
+
+**Tout le reste (conversion_table, cvl_logic) = COPIE EXACTE !**
 
 ---
 
@@ -825,51 +892,66 @@ void hmi_main_start(void) {
 
 ---
 
-## 🧪 Séquence de développement (6 phases)
+## 🧪 Séquence de développement (7 phases)
 
-### Phase 1: Driver CAN (2-3 jours)
+### Phase 1: Adaptateur TinyBMS (1-2 jours)
+- [ ] Analyser la structure `uart_bms_live_data_t` du projet BMS
+- [ ] Créer `components/can_publisher/tinybms_adapter.c/h`
+- [ ] Implémenter conversion `tinybms_model_t` → `uart_bms_live_data_t`
+- [ ] Mapper les 34 registres TinyBMS vers la structure unifiée
+- [ ] Tests unitaires de conversion
+
+### Phase 2: Driver CAN (2-3 jours)
 - [ ] Créer `components/can_victron/`
-- [ ] Copier `can_victron.c/h` depuis BMS repo
+- [ ] Copier `can_victron.c/h` depuis `Exemple/mac-local/BMS/main/can_victron/`
 - [ ] Adapter GPIO 22/21 pour ESP32-P4
+- [ ] Adapter CMakeLists.txt (dépendances ESP-IDF)
 - [ ] Tester transmission/réception basique
 - [ ] Vérifier 500 kbps avec analyseur CAN
 
-### Phase 2: Encodeurs messages (2-3 jours)
+### Phase 3: Encodeurs messages (2-3 jours)
 - [ ] Créer `components/can_publisher/`
-- [ ] Copier `conversion_table.c/h` EXACTEMENT
-- [ ] Copier `cvl_*.c/h` EXACTEMENT
+- [ ] Copier `conversion_table.c/h` depuis `Exemple/mac-local/BMS/main/can_publisher/`
+- [ ] Copier `cvl_*.c/h` (4 fichiers CVL)
+- [ ] Copier `can_publisher.c/h`
+- [ ] Adapter CMakeLists.txt
 - [ ] Compiler et résoudre dépendances
 - [ ] Tester encodage message 0x351/0x355/0x356
 
-### Phase 3: Intégration EventBus (1-2 jours)
-- [ ] Ajouter nouveaux types d'événements
-- [ ] Créer `can_publisher.c` (glue code)
-- [ ] Abonner can_publisher à `EVENT_TINYBMS_DATA_UPDATED`
-- [ ] Mapper données TinyBMS → messages CAN
-- [ ] Tester flux complet UART → CAN
+### Phase 4: Intégration EventBus (1-2 jours)
+- [ ] Ajouter nouveaux types d'événements (CAN/CVL)
+- [ ] Créer glue code dans `can_publisher.c`
+- [ ] Abonner can_publisher à `EVENT_TINYBMS_REGISTER_UPDATED`
+- [ ] Intégrer `tinybms_adapter` dans le flux
+- [ ] Mapper données TinyBMS → messages CAN via adaptateur
+- [ ] Tester flux complet: UART → tinybms_model → adapter → CAN
 
-### Phase 4: Keepalive et handshake (1-2 jours)
-- [ ] Implémenter transmission 0x305 (1000ms)
-- [ ] Implémenter réception 0x307
-- [ ] Gérer timeout keepalive
-- [ ] Tester avec GX device réel
+### Phase 5: Keepalive et handshake (1-2 jours)
+- [ ] Implémenter transmission périodique 0x305 (1000ms)
+- [ ] Implémenter réception 0x307 (handshake Victron GX)
+- [ ] Gérer timeout keepalive et reconnexion
+- [ ] Publier événements `EVENT_CAN_KEEPALIVE_TIMEOUT`
+- [ ] Tester avec GX device réel ou simulateur
 - [ ] Valider connexion stable
 
-### Phase 5: State Machine CVL (2-3 jours)
-- [ ] Intégrer `cvl_controller.c`
-- [ ] Configurer seuils SOC/tension
-- [ ] Tester transitions d'états
+### Phase 6: State Machine CVL (2-3 jours)
+- [ ] Intégrer `cvl_controller.c` + `cvl_logic.c`
+- [ ] Configurer seuils SOC/tension (fichier config ou NVS)
+- [ ] Tester transitions d'états (BULK→TRANSITION→FLOAT)
 - [ ] Vérifier protection cellule haute tension
-- [ ] Valider limitation CCL/DCL
+- [ ] Valider limitation CCL/DCL dynamique
+- [ ] Tester détection déséquilibre avec hystérésis
 
-### Phase 6: GUI et finalisation (2-3 jours)
-- [ ] Créer `screen_can_status.c`
-- [ ] Créer `screen_can_config.c`
-- [ ] Créer `screen_bms_control.c`
-- [ ] Intégrer dans `gui_init.c`
+### Phase 7: GUI et finalisation (2-3 jours)
+- [ ] Créer `screen_can_status.c` (état bus CAN + stats)
+- [ ] Créer `screen_can_config.c` (configuration CAN)
+- [ ] Créer `screen_bms_control.c` (CVL state + limites)
+- [ ] Intégrer 3 nouveaux onglets dans `gui_init.c`
+- [ ] Implémenter affichage temps réel CVL/CCL/DCL
 - [ ] Tests complets avec onduleur Victron
+- [ ] Documentation utilisateur
 
-**Durée totale estimée**: 10-16 jours
+**Durée totale estimée**: 11-18 jours
 
 ---
 
@@ -909,24 +991,38 @@ void hmi_main_start(void) {
 
 ## 📚 Références
 
-### Documentation projet BMS
-- Repository: https://github.com/thieryus007-cloud/BMS
-- Fichiers clés:
-  - `main/can_victron/can_victron.c` (driver)
-  - `main/can_publisher/conversion_table.c` (encodeurs)
-  - `main/can_publisher/cvl_logic.c` (state machine)
-  - `main/uart_bms/uart_bms.c` (référence UART)
+### Documentation projet BMS (Local)
+- **Emplacement**: `Exemple/mac-local/BMS/`
+- **Fichiers clés**:
+  - `main/can_victron/can_victron.c/h` - Driver TWAI bas niveau
+  - `main/can_publisher/can_publisher.c/h` - Orchestrateur CAN
+  - `main/can_publisher/conversion_table.c/h` - Encodeurs des 19 messages
+  - `main/can_publisher/cvl_logic.c/h` - Logique state machine CVL
+  - `main/can_publisher/cvl_controller.c/h` - Contrôleur CVL
+  - `main/can_publisher/cvl_types.h` - Types CVL
+  - `main/uart_bms/uart_bms.cpp/h` - Référence client UART
+  - `main/event_bus/event_bus.c/h` - Référence EventBus
+  - `main/app_main.c` - Séquence d'initialisation
+- **Interface Web**: `web/` - Application SPA pour monitoring
 
 ### Protocole Victron
 - Victron Energy CAN-bus BMS documentation
-- Standard J1939-like avec 11-bit IDs
-- Compatible: MultiPlus, Quattro, GX devices
+- Standard J1939-like avec 11-bit IDs (non Extended 29-bit)
+- Compatible: MultiPlus, Quattro, GX devices (Venus OS)
+- 19 messages standardisés avec périodes fixes
 
-### Hardware
-- ESP32-P4-WIFI6-Touch-LCD-7B (Waveshare)
-- GPIO CAN: 22 (TX), 21 (RX)
-- TWAI peripheral ESP32-P4
-- Référence Waveshare: 14_TWAItransmit
+### Hardware ESP32-P4
+- **Plateforme**: ESP32-P4-WIFI6-Touch-LCD-7B (Waveshare)
+- **GPIO CAN**: 22 (TX), 21 (RX)
+- **GPIO UART**: 26 (TX), 27 (RX) - TinyBMS
+- **TWAI peripheral**: ESP32-P4 CAN controller
+- **Référence Waveshare**: Exemple 14_TWAItransmit
+
+### TinyBMS
+- **Communication**: UART uniquement (115200 baud, 8N1)
+- **Protocole**: Modbus-like avec CRC16
+- **Registres**: 34 registres documentés dans tinybms_registers.c
+- **Pas de CAN natif**: L'ESP32 synthétise les messages CAN
 
 ---
 
@@ -964,7 +1060,59 @@ void hmi_main_start(void) {
 
 ---
 
-**Auteur**: Plan basé sur analyse complète du projet BMS
+---
+
+## 📝 Notes d'implémentation
+
+### Utilisation du projet BMS de référence
+
+Le projet BMS complet se trouve dans `Exemple/mac-local/BMS/`. Ce projet est la **référence absolue** pour l'implémentation CAN:
+
+1. **Ne rien inventer**: Tous les algorithmes (CVL, encodage messages) doivent être copiés EXACTEMENT
+2. **Copie directe**: Les fichiers `conversion_table.c`, `cvl_logic.c`, etc. sont à copier sans modification
+3. **Seules adaptations autorisées**:
+   - GPIO (22/21 au lieu de 7/6)
+   - Interface tinybms_model (via adaptateur)
+   - Event IDs (mapping vers event_types.h d'ESP32-P4)
+   - CMakeLists.txt (dépendances ESP-IDF)
+
+### Architecture modulaire ESP32-P4
+
+L'ESP32-P4 possède déjà une architecture solide:
+- ✅ `event_bus/` - Identique au BMS de référence
+- ✅ `tinybms_client/` - Équivalent de `uart_bms/`
+- ✅ `tinybms_model/` - Cache des registres TinyBMS
+- ✅ `gui_lvgl/` - Interface graphique 7"
+
+Il faut **compléter** avec:
+- 🔴 `can_victron/` - Driver TWAI (copie)
+- 🔴 `can_publisher/` - Encodeurs + CVL (copie + adaptateur)
+
+### Différences clés ESP32-P4 vs BMS référence
+
+| Aspect | BMS référence | ESP32-P4 |
+|--------|---------------|----------|
+| **UART Client** | `uart_bms.cpp` (C++) | `tinybms_client` (C) |
+| **Structure données** | `uart_bms_live_data_t` | `tinybms_model_t` |
+| **Interface** | Web SPA | LVGL tactile 7" |
+| **WiFi** | ESP32 standard | ESP32-P4 WiFi 6 |
+| **Display** | Aucun | 800x480 tactile |
+| **GPIO CAN** | 7/6 | 22/21 |
+| **GPIO UART** | Variable | 26/27 |
+
+**Solution**: L'adaptateur `tinybms_adapter.c` fait le pont entre les deux structures.
+
+### Avantages ESP32-P4
+
+- **Interface tactile intégrée**: Contrôle direct sans application web externe
+- **Monitoring temps réel**: Graphiques CVL/CCL/DCL sur écran
+- **Configuration interactive**: Pas besoin de recompilation pour ajuster seuils
+- **WiFi 6**: Meilleure performance pour monitoring distant
+- **Même fiabilité**: Protocole CAN et CVL identiques au BMS éprouvé
+
+---
+
+**Auteur**: Plan basé sur analyse complète du projet BMS local (Exemple/mac-local/BMS)
 **Date**: 2025-01-16
-**Version**: 1.0
+**Version**: 2.0 (adapté pour projet BMS local)
 **Status**: Prêt pour implémentation
