@@ -1,327 +1,353 @@
-## 1. Objectif et contraintes (rappel)
+# ESP32-P4 BMS HMI Interface
 
-* **Plateforme** : ESP32-P4-WIFI6-Touch-LCD-7B, ESP-IDF uniquement.
-* **Rôle HMI** :
+Interface Homme-Machine (HMI) pour système de gestion de batterie (BMS) basée sur ESP32-P4 avec écran tactile 7 pouces.
 
-  * Client distant de ton système actuel (S3),
-  * Affiche TOUT ce que l’interface web affiche (télémétrie, événements, config, etc.),
-  * Permet les mêmes actions utilisateur (commandes, ack, réglages).
-* **Architecture logicielle** (comme projet existant) :
+## 🎯 Présentation du projet
 
-  * `app_main.c` = orchestration globale, pas de logique métier lourde.
-  * **EventBus** central (publish / subscribe).
-  * Tous les modules = indépendants, connectés par EventBus (pas d’appels circulaires).
-  * Modules en **ESP-IDF natif** (pas d’Arduino, pas de mélange).
+Ce projet est une interface graphique avancée développée pour améliorer le projet **BMS (Battery Management System)** existant. Il fournit une interface tactile complète et intuitive pour visualiser et contrôler un système de gestion de batterie en temps réel.
 
----
+### Contexte
 
-## 2. Architecture générale du firmware HMI (couches)
+Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et offre :
+- **Une interface tactile 7 pouces** pour remplacer/compléter l'interface web
+- **Affichage en temps réel** de toutes les données de télémétrie
+- **Contrôle complet** du système de batterie
+- **Architecture événementielle** robuste et modulaire
 
-### 2.1. Couches logiques
+## 🔧 Matériel requis
 
-1. **HAL & BSP** (fournis)
+- **Plateforme** : [ESP32-P4-WIFI6-Touch-LCD-7B](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-7b.htm) (Waveshare)
+  - Processeur ESP32-P4 avec support WiFi 6
+  - Écran tactile capacitif 7 pouces (800x480)
+  - Interfaces RS485 et CAN intégrées
+  - Support Ethernet
 
-   * Drivers LCD, tactile, horloge, WiFi/ETH (ESP-IDF + BSP Waveshare).
-   * Utilisés principalement au démarrage et par LVGL / net_client.
+## ✨ Fonctionnalités
 
-2. **Noyau système**
+### Interface graphique (5 écrans)
 
-   * Initialisation IDF (NVS, log, clocks, etc.),
-   * `EventBus` (copie ou version factorisée du projet S3),
-   * Gestion des tasks FreeRTOS & priorités.
+1. **🏠 Écran d'accueil (Home)**
+   - Affichage grand format du SOC (State of Charge)
+   - Tension, courant, puissance et température
+   - Indicateurs de statut : BMS, CAN, MQTT, WiFi, Équilibrage, Alarmes
+   - Codes couleur pour l'état du système (vert/jaune/rouge/gris)
 
-3. **Couche “Communication”**
+2. **🔋 Écran Batterie (Battery/Pack)**
+   - Résumé du pack : SOC, tension, courant, puissance
+   - Statistiques des cellules : min, max, delta, moyenne
+   - Indicateur d'équilibrage
+   - Tableau des tensions de cellules
 
-   * `net_client` : gestion WiFi + WebSocket/HTTP client vers le S3.
-   * EventBus <-> JSON via `remote_event_adapter`.
+3. **📊 Écran Cellules (Cells)**
+   - En-tête avec statistiques (min/max/delta/moyenne)
+   - Indicateurs de seuils d'équilibrage
+   - Graphique à barres défilant pour jusqu'à 32 cellules
+   - Indicateurs d'équilibrage par cellule
 
-4. **Couche “Application”**
+4. **⚡ Écran Flux d'énergie (Power Flow)**
+   - Visualisation du flux de puissance
+   - Affichage PV (panneau solaire - prévu)
+   - État de la batterie avec indicateur directionnel
+   - Indicateur de charge/décharge avec codes couleur
 
-   * Modules qui manipulent un modèle de données logique :
+5. **⚙️ Écran Configuration (Config)**
+   - Interface de configuration (en développement)
+   - Intégration prévue avec les endpoints REST API
 
-     * `telemetry_model` (état batterie/global),
-     * `system_events_model` (wifi, storage, alertes, etc.),
-     * `config_model` (config courante téléchargée).
-   * Ces modules publient des events “propres” pour la GUI.
+### Communication
 
-5. **Couche “Présentation” (LVGL)**
+- **WiFi** : Connexion au système BMS S3
+- **WebSocket** :
+  - `/ws/telemetry` - Flux de données de batterie
+  - `/ws/events` - Flux d'événements système
+- **HTTP REST API** : Envoi de commandes et configuration
+- **RS485** : Communication directe avec TinyBMS (prévu)
+  - RXD: GPIO27, TXD: GPIO26
+- **CAN Bus** : Communication avec le pack batterie (prévu)
+  - RXD: GPIO21, TXD: GPIO22
 
-   * `gui_lvgl` + sous-écrans (`screen_home`, `screen_battery`, `screen_events`, `screen_config`, …).
-   * S’abonnent aux events de la couche application.
-   * Publient des events `EVT_USER_INPUT_*` lorsqu’un bouton / slider est utilisé.
+## 🏗️ Architecture logicielle
 
----
+Le projet suit une **architecture événementielle en 5 couches** :
 
-## 3. Arborescence projet (guideline)
+```
+┌─────────────────────────────────────────┐
+│   Couche 5 : Présentation (LVGL GUI)   │
+│   • 5 écrans tactiles interactifs       │
+└─────────────────────────────────────────┘
+                    ↓ Events
+┌─────────────────────────────────────────┐
+│   Couche 4 : Application/Modèle         │
+│   • telemetry_model                     │
+│   • system_events_model                 │
+│   • config_model                        │
+└─────────────────────────────────────────┘
+                    ↓ Events
+┌─────────────────────────────────────────┐
+│   Couche 3 : Communication              │
+│   • net_client (WiFi + WebSocket)       │
+│   • remote_event_adapter (JSON ↔ Events)│
+└─────────────────────────────────────────┘
+                    ↓ Events
+┌─────────────────────────────────────────┐
+│   Couche 2 : Noyau Système              │
+│   • EventBus (Publish/Subscribe)        │
+│   • FreeRTOS Tasks                      │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│   Couche 1 : HAL & BSP                  │
+│   • Drivers LCD, tactile, WiFi          │
+└─────────────────────────────────────────┘
+```
 
-fw_hmi_esp32p4/
-fw_hmi_esp32p4/
-├── CMakeLists.txt
-├── sdkconfig            (généré par ESP-IDF)
-├── idf_component.yml    (dépendances LVGL + BSP + esp_lvgl_port)
+### Composants principaux
+
+#### EventBus (`components/event_bus/`)
+- **Système publish-subscribe** pour communication décuplée entre modules
+- Support de 14 types d'événements
+- Thread-safe avec callbacks synchrones
+- Maximum 32 abonnés simultanés
+
+#### Types d'événements (`components/event_types/`)
+Structures de données principales :
+- `battery_status_t` : État global de la batterie (SOC, SOH, tension, courant, etc.)
+- `pack_stats_t` : Statistiques au niveau cellule (jusqu'à 32 cellules)
+- `system_status_t` : Indicateurs de santé système
+
+#### Client réseau (`components/net_client/`)
+- Gestion de la connexion WiFi en mode Station
+- Client WebSocket pour flux de données temps réel
+- Client HTTP REST pour commandes
+- Reconnexion automatique (jusqu'à 5 tentatives)
+- Configuration via menuconfig (SSID, mot de passe, hôte du bridge)
+
+#### Adaptateur d'événements (`components/remote_event_adapter/`)
+- Convertit les messages JSON ↔ événements internes
+- Parse la télémétrie depuis `/ws/telemetry`
+- Extrait : tension/courant du pack, SOC, SOH, température
+- Traite les tableaux de tensions et états d'équilibrage des cellules
+
+#### Interface graphique (`components/gui_lvgl/`)
+- Basée sur **LVGL** (Light and Versatile Graphics Library)
+- 5 écrans dans une interface à onglets
+- Thread-safe avec `lv_async_call()`
+- 1,082 lignes de code GUI
+
+## 📁 Structure du projet
+
+```
+ESP32-P4/
+├── README.md
 ├── main/
-│   ├── app_main.c
-│   ├── hmi_main.c
+│   ├── app_main.c.c         # Point d'entrée (36 lignes)
+│   ├── hmi_main.c           # Orchestrateur système (67 lignes)
 │   └── hmi_main.h
-└── components/
-    ├── event_bus/
-    │   ├── CMakeLists.txt
-    │   ├── event_bus.c
-    │   └── event_bus.h
-    ├── event_types/
-    │   ├── CMakeLists.txt
-    │   └── event_types.h
-    ├── logger/
-    │   ├── CMakeLists.txt
-    │   ├── logger.c
-    │   └── logger.h
-    ├── net_client/
-    │   ├── CMakeLists.txt
-    │   ├── net_client.c
-    │   └── net_client.h
-    ├── remote_event_adapter/
-    │   ├── CMakeLists.txt
-    │   ├── remote_event_adapter.c
-    │   └── remote_event_adapter.h
-    ├── telemetry_model/
-    │   ├── CMakeLists.txt
-    │   ├── telemetry_model.c
-    │   └── telemetry_model.h
-    ├── system_events_model/
-    │   ├── CMakeLists.txt
-    │   ├── system_events_model.c
-    │   └── system_events_model.h
-    ├── config_model/
-    │   ├── CMakeLists.txt
-    │   ├── config_model.c
-    │   └── config_model.h
-    └── gui_lvgl/
-        ├── CMakeLists.txt
-        ├── gui_init.c
-        ├── gui_init.h
-        ├── screen_home.c
-        ├── screen_home.h
-        ├── screen_battery.c
-        ├── screen_battery.h
-        ├── screen_events.c
-        ├── screen_events.h
-        ├── screen_config.c
-        └── screen_config.h
-
-Chaque répertoire `components/xxx` se compile comme un module ESP-IDF indépendant, avec ses propres tests et sans dépendances en spaghetti.
-
----
-
-## 4. app_main.c & rôle des modules
-
-### 4.1. `app_main.c` – orchestrateur minimal
-
-Rôle : **assembler**, pas “faire”.
-
-Pseudo-plan :
-
-* Init de base (NVS, logs, timers).
-* Init EventBus.
-* Init logger (avec référence EventBus si besoin).
-* Appel d’une fonction `hmi_main_start()` qui :
-
-  * lance les initialisations de :
-
-    * LVGL + écran,
-    * WiFi + réseau,
-    * net_client,
-    * remote_event_adapter,
-    * models,
-    * GUI.
-
-> **Important :** `app_main.c` ne connaît que les *interfaces publiques* des modules (`xxx_init(EventBus *bus)`), jamais leur interne.
-
-### 4.2. Interfaces types pour les modules (pattern commun)
-
-Tous les modules suivent le même pattern :
-
-```c
-// Exemple pour net_client
-void net_client_init(EventBus *bus);
-void net_client_start(void);
-// éventuellement net_client_set_server(const char *host, uint16_t port);
+├── components/
+│   ├── event_bus/           # Système d'événements pub/sub
+│   ├── event_types/         # Définitions de types et structures
+│   ├── gui_lvgl/            # Interface graphique LVGL (1,082 lignes)
+│   │   ├── gui_init.c/h
+│   │   ├── screen_home.c/h      (251 lignes)
+│   │   ├── screen_battery.c/h   (260 lignes)
+│   │   ├── screen_cells.c/h     (226 lignes)
+│   │   ├── screen_power.c/h     (117 lignes)
+│   │   └── screen_config.c/h    (22 lignes)
+│   ├── net_client/          # Client WiFi + WebSocket
+│   └── remote_event_adapter/# Convertisseur JSON ↔ EventBus
+└── Exemple/
+    └── mac-local/           # Serveur de test Node.js pour TinyBMS
 ```
 
-```c
-// Exemple pour gui_lvgl
-void gui_init(EventBus *bus);
+**Statistiques du projet :**
+- 22 fichiers source
+- 2,243 lignes de code
+- Architecture modulaire avec composants indépendants
+
+## 🚀 Démarrage rapide
+
+### Prérequis
+
+- **ESP-IDF** v5.0 ou supérieur
+- **Outils de développement ESP-IDF** configurés
+- **Carte ESP32-P4-WIFI6-Touch-LCD-7B**
+
+### Dépendances
+
+- ESP-IDF framework
+- LVGL (Light and Versatile Graphics Library)
+- esp_lvgl_port (intégration LVGL pour ESP)
+- BSP Waveshare pour ESP32-P4
+- cJSON pour le parsing JSON
+- FreeRTOS (inclus dans ESP-IDF)
+
+### Compilation et flash
+
+```bash
+# Cloner le projet
+git clone <repository-url>
+cd ESP32-P4
+
+# Configurer le projet
+idf.py menuconfig
+# Configurer :
+# - WiFi SSID et mot de passe
+# - Hôte et port du bridge BMS S3
+
+# Compiler
+idf.py build
+
+# Flasher sur l'ESP32-P4
+idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-```c
-// Exemple pour telemetry_model
-void telemetry_model_init(EventBus *bus);
+### Configuration WiFi
+
+Dans `menuconfig`, configurer :
+- `CONFIG_HMI_WIFI_SSID` : SSID du réseau WiFi
+- `CONFIG_HMI_WIFI_PASSWORD` : Mot de passe WiFi
+- `CONFIG_HMI_BRIDGE_HOST` : Adresse IP du BMS S3
+- `CONFIG_HMI_BRIDGE_PORT` : Port du serveur BMS
+
+## 🔄 Flux de données
+
+### Télémétrie (S3 → HMI)
+```
+1. S3 envoie JSON via WebSocket /ws/telemetry
+2. net_client reçoit et transmet à remote_event_adapter
+3. Adapter parse JSON → structures C
+4. Publie EVENT_BATTERY_STATUS_UPDATED et EVENT_PACK_STATS_UPDATED
+5. Composants GUI s'abonnent et mettent à jour via lv_async_call()
+6. LVGL rend les mises à jour sur l'écran 800x480
 ```
 
-Ils :
+### Commandes (HMI → S3) - En développement
+```
+1. L'utilisateur interagit avec les widgets LVGL
+2. GUI publie des événements EVENT_USER_INPUT_*
+3. remote_event_adapter convertit en JSON
+4. net_client envoie via WebSocket ou HTTP POST
+5. S3 traite et retourne le résultat
+```
 
-* reçoivent un pointeur vers l’EventBus,
-* s’abonnent à ce qui les intéresse,
-* publient leurs propres events quand ils ont du nouveau.
+## 📊 Événements système
 
----
+### Catégories d'événements
 
-## 5. EventBus & événements (contrat interne HMI)
+**Données du S3 (lecture seule) :**
+- `EVENT_REMOTE_TELEMETRY_UPDATE` : Télémétrie brute de la batterie
+- `EVENT_REMOTE_SYSTEM_EVENT` : Événements système (WiFi, storage, alertes)
+- `EVENT_REMOTE_CONFIG_SNAPSHOT` : Configuration globale
 
-On se cale sur ton modèle existant : types d’événements + payloads.
+**Modèle interne (pour GUI) :**
+- `EVENT_BATTERY_STATUS_UPDATED` : État batterie (SOC, U, I, P, T°)
+- `EVENT_PACK_STATS_UPDATED` : Statistiques cellules
+- `EVENT_SYSTEM_STATUS_UPDATED` : État des connexions
 
-### 5.1. Catégories d’événements principaux
+**Actions utilisateur (prévues) :**
+- `EVENT_USER_INPUT_SET_TARGET_SOC` : Définir SOC cible
+- `EVENT_USER_INPUT_CHANGE_MODE` : Changer mode (normal/eco/debug)
+- `EVENT_USER_INPUT_ACK_ALARM` : Acquitter alarme
+- `EVENT_USER_INPUT_WRITE_CONFIG` : Écrire configuration
 
-* **Données reçues du S3** (en lecture seule côté HMI) :
+## 🛠️ Serveur de test
 
-  * `EVT_REMOTE_TELEMETRY_UPDATE` → payload brut proche du JSON `battery` actuel.
-  * `EVT_REMOTE_SYSTEM_EVENT` → événements type “wifi_ok”, “storage_warn”, “error”, etc.
-  * `EVT_REMOTE_CONFIG_SNAPSHOT` → config globale.
+Le répertoire `Exemple/mac-local/` contient un serveur de test Node.js :
 
-* **Modèle interne dérivé** (nettoyé pour GUI) :
+**Fonctionnalités :**
+- Interface web locale pour Mac mini
+- Communication USB-UART avec TinyBMS
+- Lecture/écriture de registres
+- API REST : `/api/registers`, `/api/system/restart`
+- Auto-détection du port série
+- Filtrage par groupe de registres
+- Édition inline des valeurs
 
-  * `EVT_BATTERY_STATUS_UPDATED` (SOC, U, I, P, température, état général).
-  * `EVT_PACK_STATS_UPDATED` (min/max cell, delta, etc.).
-  * `EVT_SYSTEM_STATUS_UPDATED` (icônes wifi, MQTT, TinyBMS, CAN, etc.).
+**Démarrage :**
+```bash
+cd Exemple/mac-local
+npm install
+npm start
+# Ouvrir http://localhost:5173
+```
 
-* **Actions utilisateur HMI** :
+## 📈 État du développement
 
-  * `EVT_USER_INPUT_SET_TARGET_SOC`
-  * `EVT_USER_INPUT_CHANGE_MODE` (ex. normal / eco / debug)
-  * `EVT_USER_INPUT_ACK_ALARM`
-  * `EVT_USER_INPUT_WRITE_CONFIG` (écriture d’un registre via API)
+### ✅ Implémenté
+- Architecture EventBus centrale
+- Définitions de types d'événements
+- Client réseau (WiFi + WebSocket)
+- Adaptateur JSON vers événements
+- Interface graphique complète 5 écrans LVGL
+- Orchestration système de base
 
-* **Retour commande (ack / erreur)** :
+### 🚧 En cours / Prévu
+- Composants modèle (telemetry_model, system_events_model, config_model)
+- Composant logger
+- Système de configuration (CMakeLists.txt, sdkconfig)
+- Gestion des entrées utilisateur (commandes vers S3)
+- Interface de configuration complète
+- Modules de communication UART/CAN
+- Support mise à jour OTA
 
-  * `EVT_REMOTE_CMD_RESULT` (ok / error, message, code).
+## 🔌 Interfaces matérielles
 
-### 5.2. Responsabilités par module
+### UART/RS485
+- **RXD** : GPIO27
+- **TXD** : GPIO26
+- Communication directe avec TinyBMS
+- Référence : [Waveshare exemple 13_RS485_Test](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/13_RS485_Test)
 
-* `net_client` :
+### CAN Bus
+- **RXD** : GPIO21
+- **TXD** : GPIO22
+- Communication avec le pack batterie
+- Référence : [Waveshare exemple 14_TWAItransmit](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/14_TWAItransmit)
 
-  * Parle **HTTP/WS** avec S3 (aucun autre module ne fait de réseau).
-  * Pousse les JSON bruts en events `EVT_REMOTE_RAW_*` ou via queue dédiée vers `remote_event_adapter`.
+## 🎨 Principes de conception
 
-* `remote_event_adapter` :
+1. **Publish-Subscribe** : Toute communication inter-module via EventBus
+2. **Architecture en couches** : Séparation claire des responsabilités
+3. **Thread-safe GUI** : Callbacks asynchrones pour mises à jour LVGL
+4. **Data-Driven** : Schémas JSON mappés directement vers structures C
+5. **Composants modulaires** : Chaque composant est indépendant et testable
+6. **Main minimal** : `app_main.c` orchestre uniquement, pas de logique métier
 
-  * Convertit JSON → `EVT_REMOTE_*` structurés.
-  * Convertit `EVT_USER_INPUT_*` → HTTP/WS (JSON) vers S3.
+## 📝 Roadmap
 
-* `telemetry_model` / `system_events_model` / `config_model` :
+1. ✅ Squelette projet & EventBus
+2. ✅ `app_main.c` + `hmi_main.c`
+3. ✅ Intégration LVGL + écran
+4. ✅ Module net_client (connexion S3 + WS/HTTP)
+5. ✅ Module remote_event_adapter
+6. 🚧 Modules modèle (telemetry_model, system_events_model)
+7. 🚧 GUI LVGL v1 (lecture seule)
+8. 📋 GUI LVGL v2 (actions utilisateur)
+9. 📋 Extensions (config, historique, debug UART/CAN)
 
-  * Reçoivent `EVT_REMOTE_*`, construisent un état local propre,
-  * Publient `EVT_BATTERY_STATUS_UPDATED`, `EVT_SYSTEM_STATUS_UPDATED`, etc.
+## 🤝 Contribution
 
-* `gui_lvgl` :
+Ce projet fait partie d'une suite d'outils BMS. Pour contribuer :
+1. Fork le projet
+2. Créer une branche de fonctionnalité
+3. Commiter les changements
+4. Pousser vers la branche
+5. Ouvrir une Pull Request
 
-  * Se contente de consommer `EVT_*_UPDATED` et d’émettre `EVT_USER_INPUT_*`.
+## 📄 Licence
 
----
+[À définir]
 
-## 6. Tâches, FreeRTOS & concurrence
+## 🔗 Projets liés
 
-Pour rester propre et prévisible :
+- **Projet BMS** : Système de gestion de batterie sur ESP32-S3 (GitHub)
+- **TinyBMS** : Système BMS compact
+- **Interface Web** : Interface web du BMS
 
-* **Task réseau** (net_client)
+## 📞 Contact
 
-  * Priorité moyenne-haute (communication fluide).
-  * Gère WiFi + WS + HTTP.
-
-* **Task remote_event_adapter**
-
-  * Priorité moyenne.
-  * Travail de parsing JSON et conversion en events.
-
-* **Task LVGL / GUI**
-
-  * En général créée par `esp_lvgl_port`, qui prend en charge `lv_timer_handler`.
-  * `gui_lvgl` s’exécute dans le contexte LVGL / timers pour les updates.
-
-* **EventBus**
-
-  * Thread-safe : callbacks d’abonnés exécutés soit :
-
-    * directement dans le contexte de publication (si rapide),
-    * soit via une queue / task dédiée `EVENT_DISPATCH_TASK` (si tu veux un modèle déterministe comme sur S3).
-
-**Principe** : aucun module ne bloque longtemps, tout ce qui est lourd (JSON, réseau) se fait en tâche dédiée.
-
----
-
-## 7. Roadmap de mise en œuvre
-
-On va suivre ce fil rouge pour coder ensuite :
-
-1. **Squelette projet & EventBus**
-
-   * Créer `fw_hmi_esp32p4` avec arbo ci-dessus.
-   * Intégrer ton EventBus actuel (ou une variante identique) dans `components/event_bus`.
-   * Créer `event_types` de base.
-
-2. **`app_main.c` + `hmi_main.c`**
-
-   * Mettre en place l’init globale, l’EventBus, les appels `xxx_init(bus)`.
-
-3. **Intégration LVGL + écran (sans réseau)**
-
-   * BSP Waveshare + `esp_lvgl_port`.
-   * `gui_init()` qui affiche un écran de test.
-
-4. **Module net_client (connexion S3 + WS / HTTP)**
-
-   * Connexion WiFi.
-   * WebSocket `/ws/telemetry` + `/ws/events`.
-   * Afficher les JSON reçus dans les logs.
-
-5. **Module remote_event_adapter**
-
-   * Parser les JSON telemetry/events déjà utilisés par la web UI.
-   * Publier `EVT_REMOTE_TELEMETRY_UPDATE`, `EVT_REMOTE_SYSTEM_EVENT`.
-
-6. **Modules modèle (telemetry_model, system_events_model)**
-
-   * Construire un état simplifié pour la GUI.
-   * Publier `EVT_BATTERY_STATUS_UPDATED`, `EVT_SYSTEM_STATUS_UPDATED`.
-
-7. **GUI LVGL v1 (lecture seule)**
-
-   * Écran home avec toutes les infos principales déjà présentes sur le web dashboard (SOC, U, I, P, icônes status).
-
-8. **GUI LVGL v2 (actions)**
-
-   * Boutons / sliders → `EVT_USER_INPUT_*` → `remote_event_adapter` → HTTP/WS vers S3.
-   * Support `EVT_REMOTE_CMD_RESULT` pour afficher les erreurs.
-
-9. **Extensions (config, history, debug UART/CAN)**
-
-   * Reprendre `/api/config`, `/api/registers`, `/api/history/*` comme le fait le web.
-   * Créer des écrans LVGL dédiés.
+[À compléter]
 
 ---
 
-UART Interface : 
-
-reference https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/13_RS485_Test
-
-The ESP32-P4 has a Universal Asynchronous Receiver/Transmitter (UART) function that handles communication timing requirements and data frames by using common asynchronous serial communication interfaces such as RS232, RS422, RS485, etc.
-The ESP32-P4 has 5 UART controllers that can be independently configured for baud rate, data bit length, bit order, number of stop bits, parity bits, etc.
-The GPIO switch matrix and IO MUX of the ESP32-P4 can configure input signals of the peripheral modules to come from any IO pin, and the output signals of the peripheral modules can also be connected to any IO pin. Here RS485 controls RXD: GPIO27, TXD: GPIO26
-Example Demonstration
-
-This example demonstrates an example of RS485 communication on the ESP32-P4. The workflow for this example is as follows:
-Initialize UART1 port and set communication parameters
-Create a UART data loopback task to return the received data unchanged
-Print debugging information through the ESP_LOG system
-CAN Control
-
-CAN Function in ESP32-P4 
-
-reference : https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/14_TWAItransmit
-
-ESP32-P4 is equipped with an independent CAN controller, supporting flexible configuration of core parameters such as baud rate, data frame format, and filtering rules, to adapt to different communication scenarios.
-The GPIO switch matrix and IO MUX of the ESP32-P4 can configure input signals of the peripheral modules to come from any IO pin, and the output signals of the peripheral modules can also be connected to any IO pin. Here CAN controls RXD: GPIO21, TXD: GPIO22
-Example Demonstration
-
-This example demonstrates the CAN communication implementation of the ESP32-P4, with the workflow as follows:
-Initialize CAN controller, configure core parameters such as communication baud rate, frame format, etc.
-Create a CAN data transceiver task which echoes back any received data.
-Output real-time communication status and data information through ESP_LOG system for easy debugging and monitoring
+**Note** : Ce projet est en développement actif. Certaines fonctionnalités sont encore en cours d'implémentation.
