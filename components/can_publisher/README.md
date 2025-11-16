@@ -10,7 +10,7 @@ Il contient les modules nécessaires pour:
 3. Gérer la state machine CVL (Charge Voltage Limit)
 4. Orchestrer la publication périodique des messages CAN
 
-## Structure (après Phase 3)
+## Structure (après Phase 4)
 
 ```
 can_publisher/
@@ -19,14 +19,15 @@ can_publisher/
 ├── cvl_types.h            # ✅ Phase 3: Types pour state machine CVL (6 états)
 ├── cvl_logic.c/h          # ✅ Phase 3: Logique state machine CVL
 ├── cvl_controller.c/h     # ✅ Phase 3: Contrôleur CVL (orchestration)
-├── can_publisher.h        # ⚠️  Phase 3: Stub (types uniquement pour compilation)
-└── can_publisher.c        # 🔴 Phase 4: Orchestrateur complet (à créer)
+├── can_publisher.h        # ✅ Phase 4: API complète orchestrateur
+└── can_publisher.c        # ✅ Phase 4: Orchestrateur complet EventBus
 ```
 
 **Statistiques**:
-- **Lignes de code**: ~2100 lignes (C + headers)
+- **Lignes de code**: ~2350 lignes (C + headers)
 - **Messages CAN**: 19 encodeurs Victron
 - **State machine CVL**: 6 états
+- **Orchestrateur**: EventBus intégré (Phase 4)
 
 ## Phase 1: Adaptateur TinyBMS ✅
 
@@ -157,14 +158,62 @@ Driver TWAI bas niveau dans `components/can_victron/`:
 - Keepalive automatique 0x305/0x307
 - Thread-safe avec 3 mutex
 
-## Phases suivantes
+## Phase 4: Intégration EventBus ✅
 
-### Phase 4: Intégration EventBus (prochain)
-- Créer `can_publisher.c` (orchestrateur complet)
-- Abonner aux événements `EVENT_TINYBMS_REGISTER_UPDATED`
-- Appeler encodeurs conversion_table
-- Publier vers can_victron
-- Gestion périodique des messages
+### Orchestrateur can_publisher.c
+
+**Implémentation complète** de l'orchestrateur de publication CAN:
+
+**Fonctionnalités**:
+- ✅ Abonnement à `EVENT_TINYBMS_REGISTER_UPDATED`
+- ✅ Conversion automatique via `tinybms_adapter`
+- ✅ Encodage via `conversion_table` (19 messages)
+- ✅ Publication vers `can_victron`
+- ✅ Gestion state machine CVL
+- ✅ Persistance NVS des compteurs énergie
+- ✅ Publication événements `EVENT_CVL_LIMITS_UPDATED`
+- ✅ Throttle 1000ms (évite surcharge bus)
+
+**API**:
+```c
+// Initialiser l'orchestrateur
+void can_publisher_init(void);
+
+// Arrêter l'orchestrateur
+void can_publisher_deinit(void);
+
+// Récupérer statistiques
+void can_publisher_get_stats(uint32_t *publish_count, uint64_t *last_publish_ms);
+```
+
+**Flux de données**:
+```
+EVENT_TINYBMS_REGISTER_UPDATED
+    ↓
+tinybms_adapter_convert()
+    ↓
+can_publisher_cvl_prepare()
+    ↓
+can_publisher_conversion_ingest_sample()
+    ↓
+conversion_table encoders (19 messages)
+    ↓
+can_victron_publish_frame()
+    ↓
+EVENT_CVL_LIMITS_UPDATED (publication)
+```
+
+**Thread-safety**: Mutex pour statistiques et publication
+
+**Nouveaux événements ajoutés** (event_types.h):
+- `EVENT_CAN_BUS_STARTED/STOPPED`
+- `EVENT_CAN_MESSAGE_TX/RX`
+- `EVENT_CAN_KEEPALIVE_TIMEOUT/ERROR`
+- `EVENT_CVL_STATE_CHANGED`
+- `EVENT_CVL_LIMITS_UPDATED`
+- `EVENT_ENERGY_COUNTERS_UPDATED`
+
+## Phases suivantes
 
 ### Phase 5: Keepalive complet
 - Déjà partiellement dans can_victron (Phase 2)
@@ -194,7 +243,11 @@ Driver TWAI bas niveau dans `components/can_victron/`:
 
 - `tinybms_model`: Cache des registres TinyBMS
 - `esp_timer`: Timestamps
-- `nvs_flash`: Persistance énergie (à ajouter)
+- `event_bus`: Bus d'événements (pub/sub)
+- `event_types`: Définitions événements CAN/CVL
+- `can_victron`: Driver CAN TWAI
+- `freertos`: Mutex, tâches
+- `nvs_flash`: Persistance compteurs énergie
 
 ## Référence
 
@@ -214,3 +267,23 @@ Driver TWAI bas niveau dans `components/can_victron/`:
 - `can_publisher.h` - Types minimaux pour compilation (sera complété en Phase 4)
 
 🎯 **Respect du principe**: "Ne rien inventer de nouveau"
+
+## Notes d'implémentation Phase 4
+
+✅ **Orchestrateur complet**:
+- `can_publisher.c` - 242 lignes, orchestration EventBus
+- `can_publisher.h` - API complète (was stub)
+- `event_types.h` - 9 nouveaux événements CAN/CVL
+
+✅ **Intégration**:
+- Abonnement à `EVENT_TINYBMS_REGISTER_UPDATED`
+- Utilisation encodeurs conversion_table
+- Publication vers can_victron
+- Gestion CVL via cvl_controller
+- Persistance NVS pour énergie
+
+✅ **Thread-safety**:
+- Mutex pour statistiques publication
+- Throttle 1000ms pour éviter surcharge
+
+🎯 **Architecture événementielle**: Découplage complet entre modules via EventBus

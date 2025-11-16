@@ -48,6 +48,21 @@ typedef enum {
     EVENT_TINYBMS_CONFIG_CHANGED,       // configuration TinyBMS modifiée
     EVENT_USER_INPUT_TINYBMS_WRITE_REG, // user_input_tinybms_write_t
 
+    // --- Événements CAN Bus (Phase 2+) ---
+    EVENT_CAN_BUS_STARTED,              // Driver CAN démarré
+    EVENT_CAN_BUS_STOPPED,              // Driver CAN arrêté
+    EVENT_CAN_MESSAGE_TX,               // Message CAN transmis
+    EVENT_CAN_MESSAGE_RX,               // Message CAN reçu (0x307)
+    EVENT_CAN_KEEPALIVE_TIMEOUT,        // Timeout keepalive (pas de réponse GX)
+    EVENT_CAN_ERROR,                    // Erreur bus CAN
+
+    // --- Événements CVL State Machine (Phase 3+) ---
+    EVENT_CVL_STATE_CHANGED,            // Changement d'état CVL (cvl_state_event_t)
+    EVENT_CVL_LIMITS_UPDATED,           // CVL/CCL/DCL recalculés (cvl_limits_event_t)
+
+    // --- Événements Energy Counters (Phase 3+) ---
+    EVENT_ENERGY_COUNTERS_UPDATED,      // Compteurs énergie mis à jour
+
     EVENT_TYPE_MAX
 } event_type_t;
 
@@ -144,6 +159,29 @@ typedef struct {
     uint16_t value;            // Valeur à écrire
     char key[32];              // Clé du registre
 } user_input_tinybms_write_t;
+
+/**
+ * @brief  Événement: Changement d'état CVL
+ */
+typedef struct {
+    uint8_t previous_state;    // État CVL précédent (cvl_state_t)
+    uint8_t new_state;         // Nouvel état CVL
+    float soc_percent;         // SOC au moment du changement (%)
+    uint64_t timestamp_ms;     // Timestamp
+} cvl_state_event_t;
+
+/**
+ * @brief  Événement: Limites CVL/CCL/DCL mises à jour
+ */
+typedef struct {
+    float cvl_voltage_v;       // Charge Voltage Limit (V)
+    float ccl_current_a;       // Charge Current Limit (A)
+    float dcl_current_a;       // Discharge Current Limit (A)
+    uint8_t cvl_state;         // État CVL actuel (cvl_state_t)
+    bool imbalance_hold_active; // Protection déséquilibre active
+    bool cell_protection_active; // Protection cellule active
+    uint64_t timestamp_ms;     // Timestamp
+} cvl_limits_event_t;
 
 /**
  * @brief  Payload générique d'événement EventBus
