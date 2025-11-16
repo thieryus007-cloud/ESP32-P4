@@ -1,4 +1,5 @@
 #include "can_victron.h"
+#include "event_types.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -73,13 +74,7 @@ typedef struct {
     config_manager_identity_t identity;
 } config_manager_can_settings_t;
 
-// Event IDs (stub for ESP32-P4 - will be integrated with event_bus later)
-#define APP_EVENT_CAN_BUS_STARTED       1001
-#define APP_EVENT_CAN_BUS_STOPPED       1002
-#define APP_EVENT_CAN_MESSAGE_TX        1003
-#define APP_EVENT_CAN_MESSAGE_RX        1004
-#define APP_EVENT_CAN_KEEPALIVE_TIMEOUT 1005
-#define APP_EVENT_CAN_ERROR             1006
+// Event IDs now imported from event_types.h (Phase 4+)
 
 // ============================================================================
 
@@ -670,8 +665,10 @@ static void can_victron_service_keepalive(uint64_t now)
     // Gérer timeout
     if (needs_recovery) {
         ESP_LOGW(TAG,
-                 "Victron keepalive timeout after %" PRIu64 " ms",
+                 "Victron keepalive timeout after %" PRIu64 " ms (EVENT_CAN_KEEPALIVE_TIMEOUT should be published)",
                  now - last_rx);
+        // TODO: Publier EVENT_CAN_KEEPALIVE_TIMEOUT via event_bus
+        // Nécessite intégration complète avec event_bus_publish
         can_victron_send_keepalive(now);
     }
 }
@@ -707,7 +704,8 @@ static void can_victron_handle_rx_message(const twai_message_t *message)
         if (dlc >= 3 && payload != NULL) {
             // Validate "VIC" signature at bytes 4-6 (0-indexed: bytes 4, 5, 6)
             if (dlc >= 7 && payload[4] == 'V' && payload[5] == 'I' && payload[6] == 'C') {
-                ESP_LOGI(TAG, "Received valid 0x307 handshake with 'VIC' signature from GX device");
+                ESP_LOGI(TAG, "Received valid 0x307 handshake with 'VIC' signature from GX device (EVENT_CAN_MESSAGE_RX)");
+                // TODO: Publier EVENT_CAN_MESSAGE_RX avec payload handshake
             } else {
                 ESP_LOGW(TAG, "Received 0x307 handshake but missing 'VIC' signature (dlc=%zu)", dlc);
             }

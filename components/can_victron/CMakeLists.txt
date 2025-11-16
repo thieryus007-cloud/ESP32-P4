@@ -6,4 +6,5 @@ idf_component_register(
         esp_timer
         freertos
         event_bus
+        event_types
 )
