@@ -172,15 +172,33 @@ Le driver collecte les statistiques suivantes:
 
 ✅ **Phase 3**: Encodeurs messages CAN (dans can_publisher)
 ✅ **Phase 4**: Orchestrateur EventBus (dans can_publisher)
-✅ **Phase 5**: Intégration event_types.h
+✅ **Phase 5**: Intégration event_types.h + Publication événements
 - Event IDs partagés (EVENT_CAN_*)
 - Détection et logging timeout keepalive
 - Détection et logging handshake 0x307
+- ✅ Publication EVENT_CAN_KEEPALIVE_TIMEOUT
+- ✅ Publication EVENT_CAN_MESSAGE_RX (handshake 0x307)
+- API: `can_victron_set_event_bus(event_bus_t *bus)`
 
-## Limitations actuelles
+## Publication événements
 
-⚠️ **Publication événements**: Les événements sont détectés et loggés mais pas encore publiés via event_bus.
-Intégration complète nécessite callback event_bus_publish_fn_t (TODO Phase 5+).
+Le driver publie maintenant les événements via event_bus:
+
+**EVENT_CAN_KEEPALIVE_TIMEOUT**:
+- Publié lors du timeout keepalive (> 5000ms sans réponse GX)
+- Permet à l'interface GUI d'afficher l'état de connexion
+
+**EVENT_CAN_MESSAGE_RX**:
+- Publié lors de la réception d'un handshake 0x307 valide
+- Signature "VIC" validée (bytes 4-6)
+- Confirme la connexion avec le GX device
+
+**Utilisation**:
+```c
+// Dans hmi_main.c ou similaire
+can_victron_init();
+can_victron_set_event_bus(&event_bus);
+```
 
 ## Dépendances
 

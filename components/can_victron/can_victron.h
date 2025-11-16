@@ -98,7 +98,7 @@ typedef struct {
 
 void can_victron_init(void);
 void can_victron_deinit(void);
-void can_victron_set_event_publisher(event_bus_publish_fn_t publisher);
+void can_victron_set_event_bus(event_bus_t *bus);
 esp_err_t can_victron_publish_frame(uint32_t can_id,
                                     const uint8_t *data,
                                     size_t length,
