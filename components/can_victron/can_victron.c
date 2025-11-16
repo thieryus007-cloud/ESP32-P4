@@ -104,7 +104,7 @@ typedef enum {
 
 static const char *TAG = "can_victron";
 
-static event_bus_publish_fn_t s_event_publisher = NULL;
+static event_bus_t *s_event_bus = NULL;
 static char s_can_raw_events[CAN_VICTRON_EVENT_BUFFERS][CAN_VICTRON_JSON_SIZE];
 static char s_can_decoded_events[CAN_VICTRON_EVENT_BUFFERS][CAN_VICTRON_JSON_SIZE];
 static size_t s_next_event_slot = 0;
@@ -219,20 +219,30 @@ static bool can_victron_json_append(char *buffer, size_t buffer_size, size_t *of
     return true;
 }
 
+// Legacy function for JSON events (raw/decoded frames)
 static void can_victron_publish_event(event_bus_event_id_t id, char *payload, size_t length)
 {
-    if (s_event_publisher == NULL || payload == NULL || length == 0) {
+    // This function is kept for compatibility with raw/decoded frame events
+    // but is not used for new event_types.h events
+    (void)id;
+    (void)payload;
+    (void)length;
+}
+
+// Publish simple event_types.h events (no payload)
+static void can_victron_publish_simple_event(event_type_t event_type)
+{
+    if (s_event_bus == NULL) {
         return;
     }
 
-    event_bus_event_t event = {
-        .id = id,
-        .payload = payload,
-        .payload_size = length + 1,
+    event_t event = {
+        .type = event_type,
+        .data = NULL
     };
 
-    if (!s_event_publisher(&event, pdMS_TO_TICKS(50))) {
-        ESP_LOGW(TAG, "Failed to publish CAN event %u", (unsigned)id);
+    if (!event_bus_publish(s_event_bus, &event)) {
+        ESP_LOGW(TAG, "Failed to publish event %d", (int)event_type);
     }
 }
 
@@ -665,10 +675,10 @@ static void can_victron_service_keepalive(uint64_t now)
     // Gérer timeout
     if (needs_recovery) {
         ESP_LOGW(TAG,
-                 "Victron keepalive timeout after %" PRIu64 " ms (EVENT_CAN_KEEPALIVE_TIMEOUT should be published)",
+                 "Victron keepalive timeout after %" PRIu64 " ms",
                  now - last_rx);
-        // TODO: Publier EVENT_CAN_KEEPALIVE_TIMEOUT via event_bus
-        // Nécessite intégration complète avec event_bus_publish
+        // Publier événement timeout keepalive
+        can_victron_publish_simple_event(EVENT_CAN_KEEPALIVE_TIMEOUT);
         can_victron_send_keepalive(now);
     }
 }
@@ -704,8 +714,9 @@ static void can_victron_handle_rx_message(const twai_message_t *message)
         if (dlc >= 3 && payload != NULL) {
             // Validate "VIC" signature at bytes 4-6 (0-indexed: bytes 4, 5, 6)
             if (dlc >= 7 && payload[4] == 'V' && payload[5] == 'I' && payload[6] == 'C') {
-                ESP_LOGI(TAG, "Received valid 0x307 handshake with 'VIC' signature from GX device (EVENT_CAN_MESSAGE_RX)");
-                // TODO: Publier EVENT_CAN_MESSAGE_RX avec payload handshake
+                ESP_LOGI(TAG, "Received valid 0x307 handshake with 'VIC' signature from GX device");
+                // Publier événement handshake reçu
+                can_victron_publish_simple_event(EVENT_CAN_MESSAGE_RX);
             } else {
                 ESP_LOGW(TAG, "Received 0x307 handshake but missing 'VIC' signature (dlc=%zu)", dlc);
             }
@@ -881,9 +892,9 @@ esp_err_t can_victron_get_status(can_victron_status_t *status)
     return ESP_OK;
 }
 
-void can_victron_set_event_publisher(event_bus_publish_fn_t publisher)
+void can_victron_set_event_bus(event_bus_t *bus)
 {
-    s_event_publisher = publisher;
+    s_event_bus = bus;
 }
 
 esp_err_t can_victron_publish_frame(uint32_t can_id,
