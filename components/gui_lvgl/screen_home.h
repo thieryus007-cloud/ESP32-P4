@@ -13,6 +13,11 @@ void screen_home_create(lv_obj_t *parent);
 
 void screen_home_update_battery(const battery_status_t *status);
 void screen_home_update_system(const system_status_t *status);
+/**
+ * @brief Mise à jour du badge global de balancing (ON/OFF)
+ *        basé sur pack_stats_t (cell_balancing[]).
+ */
+void screen_home_update_balancing(const pack_stats_t *stats);
 
 #ifdef __cplusplus
 }
