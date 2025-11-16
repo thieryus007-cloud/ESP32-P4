@@ -7,9 +7,13 @@
 #include "screen_cells.h"
 #include "screen_power.h"
 #include "screen_config.h"
+#include "screen_tinybms_status.h"
+#include "screen_tinybms_config.h"
 
 #include "event_bus.h"
 #include "event_types.h"
+#include "tinybms_client.h"
+#include "tinybms_model.h"
 
 #include "lvgl.h"
 #include "esp_log.h"
@@ -38,6 +42,10 @@ typedef struct {
 typedef struct {
     pack_stats_t stats;
 } gui_pack_ctx_t;
+
+typedef struct {
+    tinybms_config_t config;
+} gui_tinybms_ctx_t;
 
 // --- Callbacks exécutés dans le contexte LVGL (via lv_async_call) ---
 
@@ -153,19 +161,71 @@ static void pack_stats_event_handler(event_bus_t *bus,
     lv_async_call(lvgl_apply_pack_update, ctx);
 }
 
+// TinyBMS connection event handler
+static void tinybms_connected_handler(event_bus_t *bus,
+                                       const event_t *event,
+                                       void *user_ctx)
+{
+    (void) bus;
+    (void) event;
+    (void) user_ctx;
+
+    ESP_LOGI(TAG, "TinyBMS connected event");
+    screen_tinybms_status_update_connection(true);
+}
+
+// TinyBMS disconnection event handler
+static void tinybms_disconnected_handler(event_bus_t *bus,
+                                          const event_t *event,
+                                          void *user_ctx)
+{
+    (void) bus;
+    (void) event;
+    (void) user_ctx;
+
+    ESP_LOGI(TAG, "TinyBMS disconnected event");
+    screen_tinybms_status_update_connection(false);
+}
+
+// TinyBMS configuration changed handler
+static void tinybms_config_changed_handler(event_bus_t *bus,
+                                            const event_t *event,
+                                            void *user_ctx)
+{
+    (void) bus;
+    (void) event;
+    (void) user_ctx;
+
+    ESP_LOGI(TAG, "TinyBMS config changed event");
+
+    // Get config snapshot and update GUI
+    tinybms_config_t config;
+    if (tinybms_model_get_config(&config) == ESP_OK) {
+        screen_tinybms_config_update(&config);
+
+        // Update stats
+        tinybms_stats_t stats;
+        if (tinybms_get_stats(&stats) == ESP_OK) {
+            screen_tinybms_status_update_stats(stats.reads_ok, stats.reads_failed,
+                                                stats.writes_ok, stats.writes_failed,
+                                                stats.crc_errors, stats.timeouts);
+        }
+    }
+}
+
 // --- API publique ---
 
 void gui_init(event_bus_t *bus)
 {
     s_bus = bus;
 
-    ESP_LOGI(TAG, "Initializing GUI (LVGL with Home + Pack + Cells + Power + Config tabs)");
+    ESP_LOGI(TAG, "Initializing GUI (LVGL with 7 tabs: Home + Pack + Cells + Power + Config + TinyBMS)");
 
     // ⚠️ Hypothèse : LVGL + driver écran + esp_lvgl_port sont déjà initialisés
 
     lv_obj_t *root = lv_scr_act();
 
-    // Tabview avec 5 onglets
+    // Tabview avec 7 onglets
     lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 40);
 
     lv_obj_t *tab_home   = lv_tabview_add_tab(tabview, "Home");
@@ -173,12 +233,16 @@ void gui_init(event_bus_t *bus)
     lv_obj_t *tab_cells  = lv_tabview_add_tab(tabview, "Cells");
     lv_obj_t *tab_power  = lv_tabview_add_tab(tabview, "Power");
     lv_obj_t *tab_config = lv_tabview_add_tab(tabview, "Config");
+    lv_obj_t *tab_tbms_status = lv_tabview_add_tab(tabview, "TBMS Status");
+    lv_obj_t *tab_tbms_config = lv_tabview_add_tab(tabview, "TBMS Config");
 
     screen_home_create(tab_home);
     screen_battery_create(tab_pack);
     screen_cells_create(tab_cells);
     screen_power_create(tab_power);
     screen_config_create(tab_config);
+    screen_tinybms_status_create(tab_tbms_status);
+    screen_tinybms_config_create(tab_tbms_config);
 
     // Abonnements EventBus
     if (s_bus) {
@@ -195,6 +259,22 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_PACK_STATS_UPDATED,
                             pack_stats_event_handler,
+                            NULL);
+
+        // TinyBMS events
+        event_bus_subscribe(s_bus,
+                            EVENT_TINYBMS_CONNECTED,
+                            tinybms_connected_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_TINYBMS_DISCONNECTED,
+                            tinybms_disconnected_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_TINYBMS_CONFIG_CHANGED,
+                            tinybms_config_changed_handler,
                             NULL);
     }
 }
