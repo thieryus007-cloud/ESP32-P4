@@ -87,6 +87,8 @@ static void lvgl_apply_pack_update(void *user_data)
         screen_battery_update_pack_stats(&ctx->stats);
         // Cells : barres + indicateurs de balancing
         screen_cells_update_cells(&ctx->stats);
+        // Dashboard : graphe 1-16 avec couleurs min/max/balancing
+        screen_dashboard_update_cells(&ctx->stats);
         // 🔹 Home : badge global de balancing
         screen_home_update_balancing(&ctx->stats);
         free(ctx);
