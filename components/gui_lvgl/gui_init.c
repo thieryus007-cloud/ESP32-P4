@@ -45,7 +45,7 @@ static void lvgl_apply_battery_update(void *user_data)
 {
     gui_batt_ctx_t *ctx = (gui_batt_ctx_t *) user_data;
     if (ctx) {
-        // Home + résumé pack + power flow + cells (pour afficher la tension de référence)
+        // Home + résumé pack + power flow + cells (pack global)
         screen_home_update_battery(&ctx->status);
         screen_battery_update_pack_basic(&ctx->status);
         screen_power_update(&ctx->status);
@@ -68,8 +68,12 @@ static void lvgl_apply_pack_update(void *user_data)
 {
     gui_pack_ctx_t *ctx = (gui_pack_ctx_t *) user_data;
     if (ctx) {
+        // Pack : stats + table
         screen_battery_update_pack_stats(&ctx->stats);
+        // Cells : barres + indicateurs de balancing
         screen_cells_update_cells(&ctx->stats);
+        // 🔹 Home : badge global de balancing
+        screen_home_update_balancing(&ctx->stats);
         free(ctx);
     }
 }
