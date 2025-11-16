@@ -298,13 +298,30 @@ On va suivre ce fil rouge pour coder ensuite :
 
 ---
 
+UART Interface : 
 
+reference https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/13_RS485_Test
 
-* l’arborescence **en version “copiable”**,
-* un **`app_main.c` complet minimal**,
-* et les **headers d’interface** pour :
+The ESP32-P4 has a Universal Asynchronous Receiver/Transmitter (UART) function that handles communication timing requirements and data frames by using common asynchronous serial communication interfaces such as RS232, RS422, RS485, etc.
+The ESP32-P4 has 5 UART controllers that can be independently configured for baud rate, data bit length, bit order, number of stop bits, parity bits, etc.
+The GPIO switch matrix and IO MUX of the ESP32-P4 can configure input signals of the peripheral modules to come from any IO pin, and the output signals of the peripheral modules can also be connected to any IO pin. Here RS485 controls RXD: GPIO27, TXD: GPIO26
+Example Demonstration
 
-  * `event_bus`,
-  * `net_client`,
-  * `remote_event_adapter`,
-  * `gui_lvgl`.
+This example demonstrates an example of RS485 communication on the ESP32-P4. The workflow for this example is as follows:
+Initialize UART1 port and set communication parameters
+Create a UART data loopback task to return the received data unchanged
+Print debugging information through the ESP_LOG system
+CAN Control
+
+CAN Function in ESP32-P4 
+
+reference : https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-7B/tree/main/examples/ESP-IDF/14_TWAItransmit
+
+ESP32-P4 is equipped with an independent CAN controller, supporting flexible configuration of core parameters such as baud rate, data frame format, and filtering rules, to adapt to different communication scenarios.
+The GPIO switch matrix and IO MUX of the ESP32-P4 can configure input signals of the peripheral modules to come from any IO pin, and the output signals of the peripheral modules can also be connected to any IO pin. Here CAN controls RXD: GPIO21, TXD: GPIO22
+Example Demonstration
+
+This example demonstrates the CAN communication implementation of the ESP32-P4, with the workflow as follows:
+Initialize CAN controller, configure core parameters such as communication baud rate, frame format, etc.
+Create a CAN data transceiver task which echoes back any received data.
+Output real-time communication status and data information through ESP_LOG system for easy debugging and monitoring
