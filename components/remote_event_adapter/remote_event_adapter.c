@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include <string.h>
+#include <stdlib.h>
 
 #include "event_types.h"
 #include "event_bus.h"
@@ -25,7 +26,7 @@ static float json_get_number(cJSON *obj, const char *key, float def)
     if (!obj || !key) return def;
     cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
     if (cJSON_IsNumber(item)) {
-        return (float)item->valuedouble;
+        return (float) item->valuedouble;
     }
     return def;
 }
@@ -40,6 +41,27 @@ static bool json_get_bool(cJSON *obj, const char *key, bool def)
     return def;
 }
 
+static int json_get_event_id(cJSON *obj, const char *key)
+{
+    if (!obj || !key) return -1;
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
+    if (cJSON_IsNumber(item)) {
+        return item->valueint;
+    }
+    if (cJSON_IsString(item) && item->valuestring) {
+        const char *s = item->valuestring;
+        // trim basique
+        while (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') {
+            s++;
+        }
+        if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+            return (int) strtol(s + 2, NULL, 16);
+        }
+        return atoi(s);
+    }
+    return -1;
+}
+
 // --- API publique ---
 
 void remote_event_adapter_init(event_bus_t *bus)
@@ -49,6 +71,12 @@ void remote_event_adapter_init(event_bus_t *bus)
     memset(&s_sys_status,  0, sizeof(s_sys_status));
     memset(&s_pack_stats,  0, sizeof(s_pack_stats));
 
+    // valeurs par défaut
+    s_sys_status.wifi_connected   = false;
+    s_sys_status.server_reachable = false;
+    s_sys_status.storage_ok       = false;
+    s_sys_status.has_error        = false;
+
     ESP_LOGI(TAG, "remote_event_adapter initialized");
 }
 
@@ -57,11 +85,13 @@ void remote_event_adapter_start(void)
     ESP_LOGI(TAG, "remote_event_adapter start (no separate task)");
 }
 
-// JSON provenant de /ws/telemetry
-// payload = { battery: {...} } ou directement { ... }
+// ============================================================================
+//  TELEMETRY  (/ws/telemetry)  → battery_status_t + pack_stats_t
+// ============================================================================
+
 void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
 {
-    (void)length;
+    (void) length;
     if (!s_bus || !json) {
         return;
     }
@@ -96,10 +126,13 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     float energy_in_wh  = json_get_number(data_obj, "energy_charged_wh",    0.0f);
     float energy_out_wh = json_get_number(data_obj, "energy_discharged_wh", 0.0f);
 
-    // Heuristiques "OK" (à affiner plus tard)
-    s_batt_status.bms_ok     = (pack_v > 0.0f);                                  // pack visible
+    // Heuristiques BMS/CAN proches de handleTelemetryUpdate()
+    // systemStatus.handleTelemetryUpdate:
+    //   - UART: OK si pack_voltage_v > 0, sinon WARNING
+    //   - CAN : OK si energy_* présents
+    s_batt_status.bms_ok     = (pack_v > 0.0f);                                  // UART/BMS OK
     s_batt_status.can_ok     = (energy_in_wh > 0.0f || energy_out_wh > 0.0f);    // CAN énergisé
-    s_batt_status.mqtt_ok    = true;                                             // à relier à /ws/events
+    s_batt_status.mqtt_ok    = true;                                             // raffinement possible plus tard
     s_batt_status.tinybms_ok = s_batt_status.bms_ok;
 
     // --- pack_stats_t : cellules + balancing ---
@@ -112,18 +145,18 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
         int arr_size = cJSON_GetArraySize(cells_arr);
         if (arr_size > PACK_MAX_CELLS) arr_size = PACK_MAX_CELLS;
 
-        s_pack_stats.cell_count = (uint8_t)arr_size;
+        s_pack_stats.cell_count = (uint8_t) arr_size;
 
         float sum         = 0.0f;
-        int   valid_count  = 0;
-        float min_mv       = 0.0f;
-        float max_mv       = 0.0f;
+        int   valid_count = 0;
+        float min_mv      = 0.0f;
+        float max_mv      = 0.0f;
 
         for (int i = 0; i < arr_size; ++i) {
             cJSON *item = cJSON_GetArrayItem(cells_arr, i);
             float  mv   = 0.0f;
             if (cJSON_IsNumber(item)) {
-                mv = (float)item->valuedouble;
+                mv = (float) item->valuedouble;
             }
             s_pack_stats.cells[i] = mv;
 
@@ -150,7 +183,7 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
             s_pack_stats.cell_min   = min_mv;
             s_pack_stats.cell_max   = max_mv;
             s_pack_stats.cell_delta = max_mv - min_mv;
-            s_pack_stats.cell_avg   = sum / (float)valid_count;
+            s_pack_stats.cell_avg   = sum / (float) valid_count;
         }
     }
 
@@ -176,15 +209,15 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
         }
     }
 
-    // balancing_bits > 0 : équilibrage actif global (optionnel)
+    // balancing_bits > 0 : équilibrage actif global (utile si tu veux un flag global)
     int balancing_bits = 0;
     cJSON *bal_bits = cJSON_GetObjectItemCaseSensitive(data_obj, "balancing_bits");
     if (cJSON_IsNumber(bal_bits)) {
         balancing_bits = bal_bits->valueint;
     }
-    (void)balancing_bits; // pour l'instant non exploité directement
+    (void) balancing_bits; // pour usage futur si besoin
 
-    // Seuils de balancing : non fournis dans telemetry → reste à 0
+    // Seuils balancing → non fournis dans telemetry pour l’instant
     s_pack_stats.bal_start_mv = 0.0f;
     s_pack_stats.bal_stop_mv  = 0.0f;
 
@@ -207,10 +240,13 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     event_bus_publish(s_bus, &evt_pack);
 }
 
-// JSON provenant de /ws/events
+// ============================================================================
+//  EVENTS  (/ws/events)  → system_status_t (WiFi, Storage, ALARM…)
+// ============================================================================
+
 void remote_event_adapter_on_event_json(const char *json, size_t length)
 {
-    (void)length;
+    (void) length;
     if (!s_bus || !json) {
         return;
     }
@@ -223,56 +259,116 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
         return;
     }
 
-    // Version améliorée : on alimente wifi / storage / alarm
-    cJSON *type  = cJSON_GetObjectItemCaseSensitive(root, "type");
-    cJSON *state = cJSON_GetObjectItemCaseSensitive(root, "status");
+    cJSON *type_item = cJSON_GetObjectItemCaseSensitive(root, "type");
+    cJSON *key_item  = cJSON_GetObjectItemCaseSensitive(root, "key");
 
-    // Fallback : certains events peuvent contenir directement "has_error"
+    const char *eventType = (cJSON_IsString(type_item) && type_item->valuestring)
+                            ? type_item->valuestring
+                            : NULL;
+    const char *eventKey  = (cJSON_IsString(key_item) && key_item->valuestring)
+                            ? key_item->valuestring
+                            : NULL;
+
+    int eventId = json_get_event_id(root, "event_id");
+
+    // Fallback : certains events peuvent porter directement has_error
     bool has_error_field = json_get_bool(root, "has_error", false);
 
-    if (cJSON_IsString(type) && type->valuestring) {
-        const char *t = type->valuestring;
+    // ------------------------------------------------------------------------
+    // 1) Alignement avec SystemStatus.handleEvent() pour WIFI / STORAGE
+    // ------------------------------------------------------------------------
+    if (eventKey || (eventType &&
+                     (!strcmp(eventType, "wifi") || !strcmp(eventType, "storage")))) {
 
-        if (strcmp(t, "wifi") == 0) {
-            if (cJSON_IsString(state) && state->valuestring) {
-                if (strcmp(state->valuestring, "connected") == 0) {
-                    s_sys_status.wifi_connected = true;
-                } else if (strcmp(state->valuestring, "disconnected") == 0) {
-                    s_sys_status.wifi_connected = false;
-                }
+        // --- Mapping par event.key ---
+        if (eventKey) {
+            if (!strcmp(eventKey, "wifi_sta_start") ||
+                !strcmp(eventKey, "wifi_sta_connected")) {
+                // WIFI CONNECTING
+                s_sys_status.wifi_connected = false;
+            } else if (!strcmp(eventKey, "wifi_sta_got_ip")) {
+                // WIFI OK
+                s_sys_status.wifi_connected = true;
+            } else if (!strcmp(eventKey, "wifi_sta_disconnected") ||
+                       !strcmp(eventKey, "wifi_sta_lost_ip") ||
+                       !strcmp(eventKey, "wifi_ap_started")) {
+                // WIFI WARNING
+                s_sys_status.wifi_connected = false;
+            } else if (!strcmp(eventKey, "wifi_ap_stopped") ||
+                       !strcmp(eventKey, "wifi_ap_client_connected") ||
+                       !strcmp(eventKey, "wifi_ap_client_disconnected")) {
+                // WIFI CONNECTING
+                s_sys_status.wifi_connected = false;
+            } else if (!strcmp(eventKey, "storage_history_ready")) {
+                // STORAGE OK
+                s_sys_status.storage_ok = true;
+                // si aucune autre source d'erreur, on pourra relâcher ALM plus bas
+            } else if (!strcmp(eventKey, "storage_history_unavailable")) {
+                // STORAGE ERROR
+                s_sys_status.storage_ok = false;
+                s_sys_status.has_error  = true;  // LED ALM rouge
             }
         }
-        else if (strcmp(t, "storage") == 0) {
-            if (cJSON_IsString(state) && state->valuestring) {
-                s_sys_status.storage_ok = (strcmp(state->valuestring, "ok") == 0);
+
+        // --- Mapping par event_id (0x1300/1301/1302/1303/1304/1310/1400/1401/110x/120x) ---
+        if (eventId >= 0) {
+            if (eventId == 0x1300 || eventId == 0x1301) {
+                // WiFi CONNECTING
+                s_sys_status.wifi_connected = false;
+            } else if (eventId == 0x1303) {
+                // WiFi OK
+                s_sys_status.wifi_connected = true;
+            } else if (eventId == 0x1302 || eventId == 0x1304 || eventId == 0x1310) {
+                // WiFi WARNING
+                s_sys_status.wifi_connected = false;
+            } else if (eventId == 0x1400) {
+                // STORAGE OK
+                s_sys_status.storage_ok = true;
+            } else if (eventId == 0x1401) {
+                // STORAGE ERROR
+                s_sys_status.storage_ok = false;
+                s_sys_status.has_error  = true;
+            } else if (eventId == 0x1100 || eventId == 0x1101 || eventId == 0x1102) {
+                // UART OK (équivalent BMS/Tiny UART actif)
+                // On pourrait l'exploiter pour un futur badge UART
+            } else if (eventId == 0x1200 || eventId == 0x1201 || eventId == 0x1202) {
+                // CAN OK
+                // Idem, exploitable plus tard
             }
         }
-        else if (strcmp(t, "alarm") == 0 || strcmp(t, "error") == 0) {
-            // 🔔 Events d’alarme/erreur → pilotent has_error
-            bool active = has_error_field;
+    }
 
-            // active bool direct
-            if (!active) {
-                active = json_get_bool(root, "active", false);
-            }
+    // ------------------------------------------------------------------------
+    // 2) Alignement "Alarm / Error" → badge ALM global
+    //    (SystemStatus.js ne gère pas ALM, donc on étend la logique ici)
+    // ------------------------------------------------------------------------
+    if (eventType &&
+        (!strcmp(eventType, "alarm") || !strcmp(eventType, "error"))) {
 
-            // status string : "on", "active", "error", "critical" → true
-            if (cJSON_IsString(state) && state->valuestring) {
-                const char *s = state->valuestring;
-                if (!active &&
-                    (strcmp(s, "on") == 0 ||
-                     strcmp(s, "active") == 0 ||
-                     strcmp(s, "error") == 0 ||
-                     strcmp(s, "critical") == 0)) {
-                    active = true;
-                }
-                if (strcmp(s, "ok") == 0 || strcmp(s, "off") == 0) {
-                    active = false;
-                }
-            }
+        bool active = has_error_field;
 
-            s_sys_status.has_error = active;
+        // active bool direct
+        if (!active) {
+            active = json_get_bool(root, "active", false);
         }
+
+        // status string : "on", "active", "error", "critical" → true
+        cJSON *status_item = cJSON_GetObjectItemCaseSensitive(root, "status");
+        if (cJSON_IsString(status_item) && status_item->valuestring) {
+            const char *s = status_item->valuestring;
+            if (!active &&
+                (!strcmp(s, "on") ||
+                 !strcmp(s, "active") ||
+                 !strcmp(s, "error") ||
+                 !strcmp(s, "critical"))) {
+                active = true;
+            }
+            if (!strcmp(s, "ok") || !strcmp(s, "off")) {
+                active = false;
+            }
+        }
+
+        s_sys_status.has_error = active;
     }
 
     // Fallback global : si un event porte has_error true, on le prend en compte
@@ -280,8 +376,15 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
         s_sys_status.has_error = true;
     }
 
+    // Si storage_ok est en erreur, on garde ALM à true
+    if (!s_sys_status.storage_ok) {
+        // si storage est en erreur, ALM doit rester rouge
+        s_sys_status.has_error = true;
+    }
+
     cJSON_Delete(root);
 
+    // Publication état système → Home (WiFi + ALM), Power, etc.
     event_t evt_sys = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_sys_status,
