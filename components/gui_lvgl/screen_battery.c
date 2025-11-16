@@ -3,6 +3,9 @@
 #include "screen_battery.h"
 
 #include <stdio.h>
+#include <stdarg.h>
+
+#include "event_types.h"   // pour PACK_MAX_CELLS
 
 // Widgets globaux de l'écran Pack
 static lv_obj_t *s_label_pack_soc      = NULL;
@@ -15,9 +18,10 @@ static lv_obj_t *s_label_cell_max      = NULL;
 static lv_obj_t *s_label_cell_delta    = NULL;
 static lv_obj_t *s_label_cell_avg      = NULL;
 
+static lv_obj_t *s_label_balancing     = NULL;   // 🔹 nouveau badge Balancing
+
 static lv_obj_t *s_table_cells         = NULL;
 
-// Helper pour formatter dans un label
 static void set_label_fmt(lv_obj_t *label, const char *fmt, ...)
 {
     if (!label || !fmt) return;
@@ -89,7 +93,7 @@ void screen_battery_create(lv_obj_t *parent)
     s_label_pack_power = lv_label_create(col_values);
     lv_label_set_text(s_label_pack_power, "---- W");
 
-    // --- Section stats cellules ---
+    // --- Section stats cellules + badge balancing ---
     lv_obj_t *cont_stats = lv_obj_create(parent);
     lv_obj_set_width(cont_stats, LV_PCT(100));
     lv_obj_set_flex_flow(cont_stats, LV_FLEX_FLOW_ROW);
@@ -138,6 +142,12 @@ void screen_battery_create(lv_obj_t *parent)
     s_label_cell_avg = lv_label_create(col_stats_values);
     lv_label_set_text(s_label_cell_avg, "-- mV");
 
+    // 🔹 Badge Balancing
+    s_label_balancing = lv_label_create(cont_stats);
+    lv_label_set_text(s_label_balancing, "Balancing: OFF");
+    lv_obj_set_style_text_color(s_label_balancing,
+                                lv_palette_main(LV_PALETTE_GREY), 0);
+
     // --- Table des cellules ---
     s_table_cells = lv_table_create(parent);
     lv_obj_set_width(s_table_cells, LV_PCT(100));
@@ -173,28 +183,67 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
 {
     if (!stats) return;
 
+    // Stats min/max/delta/avg
     if (s_label_cell_min) {
-        set_label_fmt(s_label_cell_min, "%.1f mV", stats->cell_min);
+        if (stats->cell_count > 0) {
+            set_label_fmt(s_label_cell_min, "%.1f mV", stats->cell_min);
+        } else {
+            lv_label_set_text(s_label_cell_min, "-- mV");
+        }
     }
     if (s_label_cell_max) {
-        set_label_fmt(s_label_cell_max, "%.1f mV", stats->cell_max);
+        if (stats->cell_count > 0) {
+            set_label_fmt(s_label_cell_max, "%.1f mV", stats->cell_max);
+        } else {
+            lv_label_set_text(s_label_cell_max, "-- mV");
+        }
     }
     if (s_label_cell_delta) {
-        set_label_fmt(s_label_cell_delta, "%.1f mV", stats->cell_delta);
+        if (stats->cell_count > 0) {
+            set_label_fmt(s_label_cell_delta, "%.1f mV", stats->cell_delta);
+        } else {
+            lv_label_set_text(s_label_cell_delta, "-- mV");
+        }
     }
     if (s_label_cell_avg) {
-        set_label_fmt(s_label_cell_avg, "%.1f mV", stats->cell_avg);
+        if (stats->cell_count > 0) {
+            set_label_fmt(s_label_cell_avg, "%.1f mV", stats->cell_avg);
+        } else {
+            lv_label_set_text(s_label_cell_avg, "-- mV");
+        }
     }
 
+    // 🔹 Badge Balancing : ON si au moins une cellule est en balancing
+    if (s_label_balancing) {
+        bool any_balancing = false;
+        uint8_t count = stats->cell_count;
+        if (count > PACK_MAX_CELLS) count = PACK_MAX_CELLS;
+
+        for (uint8_t i = 0; i < count; ++i) {
+            if (stats->balancing[i]) {
+                any_balancing = true;
+                break;
+            }
+        }
+
+        if (any_balancing) {
+            lv_label_set_text(s_label_balancing, "Balancing: ON");
+            lv_obj_set_style_text_color(s_label_balancing,
+                                        lv_palette_main(LV_PALETTE_ORANGE), 0);
+        } else {
+            lv_label_set_text(s_label_balancing, "Balancing: OFF");
+            lv_obj_set_style_text_color(s_label_balancing,
+                                        lv_palette_main(LV_PALETTE_GREY), 0);
+        }
+    }
+
+    // Table cellules
     if (!s_table_cells) {
         return;
     }
 
-    // On recrée la table (ligne 0 = header déjà remplie dans create)
     uint8_t rows = stats->cell_count;
-    if (rows > 32) {
-        rows = 32; // limite de sécurité, doit matcher la taille du tableau cells[]
-    }
+    if (rows > PACK_MAX_CELLS) rows = PACK_MAX_CELLS;
 
     lv_table_set_row_cnt(s_table_cells, rows + 1); // +1 pour l'entête
 
@@ -202,7 +251,7 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
         char buf_cell[16];
         char buf_volt[32];
 
-        snprintf(buf_cell, sizeof(buf_cell), "%u", (unsigned) (i + 1));
+        snprintf(buf_cell, sizeof(buf_cell), "%u", (unsigned)(i + 1));
         snprintf(buf_volt, sizeof(buf_volt), "%.1f mV", stats->cells[i]);
 
         lv_table_set_cell_value(s_table_cells, i + 1, 0, buf_cell);
