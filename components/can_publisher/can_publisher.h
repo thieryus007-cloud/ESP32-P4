@@ -2,12 +2,14 @@
 
 /**
  * @file can_publisher.h
- * @brief CAN Publisher Stub - Types pour Phase 3
+ * @brief CAN Publisher - Orchestrateur Phase 4
  *
- * Ce fichier contient les définitions de types minimales nécessaires pour
- * compiler les fichiers Phase 3 (conversion_table, cvl_*).
- *
- * L'implémentation complète de can_publisher sera ajoutée en Phase 4.
+ * Orchestre la publication des messages CAN Victron depuis les données TinyBMS:
+ * - S'abonne aux événements TinyBMS
+ * - Convertit via tinybms_adapter
+ * - Encode via conversion_table (19 messages Victron)
+ * - Gère la state machine CVL
+ * - Publie via can_victron
  */
 
 #include <stdbool.h>
@@ -62,20 +64,37 @@ typedef esp_err_t (*can_publisher_frame_publish_fn_t)(uint32_t can_id,
                                                       const char *description);
 
 // ============================================================================
-// API Functions (stubs - implementation in Phase 4)
+// API Functions
 // ============================================================================
 
 /**
- * @brief Initialize CAN publisher (stub)
- * @note Implementation in Phase 4
+ * @brief Initialize CAN publisher
+ *
+ * - Initialise le contrôleur CVL
+ * - Restaure les compteurs d'énergie depuis NVS
+ * - S'abonne à EVENT_TINYBMS_REGISTER_UPDATED
+ * - Prépare la publication des 19 messages CAN Victron
+ *
+ * @note Doit être appelé après can_victron_init() et tinybms_model_init()
  */
 void can_publisher_init(void);
 
 /**
- * @brief Deinitialize CAN publisher (stub)
- * @note Implementation in Phase 4
+ * @brief Deinitialize CAN publisher
+ *
+ * - Se désabonne des événements
+ * - Sauvegarde les compteurs d'énergie dans NVS
+ * - Libère les ressources
  */
 void can_publisher_deinit(void);
+
+/**
+ * @brief Get publisher statistics
+ *
+ * @param publish_count Output: nombre de publications CAN réalisées
+ * @param last_publish_ms Output: timestamp dernière publication (ms)
+ */
+void can_publisher_get_stats(uint32_t *publish_count, uint64_t *last_publish_ms);
 
 #ifdef __cplusplus
 }
