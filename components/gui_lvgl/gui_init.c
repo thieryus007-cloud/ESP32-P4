@@ -9,11 +9,15 @@
 #include "screen_config.h"
 #include "screen_tinybms_status.h"
 #include "screen_tinybms_config.h"
+#include "screen_can_status.h"
+#include "screen_can_config.h"
+#include "screen_bms_control.h"
 
 #include "event_bus.h"
 #include "event_types.h"
 #include "tinybms_client.h"
 #include "tinybms_model.h"
+#include "can_victron.h"
 
 #include "lvgl.h"
 #include "esp_log.h"
@@ -161,6 +165,24 @@ static void pack_stats_event_handler(event_bus_t *bus,
     lv_async_call(lvgl_apply_pack_update, ctx);
 }
 
+// CVL limits updated handler
+static void cvl_limits_event_handler(event_bus_t *bus,
+                                      const event_t *event,
+                                      void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const cvl_limits_event_t *limits = (const cvl_limits_event_t *) event->data;
+
+    // Update screen_bms_control directly (already in LVGL task context)
+    screen_bms_control_update_cvl(limits);
+}
+
 // TinyBMS connection event handler
 static void tinybms_connected_handler(event_bus_t *bus,
                                        const event_t *event,
@@ -219,14 +241,14 @@ void gui_init(event_bus_t *bus)
 {
     s_bus = bus;
 
-    ESP_LOGI(TAG, "Initializing GUI (LVGL with 7 tabs: Home + Pack + Cells + Power + Config + TinyBMS)");
+    ESP_LOGI(TAG, "Initializing GUI (LVGL with 10 tabs: Home + Pack + Cells + Power + Config + TinyBMS + CAN)");
 
     // ⚠️ Hypothèse : LVGL + driver écran + esp_lvgl_port sont déjà initialisés
 
     lv_obj_t *root = lv_scr_act();
 
-    // Tabview avec 7 onglets
-    lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 40);
+    // Tabview avec 10 onglets
+    lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 35);
 
     lv_obj_t *tab_home   = lv_tabview_add_tab(tabview, "Home");
     lv_obj_t *tab_pack   = lv_tabview_add_tab(tabview, "Pack");
@@ -235,6 +257,9 @@ void gui_init(event_bus_t *bus)
     lv_obj_t *tab_config = lv_tabview_add_tab(tabview, "Config");
     lv_obj_t *tab_tbms_status = lv_tabview_add_tab(tabview, "TBMS Status");
     lv_obj_t *tab_tbms_config = lv_tabview_add_tab(tabview, "TBMS Config");
+    lv_obj_t *tab_can_status = lv_tabview_add_tab(tabview, "CAN Status");
+    lv_obj_t *tab_can_config = lv_tabview_add_tab(tabview, "CAN Config");
+    lv_obj_t *tab_bms_control = lv_tabview_add_tab(tabview, "BMS Control");
 
     screen_home_create(tab_home);
     screen_battery_create(tab_pack);
@@ -243,6 +268,9 @@ void gui_init(event_bus_t *bus)
     screen_config_create(tab_config);
     screen_tinybms_status_create(tab_tbms_status);
     screen_tinybms_config_create(tab_tbms_config);
+    screen_can_status_create(tab_can_status);
+    screen_can_config_create(tab_can_config);
+    screen_bms_control_create(tab_bms_control);
 
     // Abonnements EventBus
     if (s_bus) {
@@ -275,6 +303,12 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_TINYBMS_CONFIG_CHANGED,
                             tinybms_config_changed_handler,
+                            NULL);
+
+        // CAN/CVL events
+        event_bus_subscribe(s_bus,
+                            EVENT_CVL_LIMITS_UPDATED,
+                            cvl_limits_event_handler,
                             NULL);
     }
 }
