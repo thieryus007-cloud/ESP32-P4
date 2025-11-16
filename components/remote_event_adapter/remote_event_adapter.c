@@ -1,3 +1,5 @@
+// components/remote_event_adapter/remote_event_adapter.c
+
 #include "remote_event_adapter.h"
 
 #include "esp_log.h"
@@ -95,9 +97,9 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     float energy_out_wh = json_get_number(data_obj, "energy_discharged_wh", 0.0f);
 
     // Heuristiques "OK" (à affiner plus tard)
-    s_batt_status.bms_ok     = (pack_v > 0.0f);                             // pack visible
-    s_batt_status.can_ok     = (energy_in_wh > 0.0f || energy_out_wh > 0.0f); // CAN énergisé
-    s_batt_status.mqtt_ok    = true;                                        // à relier à /ws/events
+    s_batt_status.bms_ok     = (pack_v > 0.0f);                                  // pack visible
+    s_batt_status.can_ok     = (energy_in_wh > 0.0f || energy_out_wh > 0.0f);    // CAN énergisé
+    s_batt_status.mqtt_ok    = true;                                             // à relier à /ws/events
     s_batt_status.tinybms_ok = s_batt_status.bms_ok;
 
     // --- pack_stats_t : cellules + balancing ---
@@ -174,16 +176,15 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
         }
     }
 
-    // balancing_bits > 0 : équilibrage actif global (utile pour un indicateur global si tu veux)
+    // balancing_bits > 0 : équilibrage actif global (optionnel)
     int balancing_bits = 0;
     cJSON *bal_bits = cJSON_GetObjectItemCaseSensitive(data_obj, "balancing_bits");
     if (cJSON_IsNumber(bal_bits)) {
         balancing_bits = bal_bits->valueint;
     }
-    // On pourrait, si tu veux, déduire un flag global ici ou colorer un label sur l’écran Pack.
+    (void)balancing_bits; // pour l'instant non exploité directement
 
-    // Seuils de balancing :
-    // → pas présents dans ton JSON telemetry actuel, on laisse à 0.0f
+    // Seuils de balancing : non fournis dans telemetry → reste à 0
     s_pack_stats.bal_start_mv = 0.0f;
     s_pack_stats.bal_stop_mv  = 0.0f;
 
@@ -198,7 +199,7 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     };
     event_bus_publish(s_bus, &evt_batt);
 
-    // Stats pack/cellules + balancing → Pack + Cells
+    // Stats pack/cellules + balancing → Pack + Cells + Home (BAL)
     event_t evt_pack = {
         .type = EVENT_PACK_STATS_UPDATED,
         .data = &s_pack_stats,
@@ -222,9 +223,12 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
         return;
     }
 
-    // Version minimale → tu pourras copier la même logique que systemStatus.js
+    // Version améliorée : on alimente wifi / storage / alarm
     cJSON *type  = cJSON_GetObjectItemCaseSensitive(root, "type");
     cJSON *state = cJSON_GetObjectItemCaseSensitive(root, "status");
+
+    // Fallback : certains events peuvent contenir directement "has_error"
+    bool has_error_field = json_get_bool(root, "has_error", false);
 
     if (cJSON_IsString(type) && type->valuestring) {
         const char *t = type->valuestring;
@@ -243,7 +247,37 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
                 s_sys_status.storage_ok = (strcmp(state->valuestring, "ok") == 0);
             }
         }
-        // TODO : compléter avec mqtt, errors, etc. (en copiant systemStatus.js)
+        else if (strcmp(t, "alarm") == 0 || strcmp(t, "error") == 0) {
+            // 🔔 Events d’alarme/erreur → pilotent has_error
+            bool active = has_error_field;
+
+            // active bool direct
+            if (!active) {
+                active = json_get_bool(root, "active", false);
+            }
+
+            // status string : "on", "active", "error", "critical" → true
+            if (cJSON_IsString(state) && state->valuestring) {
+                const char *s = state->valuestring;
+                if (!active &&
+                    (strcmp(s, "on") == 0 ||
+                     strcmp(s, "active") == 0 ||
+                     strcmp(s, "error") == 0 ||
+                     strcmp(s, "critical") == 0)) {
+                    active = true;
+                }
+                if (strcmp(s, "ok") == 0 || strcmp(s, "off") == 0) {
+                    active = false;
+                }
+            }
+
+            s_sys_status.has_error = active;
+        }
+    }
+
+    // Fallback global : si un event porte has_error true, on le prend en compte
+    if (has_error_field) {
+        s_sys_status.has_error = true;
     }
 
     cJSON_Delete(root);
