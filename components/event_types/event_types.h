@@ -41,6 +41,13 @@ typedef enum {
     EVENT_USER_INPUT_ACK_ALARM,         // futur
     EVENT_USER_INPUT_WRITE_CONFIG,      // futur
 
+    // --- Événements TinyBMS (UART direct) ---
+    EVENT_TINYBMS_CONNECTED,            // TinyBMS connecté via UART
+    EVENT_TINYBMS_DISCONNECTED,         // TinyBMS déconnecté
+    EVENT_TINYBMS_REGISTER_UPDATED,     // tinybms_register_update_t
+    EVENT_TINYBMS_CONFIG_CHANGED,       // configuration TinyBMS modifiée
+    EVENT_USER_INPUT_TINYBMS_WRITE_REG, // user_input_tinybms_write_t
+
     EVENT_TYPE_MAX
 } event_type_t;
 
@@ -118,6 +125,25 @@ typedef struct {
 typedef struct {
     float target_soc;          // %
 } user_input_set_target_soc_t;
+
+/**
+ * @brief  Mise à jour d'un registre TinyBMS
+ */
+typedef struct {
+    uint16_t address;          // Adresse du registre
+    uint16_t raw_value;        // Valeur brute
+    float user_value;          // Valeur convertie pour affichage
+    char key[32];              // Clé du registre (ex: "fully_charged_voltage_mv")
+} tinybms_register_update_t;
+
+/**
+ * @brief  Commande : écrire un registre TinyBMS
+ */
+typedef struct {
+    uint16_t address;          // Adresse du registre
+    uint16_t value;            // Valeur à écrire
+    char key[32];              // Clé du registre
+} user_input_tinybms_write_t;
 
 /**
  * @brief  Payload générique d'événement EventBus
