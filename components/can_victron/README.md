@@ -45,9 +45,9 @@ Le composant utilise des valeurs de configuration **statiques** au lieu de `conf
 | `battery_family` | "LiFePO4" | Famille batterie (0x382) |
 | `serial_number` | "ESP32P4-00000001" | Numéro de série (0x380/381) |
 
-### Dépendances supprimées
+### Dépendances supprimées/modifiées
 - ❌ `config_manager.h` → Configuration statique
-- ❌ `app_events.h` → Event IDs définis localement
+- ✅ `app_events.h` → Event IDs importés depuis `event_types.h` (Phase 5)
 - ❌ `can_config_defaults.h` → Constantes définies localement
 
 ## API
@@ -137,16 +137,19 @@ Une task FreeRTOS dédiée (`can_victron_task`) gère:
 
 ## Événements
 
-Le driver publie les événements suivants (via `event_bus_publish_fn_t`):
+Le driver publie les événements suivants (depuis `event_types.h` - Phase 5):
 
 | Event ID | Description |
 |----------|-------------|
-| `APP_EVENT_CAN_BUS_STARTED` | Driver CAN démarré |
-| `APP_EVENT_CAN_BUS_STOPPED` | Driver CAN arrêté |
-| `APP_EVENT_CAN_MESSAGE_TX` | Message CAN transmis |
-| `APP_EVENT_CAN_MESSAGE_RX` | Message CAN reçu |
-| `APP_EVENT_CAN_KEEPALIVE_TIMEOUT` | Timeout keepalive (pas de réponse GX) |
-| `APP_EVENT_CAN_ERROR` | Erreur bus CAN |
+| `EVENT_CAN_BUS_STARTED` | Driver CAN démarré |
+| `EVENT_CAN_BUS_STOPPED` | Driver CAN arrêté |
+| `EVENT_CAN_MESSAGE_TX` | Message CAN transmis |
+| `EVENT_CAN_MESSAGE_RX` | Message CAN reçu (handshake 0x307) |
+| `EVENT_CAN_KEEPALIVE_TIMEOUT` | Timeout keepalive (pas de réponse GX) |
+| `EVENT_CAN_ERROR` | Erreur bus CAN |
+
+**Note Phase 5**: Les Event IDs sont maintenant importés depuis `event_types.h` (partagés avec can_publisher).
+Publication complète via event_bus en cours d'intégration (TODO).
 
 ## Statistiques
 
@@ -157,15 +160,27 @@ Le driver collecte les statistiques suivantes:
 - Occupancy bus (%)
 - État TWAI (running, stopped, bus off, recovering)
 
+## Phases complétées
+
+✅ **Phase 2**: Driver CAN TWAI complet
+- Transmission/réception CAN 500 kbps
+- Keepalive 0x305 automatique (1000ms)
+- Handshake 0x307 avec validation signature "VIC"
+- Gestion timeout et reconnexion
+- Thread-safe avec 3 mutex
+- Task FreeRTOS dédiée
+
+✅ **Phase 3**: Encodeurs messages CAN (dans can_publisher)
+✅ **Phase 4**: Orchestrateur EventBus (dans can_publisher)
+✅ **Phase 5**: Intégration event_types.h
+- Event IDs partagés (EVENT_CAN_*)
+- Détection et logging timeout keepalive
+- Détection et logging handshake 0x307
+
 ## Limitations actuelles
 
-⚠️ **Ce composant est standalone**. Il ne publie pas encore les 19 messages CAN Victron.
-Les phases suivantes ajouteront:
-
-- **Phase 3**: Encodeurs des 19 messages CAN (conversion_table)
-- **Phase 4**: Intégration EventBus (abonnement aux événements TinyBMS)
-- **Phase 5**: Logique keepalive complète
-- **Phase 6**: State machine CVL
+⚠️ **Publication événements**: Les événements sont détectés et loggés mais pas encore publiés via event_bus.
+Intégration complète nécessite callback event_bus_publish_fn_t (TODO Phase 5+).
 
 ## Dépendances
 
@@ -173,6 +188,7 @@ Les phases suivantes ajouteront:
 - `esp_timer` (Timestamps)
 - `freertos` (Tasks, mutex)
 - `event_bus` (Publication d'événements)
+- `event_types` (Event IDs CAN/CVL - Phase 5)
 
 ## Référence
 
