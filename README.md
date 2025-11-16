@@ -140,7 +140,7 @@ Structures de données principales :
 ESP32-P4/
 ├── README.md
 ├── main/
-│   ├── app_main.c.c         # Point d'entrée (36 lignes)
+│   ├── app_main.c         # Point d'entrée (36 lignes)
 │   ├── hmi_main.c           # Orchestrateur système (67 lignes)
 │   └── hmi_main.h
 ├── components/
