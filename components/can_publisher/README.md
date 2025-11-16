@@ -6,100 +6,211 @@ Ce composant fait partie du plan d'intégration CAN BMS pour ESP32-P4 (voir `PLA
 
 Il contient les modules nécessaires pour:
 1. Adapter les données TinyBMS au format attendu par le projet BMS de référence
-2. Publier des messages CAN Victron Energy (à venir)
-3. Gérer la state machine CVL (Charge Voltage Limit) (à venir)
+2. Encoder et publier les 19 messages CAN Victron Energy
+3. Gérer la state machine CVL (Charge Voltage Limit)
+4. Orchestrer la publication périodique des messages CAN
 
-## Structure
+## Structure (après Phase 3)
 
 ```
 can_publisher/
 ├── tinybms_adapter.c/h    # ✅ Phase 1: Adaptateur tinybms_model → uart_bms_live_data_t
-├── conversion_table.c/h   # 🔴 Phase 3: Encodeurs de messages CAN (à copier)
-├── cvl_controller.c/h     # 🔴 Phase 6: Contrôleur CVL (à copier)
-├── cvl_logic.c/h          # 🔴 Phase 6: Logique state machine CVL (à copier)
-├── cvl_types.h            # 🔴 Phase 6: Types CVL (à copier)
-└── can_publisher.c/h      # 🔴 Phase 4: Orchestrateur (à créer)
+├── conversion_table.c/h   # ✅ Phase 3: Encodeurs des 19 messages CAN Victron
+├── cvl_types.h            # ✅ Phase 3: Types pour state machine CVL (6 états)
+├── cvl_logic.c/h          # ✅ Phase 3: Logique state machine CVL
+├── cvl_controller.c/h     # ✅ Phase 3: Contrôleur CVL (orchestration)
+├── can_publisher.h        # ⚠️  Phase 3: Stub (types uniquement pour compilation)
+└── can_publisher.c        # 🔴 Phase 4: Orchestrateur complet (à créer)
 ```
 
-## Phase 1: Adaptateur TinyBMS (ACTUEL)
+**Statistiques**:
+- **Lignes de code**: ~2100 lignes (C + headers)
+- **Messages CAN**: 19 encodeurs Victron
+- **State machine CVL**: 6 états
 
-### Objectif
+## Phase 1: Adaptateur TinyBMS ✅
 
-Créer un pont entre:
-- **ESP32-P4**: `tinybms_model` (cache de 34 registres de configuration 0x012C-0x0157)
-- **BMS référence**: `uart_bms_live_data_t` (structure unifiée utilisée par can_publisher)
-
-### État actuel
-
-✅ **Implémenté**:
-- Structure `uart_bms_live_data_t` définie dans `tinybms_adapter.h`
-- Fonction `tinybms_adapter_convert()` pour la conversion
-- Mapping des registres de configuration disponibles (capacité, seuils de sécurité, etc.)
-
-⚠️ **Limitations actuelles**:
-Les registres de **mesures temps réel** ne sont pas encore disponibles dans `tinybms_model`:
-- `0x0000-0x000F`: Tensions des cellules (16 valeurs)
-- `0x0024 (36)`: Tension pack (FLOAT)
-- `0x0026 (38)`: Courant pack (FLOAT)
-- `0x002D (45)`: SOH - State of Health (UINT16)
-- `0x002E (46)`: SOC - State of Charge (UINT32)
-- `0x0030 (48)`: Température moyenne (INT16)
-- `0x0066 (102)`: Courant de décharge max (UINT16)
-- `0x0067 (103)`: Courant de charge max (UINT16)
-
-Ces registres devront être ajoutés à `tinybms_model` avant les phases CAN.
+### Fonctionnalités
+- Structure `uart_bms_live_data_t` compatible BMS référence
+- Conversion `tinybms_model` → `uart_bms_live_data_t`
+- Mapping des 34 registres de configuration (0x012C-0x0157)
+- API thread-safe avec statistiques
 
 ### Utilisation
 
 ```c
 #include "tinybms_adapter.h"
 
-// S'assurer que les registres sont cachés
-tinybms_model_read_all();
-
-// Vérifier que l'adaptateur est prêt
-if (tinybms_adapter_is_ready()) {
-    uart_bms_live_data_t bms_data;
-
-    // Convertir les données
-    if (tinybms_adapter_convert(&bms_data) == ESP_OK) {
-        // Utiliser bms_data pour CAN publisher
-        // can_publisher_update(&bms_data);
-    }
+// Convertir les données TinyBMS
+uart_bms_live_data_t bms_data;
+if (tinybms_adapter_convert(&bms_data) == ESP_OK) {
+    // Données prêtes pour encodeurs CAN
 }
 ```
 
+## Phase 3: Encodeurs CAN + CVL ✅
+
+### conversion_table.c/h - Encodeurs Victron
+
+**19 messages CAN Victron** encodés depuis BMS référence:
+
+| CAN ID | Description | Période | Fonction encoder |
+|--------|-------------|---------|------------------|
+| 0x305 | Keepalive | 1000ms | `encode_keepalive()` |
+| 0x307 | Handshake Response | RX only | - |
+| 0x351 | CVL/CCL/DCL | 1000ms | `encode_cvl_ccl_dcl()` |
+| 0x355 | SOC/SOH | 1000ms | `encode_soc_soh()` |
+| 0x356 | Voltage/Current/Temp | 1000ms | `encode_voltage_current_temp()` |
+| 0x35A | Alarm Status | 1000ms | `encode_alarm_status()` |
+| 0x35E | Manufacturer Info | 2000ms | `encode_manufacturer()` |
+| 0x35F | Battery ID | 2000ms | `encode_battery_id()` |
+| 0x370-0x371 | Battery Name (2 parts) | 2000ms | `encode_battery_name_*()` |
+| 0x372 | Module Status | 1000ms | `encode_module_status()` |
+| 0x373 | Cell V/T Extremes | 1000ms | `encode_cell_extremes()` |
+| 0x374-0x377 | Min/Max Cell/Temp IDs | 1000ms | `encode_*_identifier()` |
+| 0x378 | Energy Counters | 1000ms | `encode_energy_counters()` |
+| 0x379 | Installed Capacity | 5000ms | `encode_installed_capacity()` |
+| 0x380-0x381 | Serial Number (2 parts) | 5000ms | `encode_serial_number_*()` |
+| 0x382 | Battery Family | 5000ms | `encode_battery_family()` |
+
+**Caractéristiques**:
+- ✅ Thread-safe (mutex pour energy counters)
+- ✅ Gestion NVS pour persistance énergie
+- ✅ Intégration puissance (V × I × Δt)
+- ✅ Compteurs charged/discharged (Wh)
+- ✅ Catalogue `g_can_publisher_channels[]`
+
+**API Énergie**:
+```c
+// Intégrer échantillon BMS (accumulation énergie)
+can_publisher_conversion_ingest_sample(const uart_bms_live_data_t *sample);
+
+// Lire compteurs énergie
+double charged_wh, discharged_wh;
+can_publisher_conversion_get_energy_state(&charged_wh, &discharged_wh);
+
+// Sauvegarder/restaurer depuis NVS
+can_publisher_conversion_persist_energy_state();
+can_publisher_conversion_restore_energy_state();
+```
+
+### cvl_logic.c/h - State Machine CVL
+
+**6 états CVL** pour protection batterie:
+
+```c
+typedef enum {
+    CVL_STATE_BULK = 0,              // Charge rapide initiale
+    CVL_STATE_TRANSITION = 1,         // Transition vers float
+    CVL_STATE_FLOAT_APPROACH = 2,     // Approche du float
+    CVL_STATE_FLOAT = 3,              // Charge de maintien
+    CVL_STATE_IMBALANCE_HOLD = 4,     // Protection déséquilibre
+    CVL_STATE_SUSTAIN = 5,            // Mode maintenance bas SOC
+} cvl_state_t;
+```
+
+**Logique de calcul**:
+- Transitions basées sur SOC (bulk_soc_threshold, float_soc_threshold, etc.)
+- Protection cellule haute tension (hystérésis)
+- Réduction CVL dynamique si déséquilibre
+- Limitation CCL/DCL selon l'état
+- Anti-oscillation (max_recovery_step_v)
+
+**API**:
+```c
+void cvl_compute_limits(
+    const cvl_inputs_t *input,           // SOC, voltages, températures
+    const cvl_config_snapshot_t *config, // Seuils de configuration
+    const cvl_runtime_state_t *previous, // État précédent
+    cvl_computation_result_t *result     // CVL/CCL/DCL calculés
+);
+```
+
+### cvl_controller.c/h - Contrôleur CVL
+
+Orchestration de la state machine CVL:
+- Initialisation de la configuration
+- Préparation des données BMS pour CVL
+- Récupération des résultats CVL
+
+**API**:
+```c
+// Initialiser contrôleur CVL
+can_publisher_cvl_init();
+
+// Préparer données BMS pour calcul CVL
+can_publisher_cvl_prepare(const uart_bms_live_data_t *bms_data);
+
+// Récupérer derniers résultats CVL
+bool can_publisher_cvl_get_latest(can_publisher_cvl_result_t *result);
+```
+
+### cvl_types.h - Types CVL
+
+Définitions de types pour la state machine CVL (cvl_state_t).
+
+## Phase 2: Driver CAN ✅ (completed)
+
+Driver TWAI bas niveau dans `components/can_victron/`:
+- GPIO 22/21 pour ESP32-P4
+- 500 kbps, Standard 11-bit IDs
+- Keepalive automatique 0x305/0x307
+- Thread-safe avec 3 mutex
+
 ## Phases suivantes
 
-### Phase 2: Driver CAN (à venir)
-Copier `can_victron.c/h` depuis `Exemple/mac-local/BMS/main/can_victron/`
+### Phase 4: Intégration EventBus (prochain)
+- Créer `can_publisher.c` (orchestrateur complet)
+- Abonner aux événements `EVENT_TINYBMS_REGISTER_UPDATED`
+- Appeler encodeurs conversion_table
+- Publier vers can_victron
+- Gestion périodique des messages
 
-### Phase 3: Encodeurs messages (à venir)
-Copier `conversion_table.c/h` depuis `Exemple/mac-local/BMS/main/can_publisher/`
+### Phase 5: Keepalive complet
+- Déjà partiellement dans can_victron (Phase 2)
+- Intégration complète avec can_publisher
 
-### Phase 4: Intégration EventBus (à venir)
-Créer `can_publisher.c/h` pour orchestrer la conversion et la publication
+### Phase 6: Tests et validation
+- Tests encodeurs CAN
+- Validation state machine CVL
+- Tests avec GX device réel
 
-### Phase 5: Keepalive et handshake (à venir)
-Implémenter messages 0x305 (keepalive) et 0x307 (handshake)
+### Phase 7: GUI
+- Écrans CAN status, config, BMS control
 
-### Phase 6: State Machine CVL (à venir)
-Copier les fichiers CVL depuis `Exemple/mac-local/BMS/main/can_publisher/`
+## Limitations actuelles
 
-### Phase 7: GUI (à venir)
-Créer les écrans GUI pour CAN status, config et BMS control
+⚠️ **Registres temps réel manquants** dans `tinybms_model`:
+- `0x0000-0x000F`: Tensions cellules
+- `0x0024/0x0026`: Tension/courant pack
+- `0x002D/0x002E`: SOH/SOC
+- `0x0030`: Température
+- `0x0066/0x0067`: Courants max
 
-## TODOs critiques avant Phase 2
-
-1. **Étendre tinybms_model** pour supporter les registres de mesures temps réel (0x0000-0x004F)
-2. **Implémenter la lecture périodique** des mesures temps réel dans tinybms_client
-3. **Publier des événements** pour les mises à jour de mesures (pas seulement config)
+**Workaround**: L'adaptateur utilise des valeurs par défaut temporaires.
+**Solution**: Étendre `tinybms_model` pour lire ces registres (Phase 4+).
 
 ## Dépendances
 
-- `tinybms_model`: Pour accéder au cache des registres
-- `esp_timer`: Pour les timestamps
+- `tinybms_model`: Cache des registres TinyBMS
+- `esp_timer`: Timestamps
+- `nvs_flash`: Persistance énergie (à ajouter)
 
 ## Référence
 
-Voir `PLAN_BMS_CAN.md` à la racine du projet pour le plan complet d'intégration.
+- **Plan complet**: `PLAN_BMS_CAN.md` à la racine
+- **Source originale**: `Exemple/mac-local/BMS/main/can_publisher/`
+- **Protocole Victron**: Victron Energy CAN-bus BMS specification
+
+## Notes d'implémentation Phase 3
+
+✅ **Copie exacte** depuis BMS référence:
+- `conversion_table.c/h` - AUCUNE modification
+- `cvl_logic.c/h` - AUCUNE modification
+- `cvl_controller.c/h` - AUCUNE modification
+- `cvl_types.h` - AUCUNE modification
+
+⚠️ **Stub créé**:
+- `can_publisher.h` - Types minimaux pour compilation (sera complété en Phase 4)
+
+🎯 **Respect du principe**: "Ne rien inventer de nouveau"
