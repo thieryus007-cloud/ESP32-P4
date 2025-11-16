@@ -1110,9 +1110,6 @@ Il faut **compléter** avec:
 - **WiFi 6**: Meilleure performance pour monitoring distant
 - **Même fiabilité**: Protocole CAN et CVL identiques au BMS éprouvé
 
----
+Implement professionel dashboard:
+https://docs.lvgl.io/master/details/widgets/bar.html
 
-**Auteur**: Plan basé sur analyse complète du projet BMS local (Exemple/mac-local/BMS)
-**Date**: 2025-01-16
-**Version**: 2.0 (adapté pour projet BMS local)
-**Status**: Prêt pour implémentation
