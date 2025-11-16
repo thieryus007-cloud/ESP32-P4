@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "gui_init.c"
          "screen_home.c"
+         "screen_dashboard.c"
          "screen_battery.c"
          "screen_cells.c"
          "screen_power.c"

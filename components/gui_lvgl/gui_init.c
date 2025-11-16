@@ -3,6 +3,7 @@
 #include "gui_init.h"
 
 #include "screen_home.h"
+#include "screen_dashboard.h"
 #include "screen_battery.h"
 #include "screen_cells.h"
 #include "screen_power.h"
@@ -59,6 +60,7 @@ static void lvgl_apply_battery_update(void *user_data)
     if (ctx) {
         // Home + résumé pack + power flow + cells (pack global)
         screen_home_update_battery(&ctx->status);
+        screen_dashboard_update_battery(&ctx->status);
         screen_battery_update_pack_basic(&ctx->status);
         screen_power_update(&ctx->status);
         screen_cells_update_pack(&ctx->status);
@@ -71,6 +73,7 @@ static void lvgl_apply_system_update(void *user_data)
     gui_sys_ctx_t *ctx = (gui_sys_ctx_t *) user_data;
     if (ctx) {
         screen_home_update_system(&ctx->status);
+        screen_dashboard_update_system(&ctx->status);
         screen_power_update_system(&ctx->status);
         free(ctx);
     }
@@ -84,6 +87,8 @@ static void lvgl_apply_pack_update(void *user_data)
         screen_battery_update_pack_stats(&ctx->stats);
         // Cells : barres + indicateurs de balancing
         screen_cells_update_cells(&ctx->stats);
+        // Dashboard : graphe 1-16 avec couleurs min/max/balancing
+        screen_dashboard_update_cells(&ctx->stats);
         // 🔹 Home : badge global de balancing
         screen_home_update_balancing(&ctx->stats);
         free(ctx);
@@ -241,15 +246,16 @@ void gui_init(event_bus_t *bus)
 {
     s_bus = bus;
 
-    ESP_LOGI(TAG, "Initializing GUI (LVGL with 10 tabs: Home + Pack + Cells + Power + Config + TinyBMS + CAN)");
+    ESP_LOGI(TAG, "Initializing GUI (LVGL with dashboard + existing tabs: Home, Pack, Cells, Power, Config, TinyBMS, CAN, BMS Control)");
 
     // ⚠️ Hypothèse : LVGL + driver écran + esp_lvgl_port sont déjà initialisés
 
     lv_obj_t *root = lv_scr_act();
 
-    // Tabview avec 10 onglets
+    // Tabview avec Dashboard + 10 onglets historiques
     lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 35);
 
+    lv_obj_t *tab_dashboard = lv_tabview_add_tab(tabview, "Dashboard");
     lv_obj_t *tab_home   = lv_tabview_add_tab(tabview, "Home");
     lv_obj_t *tab_pack   = lv_tabview_add_tab(tabview, "Pack");
     lv_obj_t *tab_cells  = lv_tabview_add_tab(tabview, "Cells");
@@ -261,6 +267,7 @@ void gui_init(event_bus_t *bus)
     lv_obj_t *tab_can_config = lv_tabview_add_tab(tabview, "CAN Config");
     lv_obj_t *tab_bms_control = lv_tabview_add_tab(tabview, "BMS Control");
 
+    screen_dashboard_create(tab_dashboard);
     screen_home_create(tab_home);
     screen_battery_create(tab_pack);
     screen_cells_create(tab_cells);
