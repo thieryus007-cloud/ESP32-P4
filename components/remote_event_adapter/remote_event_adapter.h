@@ -2,6 +2,7 @@
 #ifndef REMOTE_EVENT_ADAPTER_H
 #define REMOTE_EVENT_ADAPTER_H
 
+#include <stddef.h>
 #include "event_bus.h"
 
 #ifdef __cplusplus
@@ -9,34 +10,42 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialiser l'adapter JSON <-> EventBus
- *
- * - S'abonne aux events USER_INPUT_* de la GUI
- * - Prépare les structures / queues pour recevoir du JSON venant de net_client
+ * @brief Initialise l'adapter distant (référence vers l'EventBus).
  */
 void remote_event_adapter_init(event_bus_t *bus);
 
 /**
- * @brief Démarrer l'adapter
- *
- * - Crée la task qui :
- *   - lit les messages JSON bruts (via queue alimentée par net_client)
- *   - parse les JSON
- *   - publie EVENT_REMOTE_* sur l'EventBus
+ * @brief Démarre l'adapter (si une task dédiée est ajoutée plus tard).
  */
 void remote_event_adapter_start(void);
 
 /**
- * @brief Point d'entrée depuis net_client pour laisser l'adapter traiter un JSON
- *
- * @param json     buffer JSON (null-terminated)
- * @param length   longueur (optionnel, peut être 0 si null-terminated)
- *
- * @note  net_client appelle cette fonction quand il reçoit des messages sur
- *        /ws/telemetry ou /ws/events. L'adapter décode et publie des events.
+ * @brief Callback appelé quand un JSON de /ws/telemetry est reçu.
  */
 void remote_event_adapter_on_telemetry_json(const char *json, size_t length);
+
+/**
+ * @brief Callback appelé quand un JSON de /ws/events est reçu.
+ */
 void remote_event_adapter_on_event_json(const char *json, size_t length);
+
+/**
+ * @brief Callback appelé quand un JSON de statut MQTT est reçu.
+ *
+ *  Alignement logique avec SystemStatus.handleMqttStatus(status) :
+ *  - status.enabled = false  → mqtt_ok = false
+ *  - status.enabled = true & status.connected = true  → mqtt_ok = true
+ *  - status.enabled = true & status.connected = false → mqtt_ok = false
+ *
+ *  JSON attendu (exemple) :
+ *  {
+ *    "enabled": true,
+ *    "connected": false,
+ *    "client_id": "tinybms-bridge",
+ *    "last_error": "Connection refused"
+ *  }
+ */
+void remote_event_adapter_on_mqtt_status_json(const char *json, size_t length);
 
 #ifdef __cplusplus
 }
