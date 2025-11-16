@@ -24,7 +24,9 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
 
 ## ✨ Fonctionnalités
 
-### Interface graphique (5 écrans)
+### Interface graphique (7 écrans)
+
+#### Écrans BMS S3 (via WiFi/WebSocket)
 
 1. **🏠 Écran d'accueil (Home)**
    - Affichage grand format du SOC (State of Charge)
@@ -54,15 +56,37 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
    - Interface de configuration (en développement)
    - Intégration prévue avec les endpoints REST API
 
+#### Écrans TinyBMS (via UART/RS485 direct)
+
+6. **🔌 Écran TinyBMS Status**
+   - État de connexion UART en temps réel
+   - Statistiques de communication (Reads, Writes, Errors)
+   - Bouton "Read All" pour scanner les 34 registres
+   - Bouton "Restart BMS" pour redémarrer TinyBMS
+
+7. **⚙️ Écran TinyBMS Config**
+   - Configuration complète des 34 registres TinyBMS
+   - Sections : Battery (9), Charger (2), Safety (6), Advanced (5), System (13)
+   - Affichage avec unités (mV, A, Ah, %, °C)
+   - Mise à jour automatique après lecture
+
 ### Communication
 
+#### Communication réseau (BMS S3)
 - **WiFi** : Connexion au système BMS S3
 - **WebSocket** :
   - `/ws/telemetry` - Flux de données de batterie
   - `/ws/events` - Flux d'événements système
 - **HTTP REST API** : Envoi de commandes et configuration
-- **RS485** : Communication directe avec TinyBMS (prévu)
-  - RXD: GPIO27, TXD: GPIO26
+
+#### Communication directe (TinyBMS)
+- **RS485/UART** : ✅ **Implémenté** - Communication directe avec TinyBMS
+  - UART1 sur GPIO27 (RXD) / GPIO26 (TXD)
+  - 115200 baud, 8N1
+  - Protocole binaire avec CRC16
+  - 34 registres configurables
+  - Lecture/écriture avec retry et vérification
+
 - **CAN Bus** : Communication avec le pack batterie (prévu)
   - RXD: GPIO21, TXD: GPIO22
 
@@ -71,34 +95,35 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
 Le projet suit une **architecture événementielle en 5 couches** :
 
 ```
-┌─────────────────────────────────────────┐
-│   Couche 5 : Présentation (LVGL GUI)   │
-│   • 5 écrans tactiles interactifs       │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│   Couche 5 : Présentation (LVGL GUI)            │
+│   • 7 écrans tactiles interactifs (5 S3 + 2 TBMS)│
+└──────────────────────────────────────────────────┘
                     ↓ Events
-┌─────────────────────────────────────────┐
-│   Couche 4 : Application/Modèle         │
-│   • telemetry_model                     │
-│   • system_events_model                 │
-│   • config_model                        │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│   Couche 4 : Application/Modèle                  │
+│   • telemetry_model      • tinybms_model         │
+│   • system_events_model  • tinybms_client        │
+│   • config_model                                 │
+└──────────────────────────────────────────────────┘
                     ↓ Events
-┌─────────────────────────────────────────┐
-│   Couche 3 : Communication              │
-│   • net_client (WiFi + WebSocket)       │
-│   • remote_event_adapter (JSON ↔ Events)│
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│   Couche 3 : Communication                       │
+│   • net_client (WiFi + WebSocket)                │
+│   • remote_event_adapter (JSON ↔ Events)         │
+│   • tinybms_client (UART/RS485 ↔ Events)         │
+└──────────────────────────────────────────────────┘
                     ↓ Events
-┌─────────────────────────────────────────┐
-│   Couche 2 : Noyau Système              │
-│   • EventBus (Publish/Subscribe)        │
-│   • FreeRTOS Tasks                      │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│   Couche 2 : Noyau Système                       │
+│   • EventBus (Publish/Subscribe)                 │
+│   • FreeRTOS Tasks                               │
+└──────────────────────────────────────────────────┘
                     ↓
-┌─────────────────────────────────────────┐
-│   Couche 1 : HAL & BSP                  │
-│   • Drivers LCD, tactile, WiFi          │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│   Couche 1 : HAL & BSP                           │
+│   • Drivers LCD, tactile, WiFi, UART             │
+└──────────────────────────────────────────────────┘
 ```
 
 ### Composants principaux
@@ -130,9 +155,31 @@ Structures de données principales :
 
 #### Interface graphique (`components/gui_lvgl/`)
 - Basée sur **LVGL** (Light and Versatile Graphics Library)
-- 5 écrans dans une interface à onglets
+- 7 écrans dans une interface à onglets
 - Thread-safe avec `lv_async_call()`
-- 1,082 lignes de code GUI
+- 1,728 lignes de code GUI (5 écrans S3 + 2 écrans TinyBMS)
+
+#### Client TinyBMS (`components/tinybms_client/`)
+- **Protocole binaire UART** avec CRC16 (Modbus-like)
+- Communication sur UART1 (GPIO27/26) à 115200 baud
+- Fonctions de lecture/écriture thread-safe avec mutex
+- Retry automatique (3 tentatives)
+- Vérification après écriture
+- Statistiques détaillées (reads/writes OK/failed, CRC errors, timeouts)
+- Commande de redémarrage TinyBMS
+
+#### Modèle TinyBMS (`components/tinybms_model/`)
+- **Catalogue complet** de 34 registres répartis en 5 groupes :
+  - Battery (9 registres) : tensions, capacité, cellules
+  - Charger (2 registres) : délais de démarrage/arrêt
+  - Safety (6 registres) : seuils de protection
+  - Advanced (5 registres) : SOC/SOH, cycles
+  - System (13 registres) : modes de fonctionnement
+- Conversion raw ↔ user value avec scaling et précision
+- Validation des valeurs (min/max/step)
+- Support des enums (13 registres de type enum)
+- Cache local avec timestamps
+- API : read_all(), read_register(), write_register(), get_config()
 
 ## 📁 Structure du projet
 
@@ -140,29 +187,38 @@ Structures de données principales :
 ESP32-P4/
 ├── README.md
 ├── main/
-│   ├── app_main.c         # Point d'entrée (36 lignes)
-│   ├── hmi_main.c           # Orchestrateur système (67 lignes)
+│   ├── app_main.c.c         # Point d'entrée (36 lignes)
+│   ├── hmi_main.c           # Orchestrateur système (73 lignes)
 │   └── hmi_main.h
 ├── components/
 │   ├── event_bus/           # Système d'événements pub/sub
 │   ├── event_types/         # Définitions de types et structures
-│   ├── gui_lvgl/            # Interface graphique LVGL (1,082 lignes)
+│   ├── gui_lvgl/            # Interface graphique LVGL (1,728 lignes)
 │   │   ├── gui_init.c/h
-│   │   ├── screen_home.c/h      (251 lignes)
-│   │   ├── screen_battery.c/h   (260 lignes)
-│   │   ├── screen_cells.c/h     (226 lignes)
-│   │   ├── screen_power.c/h     (117 lignes)
-│   │   └── screen_config.c/h    (22 lignes)
+│   │   ├── screen_home.c/h            (251 lignes)
+│   │   ├── screen_battery.c/h         (260 lignes)
+│   │   ├── screen_cells.c/h           (226 lignes)
+│   │   ├── screen_power.c/h           (117 lignes)
+│   │   ├── screen_config.c/h          (22 lignes)
+│   │   ├── screen_tinybms_status.c/h  (209 lignes)
+│   │   └── screen_tinybms_config.c/h  (255 lignes)
 │   ├── net_client/          # Client WiFi + WebSocket
-│   └── remote_event_adapter/# Convertisseur JSON ↔ EventBus
+│   ├── remote_event_adapter/# Convertisseur JSON ↔ EventBus
+│   ├── tinybms_client/      # Client UART TinyBMS (911 lignes)
+│   │   ├── tinybms_client.c/h
+│   │   └── tinybms_protocol.c/h
+│   └── tinybms_model/       # Modèle registres TinyBMS (1,018 lignes)
+│       ├── tinybms_model.c/h
+│       └── tinybms_registers.c/h
 └── Exemple/
     └── mac-local/           # Serveur de test Node.js pour TinyBMS
 ```
 
 **Statistiques du projet :**
-- 22 fichiers source
-- 2,243 lignes de code
+- 37 fichiers source
+- 5,818 lignes de code
 - Architecture modulaire avec composants indépendants
+- 3 nouveaux composants TinyBMS (2,575 lignes)
 
 ## 🚀 Démarrage rapide
 
@@ -274,20 +330,28 @@ npm start
 ## 📈 État du développement
 
 ### ✅ Implémenté
-- Architecture EventBus centrale
-- Définitions de types d'événements
+- Architecture EventBus centrale avec 19 types d'événements
+- Définitions de types d'événements étendues
 - Client réseau (WiFi + WebSocket)
 - Adaptateur JSON vers événements
-- Interface graphique complète 5 écrans LVGL
+- Interface graphique complète 7 écrans LVGL (5 S3 + 2 TinyBMS)
 - Orchestration système de base
+- **Communication UART/RS485 TinyBMS complète**
+  - Protocole binaire avec CRC16
+  - Client thread-safe avec retry
+  - Catalogue complet de 34 registres
+  - Modèle avec cache et validation
+  - GUI de statut et configuration
+- Intégration complète dans hmi_main
 
 ### 🚧 En cours / Prévu
-- Composants modèle (telemetry_model, system_events_model, config_model)
+- Composants modèle S3 (telemetry_model, system_events_model, config_model)
 - Composant logger
 - Système de configuration (CMakeLists.txt, sdkconfig)
 - Gestion des entrées utilisateur (commandes vers S3)
-- Interface de configuration complète
-- Modules de communication UART/CAN
+- Interface de configuration S3 complète
+- Édition interactive des registres TinyBMS dans GUI
+- Module de communication CAN
 - Support mise à jour OTA
 
 ## 🔌 Interfaces matérielles

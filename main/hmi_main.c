@@ -12,6 +12,8 @@
 #include "telemetry_model.h"
 #include "system_events_model.h"
 #include "config_model.h"
+#include "tinybms_client.h"
+#include "tinybms_model.h"
 #include "gui_init.h"
 
 static const char *TAG = "HMI_MAIN";
@@ -39,6 +41,10 @@ void hmi_main_init(void)
     system_events_model_init(&s_event_bus);    // modèle statut système (wifi, storage, etc.)
     config_model_init(&s_event_bus);           // modèle config (plus tard)
 
+    // 3b) Init TinyBMS (UART direct)
+    tinybms_client_init(&s_event_bus);         // Client UART TinyBMS
+    tinybms_model_init(&s_event_bus);          // Modèle registres TinyBMS
+
     // 4) Init GUI (LVGL + écrans)
     gui_init(&s_event_bus);
 }
@@ -56,6 +62,10 @@ void hmi_main_start(void)
     telemetry_model_start();        // si besoin d'une task (sinon peut être vide)
     system_events_model_start();
     config_model_start();
+
+    // 2b) Démarrer TinyBMS
+    tinybms_client_start();         // Connexion UART TinyBMS
+
     gui_start();                    // si la GUI a besoin d'une task spécifique (en plus de LVGL)
 }
 
