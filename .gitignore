@@ -1,0 +1,29 @@
+# ESP-IDF build outputs
+build/
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node / web assets
+node_modules/
+Exemple/mac-local/node_modules/
+dist/
+.tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and environment
+*.log
+*.env
