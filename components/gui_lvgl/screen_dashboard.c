@@ -36,10 +36,6 @@ static lv_obj_t *s_chart_power = NULL;
 static lv_chart_series_t *s_chart_series_power = NULL;
 static lv_chart_series_t *s_chart_series_current = NULL;
 
-static lv_obj_t *s_card_cells = NULL;
-static lv_obj_t *s_cell_bars[16];
-static lv_obj_t *s_cell_labels[16];
-
 static lv_obj_t *s_label_voltage = NULL;
 static lv_obj_t *s_label_status_wifi = NULL;
 static lv_obj_t *s_label_status_storage = NULL;
@@ -50,7 +46,6 @@ static lv_color_t color_ok(void)      { return lv_palette_main(LV_PALETTE_GREEN)
 static lv_color_t color_warn(void)    { return lv_palette_main(LV_PALETTE_YELLOW); }
 static lv_color_t color_error(void)   { return lv_palette_main(LV_PALETTE_RED); }
 static lv_color_t color_neutral(void) { return lv_palette_main(LV_PALETTE_GREY); }
-static lv_color_t color_bal(void)     { return lv_palette_main(LV_PALETTE_ORANGE); }
 
 static void set_status_label(lv_obj_t *label, const char *text, lv_color_t color)
 {
@@ -120,49 +115,6 @@ static lv_obj_t *create_status_row(lv_obj_t *parent)
     return row;
 }
 
-static void create_cells_chart(lv_obj_t *parent)
-{
-    s_card_cells = create_card(parent, "Cellules (1-16)");
-    lv_obj_set_width(s_card_cells, LV_PCT(100));
-
-    lv_obj_t *row = lv_obj_create(s_card_cells);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_width(row, LV_PCT(100));
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row,
-                          LV_FLEX_ALIGN_START,
-                          LV_FLEX_ALIGN_END,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(row, 6, 0);
-    lv_obj_set_style_pad_column(row, 8, 0);
-
-    for (uint8_t i = 0; i < 16; ++i) {
-        lv_obj_t *col = lv_obj_create(row);
-        lv_obj_remove_style_all(col);
-        lv_obj_set_size(col, 20, 120);
-        lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(col,
-                              LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_END,
-                              LV_FLEX_ALIGN_CENTER);
-
-        lv_obj_t *bar = lv_bar_create(col);
-        lv_obj_set_size(bar, 16, 90);
-        lv_bar_set_range(bar, 0, 1000);
-        lv_bar_set_value(bar, 0, LV_ANIM_OFF);
-        lv_obj_set_style_bg_color(bar, lv_palette_main(LV_PALETTE_GREY), LV_PART_INDICATOR);
-        lv_obj_set_style_radius(bar, 6, LV_PART_INDICATOR);
-
-        lv_obj_t *lbl = lv_label_create(col);
-        char tmp[8];
-        snprintf(tmp, sizeof(tmp), "C%02u", (unsigned)(i + 1));
-        lv_label_set_text(lbl, tmp);
-
-        s_cell_bars[i] = bar;
-        s_cell_labels[i] = lbl;
-    }
-}
-
 void screen_dashboard_create(lv_obj_t *parent)
 {
     lv_obj_set_style_pad_all(parent, 10, 0);
@@ -208,9 +160,6 @@ void screen_dashboard_create(lv_obj_t *parent)
     lv_obj_set_style_text_font(s_label_voltage, &lv_font_montserrat_22, 0);
 
     create_status_row(card_status);
-
-    // Carte tensions cellules 1–16
-    create_cells_chart(parent);
 }
 
 void screen_dashboard_update_battery(const battery_status_t *status)
@@ -242,67 +191,6 @@ void screen_dashboard_update_battery(const battery_status_t *status)
         char buf[32];
         snprintf(buf, sizeof(buf), "%.2f V", status->voltage);
         lv_label_set_text(s_label_voltage, buf);
-    }
-}
-
-void screen_dashboard_update_cells(const pack_stats_t *stats)
-{
-    if (!stats || !s_card_cells) {
-        return;
-    }
-
-    float min_mv = stats->cell_min;
-    float max_mv = stats->cell_max;
-    if (max_mv <= min_mv || max_mv <= 0.0f) {
-        min_mv = 2800.0f;
-        max_mv = 3600.0f;
-    }
-    float range = max_mv - min_mv;
-    if (range <= 0.0f) {
-        range = 1.0f;
-    }
-
-    uint8_t count = stats->cell_count;
-    if (count > 16) count = 16;
-
-    for (uint8_t i = 0; i < 16; ++i) {
-        lv_obj_t *bar = s_cell_bars[i];
-        lv_obj_t *lbl = s_cell_labels[i];
-        if (!bar || !lbl) continue;
-
-        if (i < count) {
-            float mv = stats->cells[i];
-            float norm = (mv - min_mv) / range;
-            if (norm < 0.0f) norm = 0.0f;
-            if (norm > 1.0f) norm = 1.0f;
-            int val = (int)(norm * 1000.0f);
-            lv_bar_set_value(bar, val, LV_ANIM_OFF);
-
-            lv_color_t col = lv_palette_main(LV_PALETTE_BLUE);
-            if (stats->balancing[i]) {
-                col = color_bal();
-            } else if (mv == stats->cell_min) {
-                col = color_error();
-            } else if (mv == stats->cell_max) {
-                col = color_ok();
-            }
-            lv_obj_set_style_bg_color(bar, col, LV_PART_INDICATOR);
-
-            char tmp[12];
-            if (stats->balancing[i]) {
-                snprintf(tmp, sizeof(tmp), "C%02u*", (unsigned)(i + 1));
-            } else {
-                snprintf(tmp, sizeof(tmp), "C%02u", (unsigned)(i + 1));
-            }
-            lv_label_set_text(lbl, tmp);
-        } else {
-            lv_bar_set_value(bar, 0, LV_ANIM_OFF);
-            lv_obj_set_style_bg_color(bar, color_neutral(), LV_PART_INDICATOR);
-
-            char tmp[12];
-            snprintf(tmp, sizeof(tmp), "C%02u", (unsigned)(i + 1));
-            lv_label_set_text(lbl, tmp);
-        }
     }
 }
 
