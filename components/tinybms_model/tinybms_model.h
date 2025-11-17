@@ -61,7 +61,7 @@ typedef struct {
  * @param bus Pointer to EventBus
  * @return ESP_OK on success
  */
-esp_err_t tinybms_model_init(EventBus *bus);
+esp_err_t tinybms_model_init(event_bus_t *bus);
 
 /**
  * @brief Read all registers from TinyBMS

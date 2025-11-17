@@ -75,6 +75,7 @@ typedef enum {
     EVENT_TINYBMS_CONFIG_CHANGED,       // configuration TinyBMS modifiée
     EVENT_USER_INPUT_TINYBMS_WRITE_REG, // user_input_tinybms_write_t
     EVENT_TINYBMS_UART_LOG,             // tinybms_uart_log_entry_t
+    EVENT_TINYBMS_STATS_UPDATED,        // tinybms_stats_event_t
 
     // --- Événements CAN Bus (Phase 2+) ---
     EVENT_CAN_BUS_STARTED,              // Driver CAN démarré
@@ -316,6 +317,25 @@ typedef struct {
 } tinybms_uart_log_entry_t;
 
 /**
+ * @brief  Statistiques de communication TinyBMS
+ */
+typedef struct {
+    uint32_t reads_ok;
+    uint32_t reads_failed;
+    uint32_t writes_ok;
+    uint32_t writes_failed;
+    uint32_t crc_errors;
+    uint32_t timeouts;
+    uint32_t nacks;
+    uint32_t retries;
+} tinybms_stats_t;
+
+typedef struct {
+    tinybms_stats_t stats;
+    uint64_t        timestamp_ms;
+} tinybms_stats_event_t;
+
+/**
  * @brief  Commande : écrire un registre TinyBMS
  */
 typedef struct {
@@ -346,14 +366,6 @@ typedef struct {
     bool cell_protection_active; // Protection cellule active
     uint64_t timestamp_ms;     // Timestamp
 } cvl_limits_event_t;
-
-/**
- * @brief  Payload générique d'événement EventBus
- */
-typedef struct {
-    event_type_t type;
-    void        *data;         // pointeur vers une des structs ci-dessus
-} event_t;
 
 #ifdef __cplusplus
 }
