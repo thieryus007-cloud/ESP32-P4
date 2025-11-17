@@ -3,6 +3,7 @@
 #define NET_CLIENT_H
 
 #include "event_bus.h"
+#include "event_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,6 +23,11 @@ typedef struct {
  *        crée les queues, etc.
  */
 void net_client_init(event_bus_t *bus);
+
+/**
+ * @brief Déclare le mode courant (connecté/autonome) pour enrichir system_status.
+ */
+void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected);
 
 /**
  * @brief Démarrer le client réseau

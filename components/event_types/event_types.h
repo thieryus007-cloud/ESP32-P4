@@ -9,6 +9,11 @@
 extern "C" {
 #endif
 
+typedef enum {
+    HMI_MODE_CONNECTED_S3 = 0,   // Mode connecté au backend S3 / télémétrie réseau attendue
+    HMI_MODE_TINYBMS_AUTONOMOUS, // Mode autonome : UART TinyBMS uniquement, pas de réseau
+} hmi_operation_mode_t;
+
 /**
  * Nombre max de cellules supportées dans les structures.
  * Doit être cohérent avec ton pack réel (ex : 16 ou 32).
@@ -41,11 +46,12 @@ typedef enum {
     EVENT_BATTERY_STATUS_UPDATED,       // battery_status_t
     EVENT_PACK_STATS_UPDATED,           // pack_stats_t
     EVENT_SYSTEM_STATUS_UPDATED,        // system_status_t
+    EVENT_OPERATION_MODE_CHANGED,       // operation_mode_event_t
     EVENT_CONFIG_UPDATED,               // si on gère la config locale
 
     // --- Événements émis par la GUI (user actions) ---
     EVENT_USER_INPUT_SET_TARGET_SOC,    // user_input_set_target_soc_t
-    EVENT_USER_INPUT_CHANGE_MODE,       // futur
+    EVENT_USER_INPUT_CHANGE_MODE,       // user_input_change_mode_t
     EVENT_USER_INPUT_ACK_ALARM,         // futur
     EVENT_USER_INPUT_ACK_ALERT,         // user_input_ack_alert_t
     EVENT_USER_INPUT_REFRESH_ALERT_HISTORY, // requête GET /api/alerts/history
@@ -115,6 +121,8 @@ typedef struct {
     bool server_reachable;     // HMI → S3 OK
     bool storage_ok;           // stockage interne OK
     bool has_error;            // erreur globale (à affiner selon events)
+    hmi_operation_mode_t operation_mode; // Mode courant : connecté S3 ou autonome TinyBMS
+    bool telemetry_expected;   // true si on attend des flux /ws/* (mode connecté)
 } system_status_t;
 
 /**
@@ -251,6 +259,15 @@ typedef struct {
 typedef struct {
     history_range_t range;
 } user_input_history_export_t;
+
+typedef struct {
+    hmi_operation_mode_t mode;      // Mode demandé par l'utilisateur
+} user_input_change_mode_t;
+
+typedef struct {
+    hmi_operation_mode_t mode;      // Mode courant
+    bool telemetry_expected;        // Aligné avec system_status_t.telemetry_expected
+} operation_mode_event_t;
 
 typedef struct {
     bool   success;
