@@ -79,6 +79,36 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
   - `/ws/events` - Flux d'événements système
 - **HTTP REST API** : Envoi de commandes et configuration
 - **Mode Connecté/Autonome** : un paramètre `menuconfig` (persisté en NVS) ou un toggle GUI (événement `EVENT_USER_INPUT_CHANGE_MODE`) permet de basculer entre « Connecté S3 » et « Autonome TinyBMS » pour activer ou non la télémétrie réseau.
+- **Publisher périodique MQTT/HTTP** : un module `network_publisher` expédie un sous-ensemble des mesures TinyBMS (voltage, courant, puissance, SOC, SOH, température, min/max/delta cellules) avec un tampon « offline » rejoué à la reconnexion.
+
+  **Schéma des topics/payloads**
+
+  - **MQTT** : topic `tinybms/telemetry` (configurable), payload texte clef=valeur compact
+    ```
+    ts_ms=1700001234 soc=72.35 voltage_v=51.234 current_a=-12.401 power_w=-635.45 temp_c=28.1
+    ```
+  - **HTTP** : POST `/api/telemetry/local` (configurable) avec JSON compact
+    ```json
+    {
+      "ts_ms": 1700001234,
+      "soc": 72.35,
+      "soh": 99.10,
+      "voltage_v": 51.234,
+      "current_a": -12.401,
+      "power_w": -635.45,
+      "temperature_c": 28.1,
+      "cell_min_mv": 3201.5,
+      "cell_max_mv": 3230.1,
+      "cell_delta_mv": 28.6
+    }
+    ```
+
+  **Configuration menuconfig**
+
+  - `NETWORK_TELEMETRY_PUBLISHER_ENABLED` : toggle d'activation.
+  - `NETWORK_TELEMETRY_PERIOD_MS` : cadence d'envoi en millisecondes.
+  - `NETWORK_TELEMETRY_HTTP_PATH` / `NETWORK_TELEMETRY_MQTT_TOPIC` : personnalisation des cibles.
+  - `NETWORK_TELEMETRY_OFFLINE_BUFFER` + `NETWORK_TELEMETRY_BUFFER_DEPTH` : activer et dimensionner le tampon rejoué après reconnexion.
 
 #### Communication directe (TinyBMS)
 - **RS485/UART** : ✅ **Implémenté** - Communication directe avec TinyBMS
