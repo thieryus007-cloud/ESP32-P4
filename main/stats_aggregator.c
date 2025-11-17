@@ -456,6 +456,10 @@ esp_err_t stats_aggregator_start(void)
 
 esp_err_t stats_aggregator_export_to_flash(void)
 {
+    if (!s_state.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
     const char *fw = get_firmware_version();
     stats_bucket_t day = aggregate_window(s_state.hourly, 24);
     merge_bucket(&day, &s_state.current_hour);
