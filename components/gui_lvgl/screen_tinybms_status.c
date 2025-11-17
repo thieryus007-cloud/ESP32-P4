@@ -21,6 +21,7 @@ static struct {
     lv_obj_t *label_stats_errors;
     lv_obj_t *btn_read_all;
     lv_obj_t *btn_restart;
+    lv_obj_t *log_container;
 } ui = {0};
 
 /**
@@ -128,6 +129,11 @@ void screen_tinybms_status_create(lv_obj_t *parent)
     lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(btn_container, 10, 0);
 
+    lv_obj_t *btn_title = lv_label_create(btn_container);
+    lv_label_set_text(btn_title, "Shortcuts");
+    lv_obj_set_style_text_font(btn_title, &lv_font_montserrat_14, 0);
+    lv_obj_set_flex_grow(btn_title, 1);
+
     // Read All button
     ui.btn_read_all = lv_btn_create(btn_container);
     lv_obj_set_size(ui.btn_read_all, 150, 50);
@@ -146,6 +152,23 @@ void screen_tinybms_status_create(lv_obj_t *parent)
     btn_label = lv_label_create(ui.btn_restart);
     lv_label_set_text(btn_label, "Restart BMS");
     lv_obj_center(btn_label);
+
+    // UART log
+    lv_obj_t *log_title = lv_label_create(container);
+    lv_label_set_text(log_title, "UART activity (latest)");
+    lv_obj_set_style_text_font(log_title, &lv_font_montserrat_16, 0);
+
+    ui.log_container = lv_obj_create(container);
+    lv_obj_set_size(ui.log_container, LV_PCT(90), LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_all(ui.log_container, 10, 0);
+    lv_obj_set_flex_flow(ui.log_container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scrollbar_mode(ui.log_container, LV_SCROLLBAR_MODE_AUTO);
+
+    for (int i = 0; i < 6; i++) {
+        lv_obj_t *log_line = lv_label_create(ui.log_container);
+        lv_label_set_text(log_line, "Waiting for UART activity...");
+        lv_obj_set_style_text_color(log_line, lv_color_hex(0x808080), 0);
+    }
 
     ESP_LOGI(TAG, "TinyBMS status screen created");
 }
@@ -245,4 +268,30 @@ void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed
 
         free(c);
     }, ctx);
+}
+
+void screen_tinybms_status_append_log(const tinybms_uart_log_entry_t *entry)
+{
+    if (ui.log_container == NULL || entry == NULL) {
+        return;
+    }
+
+    lv_obj_t *line = lv_label_create(ui.log_container);
+    lv_label_set_text(line, entry->message);
+    lv_obj_move_to_index(line, 0);
+
+    if (entry->success) {
+        lv_obj_set_style_text_color(line, lv_color_hex(0x80FF80), 0);
+    } else {
+        lv_obj_set_style_text_color(line, lv_color_hex(0xFF7070), 0);
+    }
+
+    uint32_t child_count = lv_obj_get_child_cnt(ui.log_container);
+    while (child_count > 6) {
+        lv_obj_t *last = lv_obj_get_child(ui.log_container, child_count - 1);
+        lv_obj_delete(last);
+        child_count = lv_obj_get_child_cnt(ui.log_container);
+    }
+
+    lv_obj_invalidate(ui.log_container);
 }

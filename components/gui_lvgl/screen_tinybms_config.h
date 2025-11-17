@@ -11,6 +11,7 @@
 
 #include "lvgl.h"
 #include "tinybms_model.h"
+#include "event_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,7 @@ void screen_tinybms_config_create(lv_obj_t *parent);
  * @param config Configuration snapshot
  */
 void screen_tinybms_config_update(const tinybms_config_t *config);
+void screen_tinybms_config_apply_register(const tinybms_register_update_t *update);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,7 @@
 #include "tinybms_client.h"
 #include "tinybms_protocol.h"
 #include "event_types.h"
+#include "event_bus.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -24,6 +25,30 @@ static struct {
     tinybms_stats_t stats;
     bool initialized;
 } g_ctx = {0};
+
+static void publish_uart_log(const char *action, uint16_t address, esp_err_t result,
+                             const char *detail)
+{
+    if (g_ctx.bus == NULL) {
+        return;
+    }
+
+    tinybms_uart_log_entry_t entry = {0};
+    strncpy(entry.action, action, sizeof(entry.action) - 1);
+    entry.address = address;
+    entry.result = (int)result;
+    entry.success = (result == ESP_OK);
+
+    const char *status = esp_err_to_name(result);
+    snprintf(entry.message, sizeof(entry.message), "%s 0x%04X: %s%s%s",
+             action,
+             address,
+             status,
+             (detail && detail[0]) ? " - " : "",
+             (detail && detail[0]) ? detail : "");
+
+    event_bus_publish(g_ctx.bus, EVENT_TINYBMS_UART_LOG, &entry, sizeof(entry));
+}
 
 /**
  * @brief Initialize UART hardware
@@ -327,6 +352,14 @@ esp_err_t tinybms_read_register(uint16_t address, uint16_t *value)
     }
 
     xSemaphoreGive(g_ctx.uart_mutex);
+
+    char detail[48];
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "value=0x%04X", *value);
+    } else {
+        detail[0] = '\0';
+    }
+    publish_uart_log("read", address, ret, detail);
     return ret;
 }
 
@@ -384,15 +417,25 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
     }
 
     xSemaphoreGive(g_ctx.uart_mutex);
+
+    char detail[64];
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "written=0x%04X", value);
+    } else {
+        detail[0] = '\0';
+    }
+    publish_uart_log("write", address, ret, detail);
     return ret;
 }
 
 esp_err_t tinybms_restart(void)
 {
     ESP_LOGI(TAG, "Restarting TinyBMS...");
-    return tinybms_write_register(TINYBMS_REG_SYSTEM_RESTART,
-                                   TINYBMS_RESTART_VALUE,
-                                   NULL);
+    esp_err_t ret = tinybms_write_register(TINYBMS_REG_SYSTEM_RESTART,
+                                           TINYBMS_RESTART_VALUE,
+                                           NULL);
+    publish_uart_log("restart", TINYBMS_REG_SYSTEM_RESTART, ret, "");
+    return ret;
 }
 
 tinybms_state_t tinybms_get_state(void)

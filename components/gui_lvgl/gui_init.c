@@ -545,6 +545,36 @@ static void tinybms_config_changed_handler(event_bus_t *bus,
     }
 }
 
+static void tinybms_register_updated_handler(event_bus_t *bus,
+                                             const event_t *event,
+                                             void *user_ctx)
+{
+    (void)bus;
+    (void)user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const tinybms_register_update_t *update = (const tinybms_register_update_t *)event->data;
+    screen_tinybms_config_apply_register(update);
+}
+
+static void tinybms_uart_log_handler(event_bus_t *bus,
+                                     const event_t *event,
+                                     void *user_ctx)
+{
+    (void)bus;
+    (void)user_ctx;
+
+    if (event == NULL || event->data == NULL) {
+        return;
+    }
+
+    const tinybms_uart_log_entry_t *entry = (const tinybms_uart_log_entry_t *)event->data;
+    screen_tinybms_status_append_log(entry);
+}
+
 // --- API publique ---
 
 void gui_init(event_bus_t *bus)
@@ -634,6 +664,16 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_TINYBMS_CONFIG_CHANGED,
                             tinybms_config_changed_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_TINYBMS_REGISTER_UPDATED,
+                            tinybms_register_updated_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_TINYBMS_UART_LOG,
+                            tinybms_uart_log_handler,
                             NULL);
 
         // CAN/CVL events

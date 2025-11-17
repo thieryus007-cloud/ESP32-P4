@@ -61,6 +61,7 @@ typedef enum {
     EVENT_TINYBMS_REGISTER_UPDATED,     // tinybms_register_update_t
     EVENT_TINYBMS_CONFIG_CHANGED,       // configuration TinyBMS modifiée
     EVENT_USER_INPUT_TINYBMS_WRITE_REG, // user_input_tinybms_write_t
+    EVENT_TINYBMS_UART_LOG,             // tinybms_uart_log_entry_t
 
     // --- Événements CAN Bus (Phase 2+) ---
     EVENT_CAN_BUS_STARTED,              // Driver CAN démarré
@@ -274,6 +275,14 @@ typedef struct {
     float user_value;          // Valeur convertie pour affichage
     char key[32];              // Clé du registre (ex: "fully_charged_voltage_mv")
 } tinybms_register_update_t;
+
+typedef struct {
+    char action[16];           // read / write / restart
+    uint16_t address;          // Adresse concernée (0 si non applicable)
+    int result;                // esp_err_t code
+    bool success;              // true si succès
+    char message[96];          // Résumé pour UI
+} tinybms_uart_log_entry_t;
 
 /**
  * @brief  Commande : écrire un registre TinyBMS
