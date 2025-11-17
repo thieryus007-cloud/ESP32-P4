@@ -76,6 +76,9 @@ typedef enum {
     EVENT_USER_INPUT_TINYBMS_WRITE_REG, // user_input_tinybms_write_t
     EVENT_TINYBMS_UART_LOG,             // tinybms_uart_log_entry_t
     EVENT_TINYBMS_STATS_UPDATED,        // tinybms_stats_event_t
+    EVENT_TINYBMS_ALERT_TRIGGERED,      // tinybms_alert_event_t
+    EVENT_TINYBMS_ALERT_RECOVERED,      // tinybms_alert_event_t
+    EVENT_TINYBMS_ALERT_COUNTERS,       // tinybms_alert_counters_t
 
     // --- Événements CAN Bus (Phase 2+) ---
     EVENT_CAN_BUS_STARTED,              // Driver CAN démarré
@@ -334,6 +337,18 @@ typedef struct {
     tinybms_stats_t stats;
     uint64_t        timestamp_ms;
 } tinybms_stats_event_t;
+
+typedef struct {
+    alert_entry_t alert;     // Alerte associée à la règle TinyBMS
+    bool          active;    // true si déclenchée, false si résolue
+} tinybms_alert_event_t;
+
+typedef struct {
+    uint32_t active_count;       // alertes actives
+    uint32_t acknowledged_count; // alertes acquittées
+    bool     comm_watchdog;      // true si perte de frame détectée
+    uint64_t last_frame_ms;      // horodatage de la dernière frame TinyBMS
+} tinybms_alert_counters_t;
 
 /**
  * @brief  Commande : écrire un registre TinyBMS

@@ -10,6 +10,7 @@
 #include "esp_http_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -45,6 +46,8 @@ static system_status_t s_net_status = {
     .operation_mode = HMI_MODE_CONNECTED_S3,
     .telemetry_expected = true,
 };
+
+static void publish_system_status(void);
 
 // Config par défaut via menuconfig
 #ifndef CONFIG_HMI_WIFI_SSID
@@ -367,6 +370,58 @@ static void publish_failover_event(void)
     event_bus_publish(s_bus, &evt);
 }
 
+static void forward_alert_syslog(const tinybms_alert_event_t *payload)
+{
+    if (!payload) {
+        return;
+    }
+
+    const alert_entry_t *a = &payload->alert;
+    const char *status = payload->active ? "ACTIVE" : "RESOLVED";
+    ESP_LOGW(TAG, "[SYSLOG] %s TinyBMS alert #%d (%s): %s", status, a->id, a->source, a->message);
+}
+
+static void forward_alert_http(const tinybms_alert_event_t *payload)
+{
+    if (!payload) {
+        return;
+    }
+
+    char body[256];
+    const char *status = payload->active ? "active" : "resolved";
+    snprintf(body, sizeof(body),
+             "{\"id\":%d,\"severity\":%d,\"message\":\"%s\",\"status\":\"%s\",\"source\":\"%s\"}",
+             payload->alert.id, payload->alert.severity, payload->alert.message, status, payload->alert.source);
+
+    // Envoi best-effort : on ne bloque pas si HTTP indisponible
+    net_client_send_http_request("/api/alerts/local", "POST", body, strlen(body));
+}
+
+static void forward_alert_mqtt(const tinybms_alert_event_t *payload)
+{
+    if (!payload) {
+        return;
+    }
+
+    // TODO: brancher un client MQTT réel. Pour l'instant, log textuel.
+    const char *status = payload->active ? "active" : "resolved";
+    ESP_LOGI(TAG, "[MQTT] publish tinybms/alert status=%s id=%d message=%s", status, payload->alert.id, payload->alert.message);
+}
+
+static void tinybms_alert_event_handler(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+    if (!event || !event->data) {
+        return;
+    }
+
+    const tinybms_alert_event_t *payload = (const tinybms_alert_event_t *) event->data;
+    forward_alert_syslog(payload);
+    forward_alert_http(payload);
+    forward_alert_mqtt(payload);
+}
+
 // --- API publique ---
 
 void net_client_init(event_bus_t *bus)
@@ -374,6 +429,11 @@ void net_client_init(event_bus_t *bus)
     s_bus = bus;
     ESP_LOGI(TAG, "net_client initialized (bridge host=%s port=%d)",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
+
+    if (s_bus) {
+        event_bus_subscribe(s_bus, EVENT_TINYBMS_ALERT_TRIGGERED, tinybms_alert_event_handler, NULL);
+        event_bus_subscribe(s_bus, EVENT_TINYBMS_ALERT_RECOVERED, tinybms_alert_event_handler, NULL);
+    }
 }
 
 void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected)
