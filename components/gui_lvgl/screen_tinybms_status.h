@@ -10,6 +10,7 @@
 #define SCREEN_TINYBMS_STATUS_H
 
 #include "lvgl.h"
+#include "event_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,7 @@ void screen_tinybms_status_update_connection(bool connected);
 void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed,
                                          uint32_t writes_ok, uint32_t writes_failed,
                                          uint32_t crc_errors, uint32_t timeouts);
+void screen_tinybms_status_append_log(const tinybms_uart_log_entry_t *entry);
 
 #ifdef __cplusplus
 }
