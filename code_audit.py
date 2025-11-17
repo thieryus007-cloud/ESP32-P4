@@ -122,12 +122,7 @@ def main():
         "top_complexity": top_complexity.most_common(10),
     }
 
-    output_path = os.path.join(root, "code_audit_report.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
-
     print(json.dumps(report, indent=2))
-    print(f"\nAudit saved to {output_path}")
 
 
 if __name__ == "__main__":
