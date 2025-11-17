@@ -8,6 +8,7 @@
 #include "screen_cells.h"
 #include "screen_power.h"
 #include "screen_config.h"
+#include "screen_alerts.h"
 #include "screen_tinybms_status.h"
 #include "screen_tinybms_config.h"
 #include "screen_can_status.h"
@@ -59,6 +60,15 @@ typedef struct {
 typedef struct {
     cmd_result_t result;
 } gui_cmd_result_ctx_t;
+
+typedef struct {
+    alert_list_t alerts;
+    bool         is_history;
+} gui_alert_list_ctx_t;
+
+typedef struct {
+    alert_filters_t filters;
+} gui_alert_filters_ctx_t;
 
 // --- Callbacks exécutés dans le contexte LVGL (via lv_async_call) ---
 
@@ -117,6 +127,28 @@ static void lvgl_apply_cmd_result(void *user_data)
     gui_cmd_result_ctx_t *ctx = (gui_cmd_result_ctx_t *) user_data;
     if (ctx) {
         screen_config_show_result(&ctx->result);
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_alert_list(void *user_data)
+{
+    gui_alert_list_ctx_t *ctx = (gui_alert_list_ctx_t *) user_data;
+    if (ctx) {
+        if (ctx->is_history) {
+            screen_alerts_update_history(&ctx->alerts);
+        } else {
+            screen_alerts_update_active(&ctx->alerts);
+        }
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_alert_filters(void *user_data)
+{
+    gui_alert_filters_ctx_t *ctx = (gui_alert_filters_ctx_t *) user_data;
+    if (ctx) {
+        screen_alerts_apply_filters(&ctx->filters);
         free(ctx);
     }
 }
@@ -240,6 +272,74 @@ static void cmd_result_event_handler(event_bus_t *bus,
     lv_async_call(lvgl_apply_cmd_result, ctx);
 }
 
+static void alerts_active_event_handler(event_bus_t *bus,
+                                        const event_t *event,
+                                        void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const alert_list_t *src = (const alert_list_t *) event->data;
+    gui_alert_list_ctx_t *ctx = (gui_alert_list_ctx_t *) malloc(sizeof(gui_alert_list_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_alert_list_ctx_t");
+        return;
+    }
+
+    ctx->alerts = *src;
+    ctx->is_history = false;
+    lv_async_call(lvgl_apply_alert_list, ctx);
+}
+
+static void alerts_history_event_handler(event_bus_t *bus,
+                                         const event_t *event,
+                                         void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const alert_list_t *src = (const alert_list_t *) event->data;
+    gui_alert_list_ctx_t *ctx = (gui_alert_list_ctx_t *) malloc(sizeof(gui_alert_list_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_alert_list_ctx_t (history)");
+        return;
+    }
+
+    ctx->alerts = *src;
+    ctx->is_history = true;
+    lv_async_call(lvgl_apply_alert_list, ctx);
+}
+
+static void alert_filters_event_handler(event_bus_t *bus,
+                                        const event_t *event,
+                                        void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const alert_filters_t *src = (const alert_filters_t *) event->data;
+    gui_alert_filters_ctx_t *ctx = (gui_alert_filters_ctx_t *) malloc(sizeof(gui_alert_filters_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_alert_filters_ctx_t");
+        return;
+    }
+
+    ctx->filters = *src;
+    lv_async_call(lvgl_apply_alert_filters, ctx);
+}
+
 // CVL limits updated handler
 static void cvl_limits_event_handler(event_bus_t *bus,
                                       const event_t *event,
@@ -330,6 +430,7 @@ void gui_init(event_bus_t *bus)
     lv_obj_t *tab_pack   = lv_tabview_add_tab(tabview, "Pack");
     lv_obj_t *tab_cells  = lv_tabview_add_tab(tabview, "Cells");
     lv_obj_t *tab_power  = lv_tabview_add_tab(tabview, "Power");
+    lv_obj_t *tab_alerts = lv_tabview_add_tab(tabview, "Alerts");
     lv_obj_t *tab_config = lv_tabview_add_tab(tabview, "Config");
     lv_obj_t *tab_tbms_status = lv_tabview_add_tab(tabview, "TBMS Status");
     lv_obj_t *tab_tbms_config = lv_tabview_add_tab(tabview, "TBMS Config");
@@ -342,6 +443,8 @@ void gui_init(event_bus_t *bus)
     screen_battery_create(tab_pack);
     screen_cells_create(tab_cells);
     screen_power_create(tab_power);
+    screen_alerts_set_bus(s_bus);
+    screen_alerts_create(tab_alerts);
     screen_config_set_bus(s_bus);
     screen_config_create(tab_config);
     screen_tinybms_status_create(tab_tbms_status);
@@ -397,6 +500,21 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_REMOTE_CMD_RESULT,
                             cmd_result_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_ALERTS_ACTIVE_UPDATED,
+                            alerts_active_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_ALERTS_HISTORY_UPDATED,
+                            alerts_history_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_ALERT_FILTERS_UPDATED,
+                            alert_filters_event_handler,
                             NULL);
     }
 }

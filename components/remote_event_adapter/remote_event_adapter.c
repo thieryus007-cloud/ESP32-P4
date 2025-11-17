@@ -6,6 +6,7 @@
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "event_types.h"
 #include "event_bus.h"
@@ -35,6 +36,13 @@ static bool         s_has_pending_config = false;
 static battery_status_t s_batt_status;
 static system_status_t  s_sys_status;
 static pack_stats_t     s_pack_stats;
+static alert_list_t     s_active_alerts;
+static alert_list_t     s_history_alerts;
+static alert_filters_t  s_alert_filters = {
+    .min_severity = 0,
+    .hide_acknowledged = false,
+    .source_filter = "",
+};
 
 // --- Helpers JSON ---
 
@@ -87,6 +95,148 @@ static void set_string_field(char *dst, size_t dst_size, cJSON *root, const char
     if (cJSON_IsString(item) && item->valuestring) {
         strncpy(dst, item->valuestring, dst_size - 1);
         dst[dst_size - 1] = '\0';
+    }
+}
+
+static int severity_from_json(cJSON *item)
+{
+    if (cJSON_IsNumber(item)) {
+        return item->valueint;
+    }
+    if (cJSON_IsString(item) && item->valuestring) {
+        const char *s = item->valuestring;
+        char tmp[16] = {0};
+        size_t len = strlen(s);
+        if (len >= sizeof(tmp)) {
+            len = sizeof(tmp) - 1;
+        }
+        for (size_t i = 0; i < len; ++i) {
+            tmp[i] = (char) tolower((int) s[i]);
+        }
+
+        if (strstr(tmp, "crit")) {
+            return 4;
+        }
+        if (strstr(tmp, "err")) {
+            return 3;
+        }
+        if (strstr(tmp, "warn")) {
+            return 2;
+        }
+        if (strstr(tmp, "info")) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static bool alert_passes_filter(const alert_entry_t *alert)
+{
+    if (!alert) {
+        return false;
+    }
+
+    if (alert->severity < s_alert_filters.min_severity) {
+        return false;
+    }
+
+    if (s_alert_filters.hide_acknowledged && alert->acknowledged) {
+        return false;
+    }
+
+    if (s_alert_filters.source_filter[0] != '\0') {
+        if (strstr(alert->source, s_alert_filters.source_filter) == NULL) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void filter_alerts(const alert_list_t *src, alert_list_t *dst)
+{
+    if (!src || !dst) {
+        return;
+    }
+
+    dst->count = 0;
+    for (uint8_t i = 0; i < src->count && dst->count < ALERT_MAX_ENTRIES; ++i) {
+        if (alert_passes_filter(&src->entries[i])) {
+            dst->entries[dst->count++] = src->entries[i];
+        }
+    }
+}
+
+static void publish_alert_list(event_type_t type, const alert_list_t *list)
+{
+    if (!s_bus || !list) {
+        return;
+    }
+
+    alert_list_t filtered;
+    filter_alerts(list, &filtered);
+
+    event_t evt = {
+        .type = type,
+        .data = &filtered,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void publish_alert_filters(void)
+{
+    if (!s_bus) {
+        return;
+    }
+
+    event_t evt = {
+        .type = EVENT_ALERT_FILTERS_UPDATED,
+        .data = &s_alert_filters,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void parse_alert_entry(alert_entry_t *dst, cJSON *json)
+{
+    if (!dst || !json) {
+        return;
+    }
+
+    memset(dst, 0, sizeof(*dst));
+    dst->id         = json_get_event_id(json, "id");
+    if (dst->id <= 0) {
+        dst->id = json_get_event_id(json, "alert_id");
+    }
+    dst->code       = json_get_event_id(json, "event_id");
+    dst->severity   = severity_from_json(cJSON_GetObjectItemCaseSensitive(json, "severity"));
+    dst->timestamp_ms = (uint64_t) json_get_number(json, "timestamp_ms", 0.0f);
+    if (dst->timestamp_ms == 0) {
+        dst->timestamp_ms = (uint64_t) json_get_number(json, "timestamp", 0.0f);
+    }
+    dst->acknowledged = json_get_bool(json, "acknowledged", false);
+    cJSON *status = cJSON_GetObjectItemCaseSensitive(json, "status");
+    if (cJSON_IsString(status) && status->valuestring) {
+        strncpy(dst->status, status->valuestring, sizeof(dst->status) - 1);
+    }
+
+    set_string_field(dst->message, sizeof(dst->message), json, "message");
+    set_string_field(dst->source, sizeof(dst->source), json, "source");
+}
+
+static void parse_alert_array(cJSON *array, alert_list_t *out)
+{
+    if (!array || !out || !cJSON_IsArray(array)) {
+        return;
+    }
+
+    out->count = 0;
+    cJSON *item = NULL;
+    cJSON_ArrayForEach(item, array) {
+        if (out->count >= ALERT_MAX_ENTRIES) {
+            break;
+        }
+        parse_alert_entry(&out->entries[out->count], item);
+        out->count++;
     }
 }
 
@@ -160,6 +310,52 @@ static void handle_user_write_config(event_bus_t *bus,
     }
 }
 
+static void handle_user_ack_alert(event_bus_t *bus,
+                                  const event_t *event,
+                                  void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    const user_input_ack_alert_t *req = (const user_input_ack_alert_t *) event->data;
+    if (!req) {
+        return;
+    }
+
+    char body[64];
+    snprintf(body, sizeof(body), "{\"id\":%d}", req->alert_id);
+    net_client_send_http_request("/api/alerts/acknowledge", "POST", body, strlen(body));
+}
+
+static void handle_user_refresh_history(event_bus_t *bus,
+                                        const event_t *event,
+                                        void *user_ctx)
+{
+    (void) bus;
+    (void) event;
+    (void) user_ctx;
+
+    net_client_send_http_request("/api/alerts/history", "GET", NULL, 0);
+}
+
+static void handle_user_update_filters(event_bus_t *bus,
+                                       const event_t *event,
+                                       void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    const alert_filters_t *filters = (const alert_filters_t *) event->data;
+    if (!filters) {
+        return;
+    }
+
+    s_alert_filters = *filters;
+    publish_alert_filters();
+    publish_alert_list(EVENT_ALERTS_ACTIVE_UPDATED, &s_active_alerts);
+    publish_alert_list(EVENT_ALERTS_HISTORY_UPDATED, &s_history_alerts);
+}
+
 // --- API publique ---
 
 void remote_event_adapter_init(event_bus_t *bus)
@@ -180,6 +376,11 @@ void remote_event_adapter_init(event_bus_t *bus)
 
     event_bus_subscribe(bus, EVENT_USER_INPUT_WRITE_CONFIG, handle_user_write_config, NULL);
     event_bus_subscribe(bus, EVENT_USER_INPUT_RELOAD_CONFIG, handle_user_reload_config, NULL);
+    event_bus_subscribe(bus, EVENT_USER_INPUT_ACK_ALERT, handle_user_ack_alert, NULL);
+    event_bus_subscribe(bus, EVENT_USER_INPUT_REFRESH_ALERT_HISTORY, handle_user_refresh_history, NULL);
+    event_bus_subscribe(bus, EVENT_USER_INPUT_UPDATE_ALERT_FILTERS, handle_user_update_filters, NULL);
+
+    publish_alert_filters();
 }
 
 void remote_event_adapter_start(void)
@@ -457,6 +658,45 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
     event_bus_publish(s_bus, &evt_sys);
 }
 
+// ============================================================================
+//  ALERTS (/ws/alerts) → alert_list_t
+// ============================================================================
+
+void remote_event_adapter_on_alerts_json(const char *json, size_t length)
+{
+    (void) length;
+    if (!s_bus || !json) {
+        return;
+    }
+
+    ESP_LOGD(TAG, "Alerts JSON: %s", json);
+
+    cJSON *root = cJSON_Parse(json);
+    if (!root) {
+        ESP_LOGE(TAG, "Failed to parse alerts JSON");
+        return;
+    }
+
+    if (cJSON_IsArray(root)) {
+        parse_alert_array(root, &s_active_alerts);
+    } else if (cJSON_IsObject(root)) {
+        cJSON *active = cJSON_GetObjectItemCaseSensitive(root, "active");
+        cJSON *history = cJSON_GetObjectItemCaseSensitive(root, "history");
+        if (cJSON_IsArray(active)) {
+            parse_alert_array(active, &s_active_alerts);
+        }
+        if (cJSON_IsArray(history)) {
+            parse_alert_array(history, &s_history_alerts);
+            publish_alert_list(EVENT_ALERTS_HISTORY_UPDATED, &s_history_alerts);
+        }
+    }
+
+    cJSON_Delete(root);
+
+    publish_alert_list(EVENT_ALERTS_ACTIVE_UPDATED, &s_active_alerts);
+    publish_alert_filters();
+}
+
 void remote_event_adapter_on_http_response(const char *path,
                                            const char *method,
                                            int status,
@@ -489,9 +729,26 @@ void remote_event_adapter_on_http_response(const char *path,
             } else if (strcmp(path, "/api/mqtt/config") == 0) {
                 parse_mqtt_config_json(root);
                 publish_config_update();
+            } else if (strcmp(path, "/api/alerts/history") == 0) {
+                if (cJSON_IsArray(root)) {
+                    parse_alert_array(root, &s_history_alerts);
+                } else if (cJSON_IsObject(root)) {
+                    cJSON *history = cJSON_GetObjectItemCaseSensitive(root, "history");
+                    if (cJSON_IsArray(history)) {
+                        parse_alert_array(history, &s_history_alerts);
+                    }
+                }
+                publish_alert_list(EVENT_ALERTS_HISTORY_UPDATED, &s_history_alerts);
+            } else if (strcmp(path, "/api/alerts/acknowledge") == 0) {
+                // Un acquittement réussi peut modifier la liste active : on redemande l'historique
+                net_client_send_http_request("/api/alerts/history", "GET", NULL, 0);
             }
             cJSON_Delete(root);
         }
+    }
+
+    if (success && strcmp(path, "/api/alerts/acknowledge") == 0 && (!body || strlen(body) == 0)) {
+        net_client_send_http_request("/api/alerts/history", "GET", NULL, 0);
     }
 
     if (success && strcmp(method, "POST") == 0 && s_has_pending_config) {
