@@ -3,6 +3,8 @@
 #include "remote_event_adapter.h"
 
 #include "esp_log.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
@@ -14,6 +16,9 @@
 #include "history_model.h"
 
 static const char *TAG = "REMOTE_ADAPTER";
+static const char *NVS_NAMESPACE = "hmi_cache";
+static const char *NVS_KEY_TELE   = "telemetry";
+static const char *NVS_KEY_CONFIG = "config";
 
 static event_bus_t *s_bus = NULL;
 
@@ -44,6 +49,15 @@ static alert_filters_t  s_alert_filters = {
     .hide_acknowledged = false,
     .source_filter = "",
 };
+
+typedef struct {
+    battery_status_t batt;
+    pack_stats_t     pack;
+} cache_telemetry_t;
+
+static bool s_cache_loaded = false;
+static bool s_has_cached_telemetry = false;
+static bool s_has_cached_config = false;
 
 // --- Helpers JSON ---
 
@@ -250,6 +264,134 @@ static void publish_config_update(void)
     event_bus_publish(s_bus, &evt);
 }
 
+static void attempt_send_pending_config(bool include_mqtt)
+{
+    if (!s_has_pending_config) {
+        return;
+    }
+
+    char body_config[256];
+    snprintf(body_config, sizeof(body_config),
+             "{\"wifi_ssid\":\"%s\",\"wifi_password\":\"%s\",\"static_ip\":\"%s\",\"can_bitrate\":%d,\"uart_baudrate\":%d,\"uart_parity\":\"%s\"}",
+             s_pending_config.wifi_ssid,
+             s_pending_config.wifi_password,
+             s_pending_config.static_ip,
+             s_pending_config.can_bitrate,
+             s_pending_config.uart_baudrate,
+             s_pending_config.uart_parity);
+
+    bool sent_main = net_client_send_http_request("/api/config", "POST", body_config, strlen(body_config));
+    if (!sent_main) {
+        ESP_LOGW(TAG, "Queue config write (offline?)");
+        return;
+    }
+
+    if (include_mqtt) {
+        char body_mqtt[256];
+        snprintf(body_mqtt, sizeof(body_mqtt),
+                 "{\"mqtt_broker\":\"%s\",\"mqtt_topic_pub\":\"%s\",\"mqtt_topic_sub\":\"%s\"}",
+                 s_pending_config.mqtt_broker,
+                 s_pending_config.mqtt_topic_pub,
+                 s_pending_config.mqtt_topic_sub);
+
+        if (!net_client_send_http_request("/api/mqtt/config", "POST", body_mqtt, strlen(body_mqtt))) {
+            ESP_LOGW(TAG, "MQTT config write pending until network recovers");
+        }
+    }
+}
+
+static esp_err_t save_blob(const char *key, const void *data, size_t len)
+{
+    if (!key || !data || len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS (%s)", esp_err_to_name(err));
+        return err;
+    }
+
+    err = nvs_set_blob(handle, key, data, len);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    return err;
+}
+
+static void save_cached_telemetry(void)
+{
+    cache_telemetry_t cache = {
+        .batt = s_batt_status,
+        .pack = s_pack_stats,
+    };
+
+    if (save_blob(NVS_KEY_TELE, &cache, sizeof(cache)) == ESP_OK) {
+        s_has_cached_telemetry = true;
+    }
+}
+
+static void save_cached_config(void)
+{
+    if (save_blob(NVS_KEY_CONFIG, &s_config, sizeof(s_config)) == ESP_OK) {
+        s_has_cached_config = true;
+    }
+}
+
+static void load_cached_state(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        return;
+    }
+
+    size_t len = sizeof(cache_telemetry_t);
+    cache_telemetry_t cache = {0};
+    if (nvs_get_blob(handle, NVS_KEY_TELE, &cache, &len) == ESP_OK && len == sizeof(cache)) {
+        s_batt_status = cache.batt;
+        s_pack_stats  = cache.pack;
+        s_has_cached_telemetry = true;
+    }
+
+    len = sizeof(hmi_config_t);
+    hmi_config_t cfg = {0};
+    if (nvs_get_blob(handle, NVS_KEY_CONFIG, &cfg, &len) == ESP_OK && len == sizeof(cfg)) {
+        s_config = cfg;
+        s_has_cached_config = true;
+    }
+
+    nvs_close(handle);
+    s_cache_loaded = true;
+}
+
+static void publish_cached_state(void)
+{
+    if (!s_bus) {
+        return;
+    }
+
+    if (s_has_cached_telemetry) {
+        event_t evt_batt = {
+            .type = EVENT_BATTERY_STATUS_UPDATED,
+            .data = &s_batt_status,
+        };
+        event_bus_publish(s_bus, &evt_batt);
+
+        event_t evt_pack = {
+            .type = EVENT_PACK_STATS_UPDATED,
+            .data = &s_pack_stats,
+        };
+        event_bus_publish(s_bus, &evt_pack);
+    }
+
+    if (s_has_cached_config) {
+        publish_config_update();
+    }
+}
+
 static void parse_main_config_json(cJSON *root);
 static void parse_mqtt_config_json(cJSON *root);
 
@@ -287,28 +429,7 @@ static void handle_user_write_config(event_bus_t *bus,
     s_pending_config = req->config;
     s_has_pending_config = true;
 
-    char body_config[256];
-    snprintf(body_config, sizeof(body_config),
-             "{\"wifi_ssid\":\"%s\",\"wifi_password\":\"%s\",\"static_ip\":\"%s\",\"can_bitrate\":%d,\"uart_baudrate\":%d,\"uart_parity\":\"%s\"}",
-             req->config.wifi_ssid,
-             req->config.wifi_password,
-             req->config.static_ip,
-             req->config.can_bitrate,
-             req->config.uart_baudrate,
-             req->config.uart_parity);
-
-    net_client_send_http_request("/api/config", "POST", body_config, strlen(body_config));
-
-    char body_mqtt[256];
-    snprintf(body_mqtt, sizeof(body_mqtt),
-             "{\"mqtt_broker\":\"%s\",\"mqtt_topic_pub\":\"%s\",\"mqtt_topic_sub\":\"%s\"}",
-             req->config.mqtt_broker,
-             req->config.mqtt_topic_pub,
-             req->config.mqtt_topic_sub);
-
-    if (!req->mqtt_only) {
-        net_client_send_http_request("/api/mqtt/config", "POST", body_mqtt, strlen(body_mqtt));
-    }
+    attempt_send_pending_config(!req->mqtt_only);
 }
 
 static void handle_user_ack_alert(event_bus_t *bus,
@@ -373,6 +494,11 @@ void remote_event_adapter_init(event_bus_t *bus)
     s_sys_status.storage_ok       = false;
     s_sys_status.has_error        = false;
 
+    if (!s_cache_loaded) {
+        load_cached_state();
+        publish_cached_state();
+    }
+
     ESP_LOGI(TAG, "remote_event_adapter initialized");
 
     event_bus_subscribe(bus, EVENT_USER_INPUT_WRITE_CONFIG, handle_user_write_config, NULL);
@@ -387,6 +513,15 @@ void remote_event_adapter_init(event_bus_t *bus)
 void remote_event_adapter_start(void)
 {
     ESP_LOGI(TAG, "remote_event_adapter start (no separate task)");
+}
+
+void remote_event_adapter_on_network_online(void)
+{
+    ESP_LOGI(TAG, "Network restored, refreshing snapshots");
+    attempt_send_pending_config(true);
+    net_client_send_http_request("/api/config", "GET", NULL, 0);
+    net_client_send_http_request("/api/mqtt/config", "GET", NULL, 0);
+    net_client_send_http_request("/api/alerts/history", "GET", NULL, 0);
 }
 
 // ============================================================================
@@ -519,6 +654,8 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     s_pack_stats.bal_stop_mv  = 0.0f;
 
     cJSON_Delete(root);
+
+    save_cached_telemetry();
 
     // --- Publication des événements « propres » ---
 
@@ -760,6 +897,7 @@ void remote_event_adapter_on_http_response(const char *path,
     if (success && strcmp(method, "POST") == 0 && s_has_pending_config) {
         s_config = s_pending_config;
         s_has_pending_config = false;
+        save_cached_config();
         publish_config_update();
     }
 }
@@ -830,6 +968,7 @@ static void parse_main_config_json(cJSON *root)
     }
 
     set_string_field(s_config.uart_parity, sizeof(s_config.uart_parity), root, "uart_parity");
+    save_cached_config();
 }
 
 static void parse_mqtt_config_json(cJSON *root)
@@ -841,4 +980,5 @@ static void parse_mqtt_config_json(cJSON *root)
     set_string_field(s_config.mqtt_broker, sizeof(s_config.mqtt_broker), root, "mqtt_broker");
     set_string_field(s_config.mqtt_topic_pub, sizeof(s_config.mqtt_topic_pub), root, "mqtt_topic_pub");
     set_string_field(s_config.mqtt_topic_sub, sizeof(s_config.mqtt_topic_sub), root, "mqtt_topic_sub");
+    save_cached_config();
 }
