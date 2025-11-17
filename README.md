@@ -414,6 +414,7 @@ npm start
 - Adaptateur JSON vers événements
 - Interface graphique complète 7 écrans LVGL (5 S3 + 2 TinyBMS)
 - Orchestration système de base
+- Composants modèle S3 (`telemetry_model`, `system_events_model`)
 - **Communication UART/RS485 TinyBMS complète**
   - Protocole binaire avec CRC16
   - Client thread-safe avec retry
@@ -423,7 +424,7 @@ npm start
 - Intégration complète dans hmi_main
 
 ### 🚧 En cours / Prévu
-- Composants modèle S3 (telemetry_model, system_events_model, config_model)
+- Composant modèle S3 `config_model`
 - Composant logger
 - Système de configuration (CMakeLists.txt, sdkconfig)
 - Gestion des entrées utilisateur (commandes vers S3)
@@ -470,10 +471,11 @@ npm start
 3. ✅ Intégration LVGL + écran
 4. ✅ Module net_client (connexion S3 + WS/HTTP)
 5. ✅ Module remote_event_adapter
-6. 🚧 Modules modèle (telemetry_model, system_events_model)
-7. 🚧 GUI LVGL v1 (lecture seule)
-8. 📋 GUI LVGL v2 (actions utilisateur)
-9. 📋 Extensions (config, historique, debug UART/CAN)
+6. ✅ Module modèle `telemetry_model` (statuts batterie/pack)
+7. ✅ Module modèle `system_events_model` (état système global)
+8. ✅ GUI LVGL v1 (lecture seule)
+9. ✅ GUI LVGL v2 (actions utilisateur)
+10. ✅ Extensions (config, historique, debug UART/CAN)
 
 ## 🤝 Contribution
 
