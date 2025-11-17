@@ -23,11 +23,14 @@ static const char *TAG = "NET_CLIENT";
 // WiFi event bits
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
+#define WIFI_CONNECT_TIMEOUT_MS 15000
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 static int s_fail_sequences = 0;
 static bool s_failover_triggered = false;
+static esp_event_handler_instance_t s_wifi_any_id;
+static esp_event_handler_instance_t s_ip_got_ip;
 
 // EventBus global pointer pour ce module
 static event_bus_t *s_bus = NULL;
@@ -113,6 +116,28 @@ static void wifi_event_handler(void *arg,
     }
 }
 
+static void wifi_stop(void)
+{
+    if (!s_wifi_event_group && !s_wifi_any_id && !s_ip_got_ip) {
+        return;
+    }
+
+    ESP_LOGI(TAG, "Stopping WiFi station");
+
+    if (s_wifi_event_group) {
+        vEventGroupDelete(s_wifi_event_group);
+        s_wifi_event_group = NULL;
+    }
+
+    esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_wifi_any_id);
+    esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, s_ip_got_ip);
+    s_wifi_any_id = NULL;
+    s_ip_got_ip = NULL;
+
+    esp_wifi_stop();
+    esp_wifi_deinit();
+}
+
 static void wifi_init_sta(void)
 {
     s_wifi_event_group = xEventGroupCreate();
@@ -124,19 +149,16 @@ static void wifi_init_sta(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    esp_event_handler_instance_t any_id;
-    esp_event_handler_instance_t got_ip;
-
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
                                                         &wifi_event_handler,
                                                         NULL,
-                                                        &any_id));
+                                                        &s_wifi_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
                                                         IP_EVENT_STA_GOT_IP,
                                                         &wifi_event_handler,
                                                         NULL,
-                                                        &got_ip));
+                                                        &s_ip_got_ip));
 
     wifi_config_t wifi_config = { 0 };
     strncpy((char *) wifi_config.sta.ssid, CONFIG_HMI_WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
@@ -155,7 +177,7 @@ static void wifi_init_sta(void)
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
                                            pdFALSE,
                                            pdFALSE,
-                                           portMAX_DELAY);
+                                           pdMS_TO_TICKS(WIFI_CONNECT_TIMEOUT_MS));
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to ap SSID:%s", CONFIG_HMI_WIFI_SSID);
@@ -163,6 +185,17 @@ static void wifi_init_sta(void)
         s_failover_triggered = false;
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to SSID:%s", CONFIG_HMI_WIFI_SSID);
+        s_fail_sequences++;
+        if (CONFIG_HMI_WIFI_FAILOVER_ENABLED && !s_failover_triggered &&
+            s_fail_sequences >= CONFIG_HMI_WIFI_FAILOVER_THRESHOLD) {
+            s_failover_triggered = true;
+            publish_failover_event();
+        }
+    } else if (bits == 0) {
+        ESP_LOGE(TAG, "WiFi connection timeout after %d ms", WIFI_CONNECT_TIMEOUT_MS);
+        s_net_status.wifi_connected = false;
+        s_net_status.network_state = NETWORK_STATE_ERROR;
+        publish_system_status();
         s_fail_sequences++;
         if (CONFIG_HMI_WIFI_FAILOVER_ENABLED && !s_failover_triggered &&
             s_fail_sequences >= CONFIG_HMI_WIFI_FAILOVER_THRESHOLD) {
@@ -286,6 +319,34 @@ static void websocket_start(void)
 
     ESP_LOGI(TAG, "Connecting WebSocket alerts: %s", uri);
     ESP_ERROR_CHECK(esp_websocket_client_start(s_ws_alerts));
+}
+
+static void websocket_stop(void)
+{
+    ESP_LOGI(TAG, "Stopping WebSocket clients");
+
+    esp_websocket_client_handle_t handles[] = {
+        s_ws_telemetry,
+        s_ws_events,
+        s_ws_alerts,
+    };
+
+    for (size_t i = 0; i < sizeof(handles) / sizeof(handles[0]); ++i) {
+        if (!handles[i]) {
+            continue;
+        }
+        if (esp_websocket_client_is_connected(handles[i])) {
+            esp_websocket_client_stop(handles[i]);
+        }
+        esp_websocket_client_destroy(handles[i]);
+    }
+
+    s_ws_telemetry = NULL;
+    s_ws_events = NULL;
+    s_ws_alerts = NULL;
+
+    s_net_status.server_reachable = false;
+    publish_system_status();
 }
 
 static void publish_request_started(const char *path, const char *method)
@@ -444,6 +505,10 @@ void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_exp
     if (!telemetry_expected) {
         s_fail_sequences = 0;
         s_failover_triggered = false;
+        websocket_stop();
+        wifi_stop();
+        s_net_status.wifi_connected = false;
+        s_net_status.server_reachable = false;
         s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
     } else {
         s_net_status.network_state = s_net_status.wifi_connected
