@@ -39,6 +39,7 @@ static lv_obj_t *s_lbl_language = NULL;
 
 static lv_obj_t *s_lbl_btn_reload = NULL;
 static lv_obj_t *s_lbl_btn_save = NULL;
+static lv_obj_t *s_lbl_btn_reconnect = NULL;
 
 static lv_obj_t *create_section(lv_obj_t *parent, const char *title, lv_obj_t **out_label)
 {
@@ -126,6 +127,7 @@ static void apply_texts(void)
     ui_i18n_label_set_text(s_lbl_language, "config.label.language");
 
     ui_i18n_label_set_text(s_lbl_btn_reload, "config.btn.reload");
+    ui_i18n_label_set_text(s_lbl_btn_reconnect, "config.btn.reconnect");
     ui_i18n_label_set_text(s_lbl_btn_save, "config.btn.save");
 
     update_language_dropdown();
@@ -267,6 +269,22 @@ static void on_reload_event(lv_event_t *e)
     screen_config_set_loading(true, ui_i18n("config.status.loading"));
 }
 
+static void on_reconnect_event(lv_event_t *e)
+{
+    (void) e;
+    if (!s_bus) return;
+
+    user_input_change_mode_t req = {
+        .mode = HMI_MODE_CONNECTED_S3,
+    };
+    event_t evt = {
+        .type = EVENT_USER_INPUT_CHANGE_MODE,
+        .data = &req,
+    };
+    event_bus_publish(s_bus, &evt);
+    set_status(ui_i18n("config.status.reconnect"), lv_palette_main(LV_PALETTE_BLUE));
+}
+
 static void on_save_event(lv_event_t *e)
 {
     (void) e;
@@ -355,6 +373,11 @@ void screen_config_create(lv_obj_t *parent)
     lv_obj_add_event_cb(btn_reload, on_reload_event, LV_EVENT_CLICKED, NULL);
     s_lbl_btn_reload = lv_label_create(btn_reload);
     ui_i18n_label_set_text(s_lbl_btn_reload, "config.btn.reload");
+
+    lv_obj_t *btn_reconnect = lv_btn_create(row_actions);
+    lv_obj_add_event_cb(btn_reconnect, on_reconnect_event, LV_EVENT_CLICKED, NULL);
+    s_lbl_btn_reconnect = lv_label_create(btn_reconnect);
+    ui_i18n_label_set_text(s_lbl_btn_reconnect, "config.btn.reconnect");
 
     lv_obj_t *btn_save = lv_btn_create(row_actions);
     lv_obj_add_event_cb(btn_save, on_save_event, LV_EVENT_CLICKED, NULL);

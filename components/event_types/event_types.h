@@ -14,6 +14,12 @@ typedef enum {
     HMI_MODE_TINYBMS_AUTONOMOUS, // Mode autonome : UART TinyBMS uniquement, pas de réseau
 } hmi_operation_mode_t;
 
+typedef enum {
+    NETWORK_STATE_NOT_CONFIGURED = 0,  // réseau non attendu ou non configuré
+    NETWORK_STATE_ERROR,               // tentative en échec
+    NETWORK_STATE_ACTIVE,              // WiFi et bridge accessibles
+} network_state_t;
+
 /**
  * Nombre max de cellules supportées dans les structures.
  * Doit être cohérent avec ton pack réel (ex : 16 ou 32).
@@ -46,6 +52,7 @@ typedef enum {
     EVENT_BATTERY_STATUS_UPDATED,       // battery_status_t
     EVENT_PACK_STATS_UPDATED,           // pack_stats_t
     EVENT_SYSTEM_STATUS_UPDATED,        // system_status_t
+    EVENT_NETWORK_FAILOVER_ACTIVATED,   // network_failover_event_t
     EVENT_OPERATION_MODE_CHANGED,       // operation_mode_event_t
     EVENT_CONFIG_UPDATED,               // si on gère la config locale
 
@@ -121,6 +128,7 @@ typedef struct {
     bool server_reachable;     // HMI → S3 OK
     bool storage_ok;           // stockage interne OK
     bool has_error;            // erreur globale (à affiner selon events)
+    network_state_t network_state; // État réseau global
     hmi_operation_mode_t operation_mode; // Mode courant : connecté S3 ou autonome TinyBMS
     bool telemetry_expected;   // true si on attend des flux /ws/* (mode connecté)
 } system_status_t;
@@ -268,6 +276,12 @@ typedef struct {
     hmi_operation_mode_t mode;      // Mode courant
     bool telemetry_expected;        // Aligné avec system_status_t.telemetry_expected
 } operation_mode_event_t;
+
+typedef struct {
+    int                  fail_count;       // Nombre de tentatives WiFi échouées
+    int                  fail_threshold;   // Seuil ayant déclenché la bascule
+    hmi_operation_mode_t new_mode;         // Mode choisi après bascule
+} network_failover_event_t;
 
 typedef struct {
     bool   success;

@@ -30,6 +30,7 @@ static bool s_remote_started     = false;
 static void hmi_create_core_tasks(void);
 static void publish_operation_mode_state(bool telemetry_expected);
 static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void *user_ctx);
+static void handle_network_failover(event_bus_t *bus, const event_t *event, void *user_ctx);
 static void ensure_remote_modules_started(bool telemetry_expected);
 
 void hmi_main_init(void)
@@ -71,6 +72,7 @@ void hmi_main_init(void)
 
     // Abonnement au changement de mode (toggle GUI/menu futur)
     event_bus_subscribe(&s_event_bus, EVENT_USER_INPUT_CHANGE_MODE, handle_user_change_mode, NULL);
+    event_bus_subscribe(&s_event_bus, EVENT_NETWORK_FAILOVER_ACTIVATED, handle_network_failover, NULL);
 }
 
 void hmi_main_start(void)
@@ -124,6 +126,7 @@ static void publish_operation_mode_state(bool telemetry_expected)
         .server_reachable = false,
         .storage_ok = true,
         .has_error = false,
+        .network_state = telemetry_expected ? NETWORK_STATE_ERROR : NETWORK_STATE_NOT_CONFIGURED,
         .operation_mode = s_operation_mode,
         .telemetry_expected = telemetry_expected,
     };
@@ -187,4 +190,37 @@ static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void
         }
         publish_operation_mode_state(telemetry_expected);
     }
+}
+
+static void handle_network_failover(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    const network_failover_event_t *failover = (const network_failover_event_t *) event->data;
+    if (!failover) {
+        return;
+    }
+
+    if (s_operation_mode == failover->new_mode) {
+        ESP_LOGW(TAG, "Failover event received but mode already %d", s_operation_mode);
+        return;
+    }
+
+    ESP_LOGW(TAG, "WiFi failed %d times (threshold=%d), switching to mode %d",
+             failover->fail_count, failover->fail_threshold, failover->new_mode);
+
+    if (operation_mode_set(failover->new_mode) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to persist failover mode %d", failover->new_mode);
+        return;
+    }
+
+    s_operation_mode = failover->new_mode;
+    bool telemetry_expected = (s_operation_mode == HMI_MODE_CONNECTED_S3);
+
+    if (s_remote_initialized) {
+        net_client_set_operation_mode(s_operation_mode, telemetry_expected);
+        remote_event_adapter_set_operation_mode(s_operation_mode, telemetry_expected);
+    }
+    publish_operation_mode_state(telemetry_expected);
 }

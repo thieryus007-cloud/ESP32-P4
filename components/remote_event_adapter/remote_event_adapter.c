@@ -493,6 +493,7 @@ void remote_event_adapter_init(event_bus_t *bus)
     s_sys_status.server_reachable = false;
     s_sys_status.storage_ok       = false;
     s_sys_status.has_error        = false;
+    s_sys_status.network_state    = NETWORK_STATE_NOT_CONFIGURED;
     s_sys_status.operation_mode   = HMI_MODE_CONNECTED_S3;
     s_sys_status.telemetry_expected = true;
 
@@ -521,6 +522,15 @@ void remote_event_adapter_set_operation_mode(hmi_operation_mode_t mode, bool tel
 {
     s_sys_status.operation_mode    = mode;
     s_sys_status.telemetry_expected = telemetry_expected;
+
+    if (!telemetry_expected) {
+        s_sys_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+        s_sys_status.wifi_connected = false;
+        s_sys_status.server_reachable = false;
+        s_sys_status.has_error = false;
+    } else if (s_sys_status.network_state == NETWORK_STATE_NOT_CONFIGURED) {
+        s_sys_status.network_state = NETWORK_STATE_ERROR;
+    }
 
     if (!s_bus) {
         return;

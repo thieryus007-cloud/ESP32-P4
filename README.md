@@ -139,7 +139,8 @@ Le projet suit une **architecture événementielle en 5 couches** :
 Structures de données principales :
 - `battery_status_t` : État global de la batterie (SOC, SOH, tension, courant, etc.)
 - `pack_stats_t` : Statistiques au niveau cellule (jusqu'à 32 cellules)
-- `system_status_t` : Indicateurs de santé système
+- `system_status_t` : Indicateurs de santé système (état WiFi/bridge, mode courant,
+  et statut réseau tri-états : non configuré, en échec, actif)
 
 #### Client réseau (`components/net_client/`)
 - Gestion de la connexion WiFi en mode Station
@@ -147,6 +148,9 @@ Structures de données principales :
 - Client HTTP REST pour commandes
 - Reconnexion automatique (jusqu'à 5 tentatives)
 - Configuration via menuconfig (SSID, mot de passe, hôte du bridge)
+- Bascule optionnelle vers le mode autonome si le WiFi échoue plusieurs fois :
+  activable via `CONFIG_HMI_WIFI_FAILOVER_ENABLED` et seuil configurable avec
+  `CONFIG_HMI_WIFI_FAILOVER_THRESHOLD`; un événement dédié alerte la GUI.
 
 #### Adaptateur d'événements (`components/remote_event_adapter/`)
 - Convertit les messages JSON ↔ événements internes
@@ -159,6 +163,7 @@ Structures de données principales :
 - 7 écrans dans une interface à onglets
 - Thread-safe avec `lv_async_call()`
 - 1,728 lignes de code GUI (5 écrans S3 + 2 écrans TinyBMS)
+- Onglet Config : bouton dédié pour redemander le mode connecté après une bascule autonome.
 
 #### Client TinyBMS (`components/tinybms_client/`)
 - **Protocole binaire UART** avec CRC16 (Modbus-like)
