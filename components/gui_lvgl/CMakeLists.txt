@@ -12,6 +12,7 @@ idf_component_register(
          "screen_can_status.c"
          "screen_can_config.c"
          "screen_bms_control.c"
+         "screen_history.c"
     INCLUDE_DIRS "."
     REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher
 )

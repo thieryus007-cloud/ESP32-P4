@@ -14,6 +14,7 @@
 #include "screen_can_status.h"
 #include "screen_can_config.h"
 #include "screen_bms_control.h"
+#include "screen_history.h"
 
 #include "event_bus.h"
 #include "event_types.h"
@@ -69,6 +70,14 @@ typedef struct {
 typedef struct {
     alert_filters_t filters;
 } gui_alert_filters_ctx_t;
+
+typedef struct {
+    history_snapshot_t snapshot;
+} gui_history_ctx_t;
+
+typedef struct {
+    history_export_result_t result;
+} gui_history_export_ctx_t;
 
 // --- Callbacks exécutés dans le contexte LVGL (via lv_async_call) ---
 
@@ -149,6 +158,24 @@ static void lvgl_apply_alert_filters(void *user_data)
     gui_alert_filters_ctx_t *ctx = (gui_alert_filters_ctx_t *) user_data;
     if (ctx) {
         screen_alerts_apply_filters(&ctx->filters);
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_history_update(void *user_data)
+{
+    gui_history_ctx_t *ctx = (gui_history_ctx_t *) user_data;
+    if (ctx) {
+        screen_history_update(&ctx->snapshot);
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_history_export(void *user_data)
+{
+    gui_history_export_ctx_t *ctx = (gui_history_export_ctx_t *) user_data;
+    if (ctx) {
+        screen_history_show_export(&ctx->result);
         free(ctx);
     }
 }
@@ -340,6 +367,50 @@ static void alert_filters_event_handler(event_bus_t *bus,
     lv_async_call(lvgl_apply_alert_filters, ctx);
 }
 
+static void history_event_handler(event_bus_t *bus,
+                                  const event_t *event,
+                                  void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const history_snapshot_t *src = (const history_snapshot_t *) event->data;
+    gui_history_ctx_t *ctx = (gui_history_ctx_t *) malloc(sizeof(gui_history_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_history_ctx_t");
+        return;
+    }
+
+    ctx->snapshot = *src;
+    lv_async_call(lvgl_apply_history_update, ctx);
+}
+
+static void history_export_event_handler(event_bus_t *bus,
+                                         const event_t *event,
+                                         void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const history_export_result_t *src = (const history_export_result_t *) event->data;
+    gui_history_export_ctx_t *ctx = (gui_history_export_ctx_t *) malloc(sizeof(gui_history_export_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_history_export_ctx_t");
+        return;
+    }
+
+    ctx->result = *src;
+    lv_async_call(lvgl_apply_history_export, ctx);
+}
+
 // CVL limits updated handler
 static void cvl_limits_event_handler(event_bus_t *bus,
                                       const event_t *event,
@@ -437,6 +508,7 @@ void gui_init(event_bus_t *bus)
     lv_obj_t *tab_can_status = lv_tabview_add_tab(tabview, "CAN Status");
     lv_obj_t *tab_can_config = lv_tabview_add_tab(tabview, "CAN Config");
     lv_obj_t *tab_bms_control = lv_tabview_add_tab(tabview, "BMS Control");
+    lv_obj_t *tab_history = lv_tabview_add_tab(tabview, "History");
 
     screen_dashboard_create(tab_dashboard);
     screen_home_create(tab_home);
@@ -452,6 +524,8 @@ void gui_init(event_bus_t *bus)
     screen_can_status_create(tab_can_status);
     screen_can_config_create(tab_can_config);
     screen_bms_control_create(tab_bms_control);
+    screen_history_set_bus(s_bus);
+    screen_history_create(tab_history);
 
     // Abonnements EventBus
     if (s_bus) {
@@ -515,6 +589,16 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_ALERT_FILTERS_UPDATED,
                             alert_filters_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_HISTORY_UPDATED,
+                            history_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_HISTORY_EXPORTED,
+                            history_export_event_handler,
                             NULL);
     }
 }

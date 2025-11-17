@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +32,8 @@ typedef enum {
     EVENT_ALERTS_ACTIVE_UPDATED,        // Liste des alertes actives (alert_list_t)
     EVENT_ALERTS_HISTORY_UPDATED,       // Historique des alertes (alert_list_t)
     EVENT_ALERT_FILTERS_UPDATED,        // Filtres/seuils appliqués aux alertes (alert_filters_t)
+    EVENT_HISTORY_UPDATED,              // Historique batterie (history_snapshot_t)
+    EVENT_HISTORY_EXPORTED,             // Résultat export CSV (history_export_result_t)
 
     // --- Événements "propres" (modèle traité/local) ---
     EVENT_BATTERY_STATUS_UPDATED,       // battery_status_t
@@ -45,6 +48,8 @@ typedef enum {
     EVENT_USER_INPUT_ACK_ALERT,         // user_input_ack_alert_t
     EVENT_USER_INPUT_REFRESH_ALERT_HISTORY, // requête GET /api/alerts/history
     EVENT_USER_INPUT_UPDATE_ALERT_FILTERS,  // alert_filters_t
+    EVENT_USER_INPUT_REQUEST_HISTORY,   // user_input_history_request_t
+    EVENT_USER_INPUT_EXPORT_HISTORY,    // user_input_history_export_t
     EVENT_USER_INPUT_WRITE_CONFIG,      // futur
     EVENT_USER_INPUT_RELOAD_CONFIG,     // recharger /api/config
 
@@ -198,6 +203,46 @@ typedef struct {
 typedef struct {
     bool include_mqtt;         // true -> charger aussi /api/mqtt/config
 } user_input_reload_config_t;
+
+/**
+ * @brief Échantillon pour l'historique batterie
+ */
+typedef struct {
+    uint64_t timestamp_ms;  // Horodatage en millisecondes
+    float    voltage;       // V
+    float    current;       // A
+    float    temperature;   // °C
+    float    soc;           // %
+} history_sample_t;
+
+typedef enum {
+    HISTORY_RANGE_LAST_HOUR = 0,
+    HISTORY_RANGE_LAST_DAY,
+    HISTORY_RANGE_LAST_WEEK,
+} history_range_t;
+
+#define HISTORY_SNAPSHOT_MAX 512
+
+typedef struct {
+    history_range_t   range;                       // fenêtre demandée
+    uint16_t          count;                       // nombre d'échantillons valides
+    bool              from_backend;                // true si issu du backend
+    history_sample_t  samples[HISTORY_SNAPSHOT_MAX];
+} history_snapshot_t;
+
+typedef struct {
+    history_range_t range;
+} user_input_history_request_t;
+
+typedef struct {
+    history_range_t range;
+} user_input_history_export_t;
+
+typedef struct {
+    bool   success;
+    char   path[64];
+    size_t exported_count;
+} history_export_result_t;
 
 typedef struct {
     int alert_id;              // identifiant à acquitter
