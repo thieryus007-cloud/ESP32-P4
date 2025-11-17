@@ -19,6 +19,7 @@
 #include "gui_init.h"
 #include "history_model.h"
 #include "operation_mode.h"
+#include "stats_aggregator.h"
 
 static const char *TAG = "HMI_MAIN";
 
@@ -66,6 +67,7 @@ void hmi_main_init(void)
     system_events_model_init(&s_event_bus);    // modèle statut système (wifi, storage, etc.)
     config_model_init(&s_event_bus);           // modèle config (plus tard)
     history_model_init(&s_event_bus);          // historique local + backend
+    stats_aggregator_init(&s_event_bus);       // agrégation locale des stats 24h/7j
 
     // 3b) Init TinyBMS (UART direct)
     tinybms_client_init(&s_event_bus);         // Client UART TinyBMS
@@ -99,6 +101,7 @@ void hmi_main_start(void)
     system_events_model_start();
     config_model_start();
     history_model_start();
+    stats_aggregator_start();
 
     // 2b) Démarrer TinyBMS
     tinybms_client_start();         // Connexion UART TinyBMS
