@@ -17,6 +17,8 @@
 #include "tinybms_client.h"
 #include "tinybms_model.h"
 #include "network_publisher.h"
+#include "status_endpoint.h"
+#include "config_manager.h"
 #include "gui_init.h"
 #include "history_model.h"
 #include "operation_mode.h"
@@ -42,6 +44,9 @@ void hmi_main_init(void)
 
     // 1) Init EventBus
     event_bus_init(&s_event_bus);
+
+    // Config persistante (seuils, destinations, etc.)
+    config_manager_init();
 
     // Journal circulaire de diagnostic (UART/RS485)
     diagnostic_logger_init(&s_event_bus);
@@ -70,6 +75,7 @@ void hmi_main_init(void)
     history_model_init(&s_event_bus);          // historique local + backend
     stats_aggregator_init(&s_event_bus);       // agrégation locale des stats 24h/7j
     network_publisher_init(&s_event_bus);      // publication périodique MQTT/HTTP
+    status_endpoint_init(&s_event_bus);        // exposition statut backend
 
     // 3b) Init TinyBMS (UART direct)
     tinybms_client_init(&s_event_bus);         // Client UART TinyBMS
@@ -105,6 +111,7 @@ void hmi_main_start(void)
     history_model_start();
     stats_aggregator_start();
     network_publisher_start();
+    status_endpoint_start();
 
     // 2b) Démarrer TinyBMS
     tinybms_client_start();         // Connexion UART TinyBMS

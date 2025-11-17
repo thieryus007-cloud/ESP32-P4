@@ -40,6 +40,10 @@ typedef struct {
     pack_stats_t     last_pack;
     bool             has_batt;
     bool             has_pack;
+    uint32_t         publish_errors;
+    uint32_t         published_points;
+    uint64_t         last_sync_ms;
+    uint32_t         last_duration_ms;
 
     telemetry_point_t buffer[TELEMETRY_BUFFER_DEPTH];
     size_t            head;
@@ -175,9 +179,18 @@ static bool publish_mqtt(const telemetry_point_t *pt)
 
 static bool publish_point(const telemetry_point_t *pt)
 {
+    uint64_t start_us = esp_timer_get_time();
     bool mqtt_ok = publish_mqtt(pt);
     bool http_ok = publish_http(pt);
-    return mqtt_ok && http_ok;
+    s_state.last_duration_ms = (uint32_t) ((esp_timer_get_time() - start_us) / 1000ULL);
+    if (mqtt_ok && http_ok) {
+        s_state.published_points++;
+        s_state.last_sync_ms = get_time_ms();
+        return true;
+    }
+
+    s_state.publish_errors++;
+    return false;
 }
 
 static void flush_buffer_if_online(void)
@@ -291,6 +304,19 @@ esp_err_t network_publisher_init(event_bus_t *bus)
              TELEMETRY_BUFFER_DEPTH);
 
     return ESP_OK;
+}
+
+network_publisher_metrics_t network_publisher_get_metrics(void)
+{
+    network_publisher_metrics_t m = {
+        .last_sync_ms = s_state.last_sync_ms,
+        .buffered_points = (uint32_t) s_state.count,
+        .buffer_capacity = TELEMETRY_BUFFER_DEPTH,
+        .publish_errors = s_state.publish_errors,
+        .published_points = s_state.published_points,
+        .last_duration_ms = s_state.last_duration_ms,
+    };
+    return m;
 }
 
 esp_err_t network_publisher_start(void)
