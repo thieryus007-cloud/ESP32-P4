@@ -185,10 +185,12 @@ static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void
     (void) bus;
     (void) user_ctx;
 
-    const user_input_change_mode_t *req = (const user_input_change_mode_t *) event->data;
-    if (!req) {
+    if (!event || !event->data) {
+        ESP_LOGW(TAG, "Received NULL change-mode event");
         return;
     }
+
+    const user_input_change_mode_t *req = (const user_input_change_mode_t *) event->data;
 
     if (operation_mode_set(req->mode) != ESP_OK) {
         ESP_LOGE(TAG, "Invalid operation mode requested: %d", req->mode);
@@ -214,10 +216,12 @@ static void handle_network_failover(event_bus_t *bus, const event_t *event, void
     (void) bus;
     (void) user_ctx;
 
-    const network_failover_event_t *failover = (const network_failover_event_t *) event->data;
-    if (!failover) {
+    if (!event || !event->data) {
+        ESP_LOGW(TAG, "Received NULL failover event");
         return;
     }
+
+    const network_failover_event_t *failover = (const network_failover_event_t *) event->data;
 
     if (s_operation_mode == failover->new_mode) {
         ESP_LOGW(TAG, "Failover event received but mode already %d", s_operation_mode);
