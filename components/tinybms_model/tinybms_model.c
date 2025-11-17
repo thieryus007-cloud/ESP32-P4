@@ -15,7 +15,7 @@ static const char *TAG = "tinybms_model";
 
 // Module state
 static struct {
-    EventBus *bus;
+    event_bus_t *bus;
     register_cache_entry_t cache[TINYBMS_REGISTER_COUNT];
     uint32_t total_reads;
     uint32_t total_writes;
@@ -82,8 +82,12 @@ static void update_cache_and_publish(uint16_t address, uint16_t raw_value)
         strncpy(update.key, desc->key, sizeof(update.key) - 1);
         update.key[sizeof(update.key) - 1] = '\0';
 
-        event_bus_publish(g_model.bus, EVENT_TINYBMS_REGISTER_UPDATED,
-                         &update, sizeof(update));
+        event_t evt = {
+            .type = EVENT_TINYBMS_REGISTER_UPDATED,
+            .data = &update,
+        };
+
+        event_bus_publish(g_model.bus, &evt);
 
         ESP_LOGD(TAG, "Register updated: %s = %.2f (0x%04X)",
                  desc->key, update.user_value, raw_value);
@@ -93,15 +97,16 @@ static void update_cache_and_publish(uint16_t address, uint16_t raw_value)
 /**
  * @brief Event handler for user write requests
  */
-static void on_user_write_request(event_type_t type, const void *data, size_t data_len)
+static void on_user_write_request(event_bus_t *bus, const event_t *event, void *user_ctx)
 {
-    (void)type;
+    (void) bus;
+    (void) user_ctx;
 
-    if (data == NULL || data_len != sizeof(user_input_tinybms_write_t)) {
+    if (!event || !event->data) {
         return;
     }
 
-    const user_input_tinybms_write_t *req = (const user_input_tinybms_write_t *)data;
+    const user_input_tinybms_write_t *req = (const user_input_tinybms_write_t *) event->data;
 
     ESP_LOGI(TAG, "User write request: address=0x%04X, value=0x%04X",
              req->address, req->value);
@@ -122,7 +127,7 @@ static void on_user_write_request(event_type_t type, const void *data, size_t da
 
 // Public API
 
-esp_err_t tinybms_model_init(EventBus *bus)
+esp_err_t tinybms_model_init(event_bus_t *bus)
 {
     if (g_model.initialized) {
         ESP_LOGW(TAG, "Already initialized");
@@ -146,7 +151,7 @@ esp_err_t tinybms_model_init(EventBus *bus)
     }
 
     // Subscribe to user write events
-    event_bus_subscribe(bus, EVENT_USER_INPUT_TINYBMS_WRITE_REG, on_user_write_request);
+    event_bus_subscribe(bus, EVENT_USER_INPUT_TINYBMS_WRITE_REG, on_user_write_request, NULL);
 
     g_model.initialized = true;
     ESP_LOGI(TAG, "TinyBMS model initialized with %d registers", TINYBMS_REGISTER_COUNT);
@@ -189,7 +194,11 @@ esp_err_t tinybms_model_read_all(void)
 
     if (success_count > 0) {
         // Publish config changed event
-        event_bus_publish(g_model.bus, EVENT_TINYBMS_CONFIG_CHANGED, NULL, 0);
+        event_t evt = {
+            .type = EVENT_TINYBMS_CONFIG_CHANGED,
+            .data = NULL,
+        };
+        event_bus_publish(g_model.bus, &evt);
     }
 
     return (success_count > 0) ? ESP_OK : ESP_FAIL;
@@ -266,7 +275,11 @@ esp_err_t tinybms_model_write_register(uint16_t address, float user_value)
         g_model.total_writes++;
 
         // Publish config changed event
-        event_bus_publish(g_model.bus, EVENT_TINYBMS_CONFIG_CHANGED, NULL, 0);
+        event_t evt = {
+            .type = EVENT_TINYBMS_CONFIG_CHANGED,
+            .data = NULL,
+        };
+        event_bus_publish(g_model.bus, &evt);
     }
 
     return ret;

@@ -7,6 +7,7 @@
 #include "tinybms_protocol.h"
 #include "event_types.h"
 #include "event_bus.h"
+#include "esp_timer.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
@@ -19,12 +20,14 @@ static const char *TAG = "tinybms_client";
 
 // Module state
 static struct {
-    EventBus *bus;
+    event_bus_t *bus;
     SemaphoreHandle_t uart_mutex;
     tinybms_state_t state;
     tinybms_stats_t stats;
     bool initialized;
 } g_ctx = {0};
+
+static void publish_stats_event(void);
 
 static void publish_uart_log(const char *action, uint16_t address, esp_err_t result,
                              const char *detail)
@@ -47,7 +50,29 @@ static void publish_uart_log(const char *action, uint16_t address, esp_err_t res
              (detail && detail[0]) ? " - " : "",
              (detail && detail[0]) ? detail : "");
 
-    event_bus_publish(g_ctx.bus, EVENT_TINYBMS_UART_LOG, &entry, sizeof(entry));
+    event_t evt = {
+        .type = EVENT_TINYBMS_UART_LOG,
+        .data = &entry,
+    };
+    event_bus_publish(g_ctx.bus, &evt);
+}
+
+static void publish_stats_event(void)
+{
+    if (!g_ctx.bus) {
+        return;
+    }
+
+    tinybms_stats_event_t stats_evt = {
+        .stats = g_ctx.stats,
+        .timestamp_ms = (uint64_t)(esp_timer_get_time() / 1000ULL),
+    };
+
+    event_t evt = {
+        .type = EVENT_TINYBMS_STATS_UPDATED,
+        .data = &stats_evt,
+    };
+    event_bus_publish(g_ctx.bus, &evt);
 }
 
 /**
@@ -248,7 +273,7 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
 
 // Public API implementations
 
-esp_err_t tinybms_client_init(EventBus *bus)
+esp_err_t tinybms_client_init(event_bus_t *bus)
 {
     if (g_ctx.initialized) {
         ESP_LOGW(TAG, "Already initialized");
@@ -283,6 +308,8 @@ esp_err_t tinybms_client_init(EventBus *bus)
     g_ctx.initialized = true;
     ESP_LOGI(TAG, "TinyBMS client initialized");
 
+    publish_stats_event();
+
     return ESP_OK;
 }
 
@@ -306,7 +333,11 @@ esp_err_t tinybms_client_start(void)
 
         // Publish connected event
         if (g_ctx.bus) {
-            event_bus_publish(g_ctx.bus, EVENT_TINYBMS_CONNECTED, NULL, 0);
+            event_t evt = {
+                .type = EVENT_TINYBMS_CONNECTED,
+                .data = NULL,
+            };
+            event_bus_publish(g_ctx.bus, &evt);
         }
     } else {
         g_ctx.state = TINYBMS_STATE_ERROR;
@@ -343,6 +374,7 @@ esp_err_t tinybms_read_register(uint16_t address, uint16_t *value)
         if (retry < TINYBMS_RETRY_COUNT - 1) {
             ESP_LOGD(TAG, "Retry %d/%d for register 0x%04X",
                      retry + 1, TINYBMS_RETRY_COUNT, address);
+            g_ctx.stats.retries++;
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
@@ -360,6 +392,7 @@ esp_err_t tinybms_read_register(uint16_t address, uint16_t *value)
         detail[0] = '\0';
     }
     publish_uart_log("read", address, ret, detail);
+    publish_stats_event();
     return ret;
 }
 
@@ -388,6 +421,7 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
         if (retry < TINYBMS_RETRY_COUNT - 1) {
             ESP_LOGD(TAG, "Retry %d/%d for write to 0x%04X",
                      retry + 1, TINYBMS_RETRY_COUNT, address);
+            g_ctx.stats.retries++;
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
@@ -425,6 +459,7 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
         detail[0] = '\0';
     }
     publish_uart_log("write", address, ret, detail);
+    publish_stats_event();
     return ret;
 }
 
@@ -457,4 +492,5 @@ void tinybms_reset_stats(void)
 {
     memset(&g_ctx.stats, 0, sizeof(tinybms_stats_t));
     ESP_LOGI(TAG, "Statistics reset");
+    publish_stats_event();
 }

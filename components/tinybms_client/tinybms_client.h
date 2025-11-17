@@ -17,6 +17,7 @@
 
 #include "esp_err.h"
 #include "event_bus.h"
+#include "event_types.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -45,19 +46,6 @@ typedef enum {
 } tinybms_state_t;
 
 /**
- * @brief TinyBMS client statistics
- */
-typedef struct {
-    uint32_t reads_ok;
-    uint32_t reads_failed;
-    uint32_t writes_ok;
-    uint32_t writes_failed;
-    uint32_t crc_errors;
-    uint32_t timeouts;
-    uint32_t nacks;
-} tinybms_stats_t;
-
-/**
  * @brief Initialize TinyBMS UART client
  *
  * Sets up UART1 for RS485 communication with TinyBMS.
@@ -66,7 +54,7 @@ typedef struct {
  * @param bus Pointer to EventBus for publishing events
  * @return ESP_OK on success
  */
-esp_err_t tinybms_client_init(EventBus *bus);
+esp_err_t tinybms_client_init(event_bus_t *bus);
 
 /**
  * @brief Start TinyBMS client

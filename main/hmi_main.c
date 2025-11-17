@@ -7,6 +7,7 @@
 
 #include "event_bus.h"
 #include "event_types.h"
+#include "diagnostic_logger.h"
 #include "logger.h"
 #include "net_client.h"
 #include "remote_event_adapter.h"
@@ -39,6 +40,9 @@ void hmi_main_init(void)
 
     // 1) Init EventBus
     event_bus_init(&s_event_bus);
+
+    // Journal circulaire de diagnostic (UART/RS485)
+    diagnostic_logger_init(&s_event_bus);
 
     // Charger le mode de fonctionnement (persisté en NVS)
     if (operation_mode_init() == ESP_OK) {
