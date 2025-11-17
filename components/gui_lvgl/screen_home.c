@@ -208,9 +208,13 @@ void screen_home_update_battery(const battery_status_t *status)
                          status->can_ok ? color_ok() : color_error());
     }
     if (s_label_status_mqtt) {
-        set_status_label(s_label_status_mqtt,
-                         ui_i18n("home.status.mqtt"),
-                         status->mqtt_ok ? color_ok() : color_error());
+        if (s_has_sys && !s_last_sys.telemetry_expected) {
+            set_status_label(s_label_status_mqtt, "Autonome", lv_palette_main(LV_PALETTE_BLUE));
+        } else {
+            set_status_label(s_label_status_mqtt,
+                             ui_i18n("home.status.mqtt"),
+                             status->mqtt_ok ? color_ok() : color_error());
+        }
     }
 }
 
@@ -223,19 +227,23 @@ void screen_home_update_system(const system_status_t *status)
 
     // WiFi / storage / erreurs globales -> on les reflète sur "WiFi"
     if (s_label_status_wifi) {
-        lv_color_t c = color_neutral();
-        const char *text = ui_i18n("home.status.wifi");
-
-        if (!status->wifi_connected) {
-            c = color_error();
-        } else if (!status->server_reachable || !status->storage_ok) {
-            c = color_warn();
-        } else if (status->has_error) {
-            c = color_error();
+        if (!status->telemetry_expected) {
+            set_status_label(s_label_status_wifi, "Autonome", lv_palette_main(LV_PALETTE_BLUE));
         } else {
-            c = color_ok();
+            lv_color_t c = color_neutral();
+            const char *text = ui_i18n("home.status.wifi");
+
+            if (!status->wifi_connected) {
+                c = color_error();
+            } else if (!status->server_reachable || !status->storage_ok) {
+                c = color_warn();
+            } else if (status->has_error) {
+                c = color_error();
+            } else {
+                c = color_ok();
+            }
+            set_status_label(s_label_status_wifi, text, c);
         }
-        set_status_label(s_label_status_wifi, text, c);
     }
 
     // 🔔 Badge ALM : rouge si has_error, neutre sinon

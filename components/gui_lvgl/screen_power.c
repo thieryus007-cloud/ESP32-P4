@@ -120,7 +120,10 @@ void screen_power_update_system(const system_status_t *status)
     const char *txt = ui_i18n("power.status.ok");
     lv_color_t col  = lv_palette_main(LV_PALETTE_GREEN);
 
-    if (!status->wifi_connected || !status->storage_ok || status->has_error) {
+    if (!status->telemetry_expected) {
+        txt = "Mode autonome";
+        col = lv_palette_main(LV_PALETTE_BLUE);
+    } else if (!status->wifi_connected || !status->storage_ok || status->has_error) {
         txt = ui_i18n("power.status.check");
         col = lv_palette_main(LV_PALETTE_RED);
     }
