@@ -28,6 +28,9 @@ typedef enum {
     EVENT_REMOTE_SYSTEM_EVENT,          // JSON brut → événements système
     EVENT_REMOTE_CONFIG_SNAPSHOT,       // non utilisé pour l'instant
     EVENT_REMOTE_CMD_RESULT,            // résultat retour /api ou WS commande
+    EVENT_ALERTS_ACTIVE_UPDATED,        // Liste des alertes actives (alert_list_t)
+    EVENT_ALERTS_HISTORY_UPDATED,       // Historique des alertes (alert_list_t)
+    EVENT_ALERT_FILTERS_UPDATED,        // Filtres/seuils appliqués aux alertes (alert_filters_t)
 
     // --- Événements "propres" (modèle traité/local) ---
     EVENT_BATTERY_STATUS_UPDATED,       // battery_status_t
@@ -39,6 +42,9 @@ typedef enum {
     EVENT_USER_INPUT_SET_TARGET_SOC,    // user_input_set_target_soc_t
     EVENT_USER_INPUT_CHANGE_MODE,       // futur
     EVENT_USER_INPUT_ACK_ALARM,         // futur
+    EVENT_USER_INPUT_ACK_ALERT,         // user_input_ack_alert_t
+    EVENT_USER_INPUT_REFRESH_ALERT_HISTORY, // requête GET /api/alerts/history
+    EVENT_USER_INPUT_UPDATE_ALERT_FILTERS,  // alert_filters_t
     EVENT_USER_INPUT_WRITE_CONFIG,      // futur
     EVENT_USER_INPUT_RELOAD_CONFIG,     // recharger /api/config
 
@@ -136,6 +142,36 @@ typedef struct {
 } cmd_result_t;
 
 /**
+ * @brief  Entrée d'alerte (active ou historique)
+ */
+#define ALERT_MAX_ENTRIES        32
+#define ALERT_MESSAGE_MAX_LEN    96
+#define ALERT_SOURCE_MAX_LEN     32
+#define ALERT_STATUS_MAX_LEN     16
+
+typedef struct {
+    int      id;                                // identifiant unique de l'alerte
+    int      code;                              // code optionnel (event_id)
+    int      severity;                          // niveau de sévérité (0=info, 4=critique)
+    uint64_t timestamp_ms;                      // horodatage
+    bool     acknowledged;                      // true si acquittée
+    char     message[ALERT_MESSAGE_MAX_LEN];    // texte
+    char     source[ALERT_SOURCE_MAX_LEN];      // source (module)
+    char     status[ALERT_STATUS_MAX_LEN];      // statut (active/resolved)
+} alert_entry_t;
+
+typedef struct {
+    alert_entry_t entries[ALERT_MAX_ENTRIES];
+    uint8_t       count;
+} alert_list_t;
+
+typedef struct {
+    int  min_severity;                          // seuil minimal à afficher
+    bool hide_acknowledged;                     // masque les alertes acquittées
+    char source_filter[ALERT_SOURCE_MAX_LEN];   // filtre optionnel sur la source
+} alert_filters_t;
+
+/**
  * @brief  Commande : changer le target SOC
  */
 typedef struct {
@@ -162,6 +198,14 @@ typedef struct {
 typedef struct {
     bool include_mqtt;         // true -> charger aussi /api/mqtt/config
 } user_input_reload_config_t;
+
+typedef struct {
+    int alert_id;              // identifiant à acquitter
+} user_input_ack_alert_t;
+
+typedef struct {
+    alert_filters_t filters;   // filtres/thresholds souhaités
+} user_input_alert_filters_t;
 
 /**
  * @brief  Mise à jour d'un registre TinyBMS

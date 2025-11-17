@@ -6,6 +6,7 @@ idf_component_register(
          "screen_cells.c"
          "screen_power.c"
          "screen_config.c"
+         "screen_alerts.c"
          "screen_tinybms_status.c"
          "screen_tinybms_config.c"
          "screen_can_status.c"

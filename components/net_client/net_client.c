@@ -30,6 +30,7 @@ static event_bus_t *s_bus = NULL;
 // WebSocket handles
 static esp_websocket_client_handle_t s_ws_telemetry = NULL;
 static esp_websocket_client_handle_t s_ws_events    = NULL;
+static esp_websocket_client_handle_t s_ws_alerts    = NULL;
 
 // Config par défaut via menuconfig
 #ifndef CONFIG_HMI_WIFI_SSID
@@ -51,6 +52,7 @@ static esp_websocket_client_handle_t s_ws_events    = NULL;
 typedef enum {
     WS_CHANNEL_TELEMETRY = 0,
     WS_CHANNEL_EVENTS    = 1,
+    WS_CHANNEL_ALERTS    = 2,
 } ws_channel_t;
 
 // --- WiFi station ---
@@ -164,6 +166,8 @@ static void websocket_event_handler(void *handler_args,
                     remote_event_adapter_on_telemetry_json(payload, data->data_len);
                 } else if (channel == WS_CHANNEL_EVENTS) {
                     remote_event_adapter_on_event_json(payload, data->data_len);
+                } else if (channel == WS_CHANNEL_ALERTS) {
+                    remote_event_adapter_on_alerts_json(payload, data->data_len);
                 }
 
                 free(payload);
@@ -218,6 +222,25 @@ static void websocket_start(void)
 
     ESP_LOGI(TAG, "Connecting WebSocket events: %s", uri);
     ESP_ERROR_CHECK(esp_websocket_client_start(s_ws_events));
+
+    // --- Alerts WS ---
+    snprintf(uri, sizeof(uri), "ws://%s:%d/ws/alerts",
+             CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
+
+    esp_websocket_client_config_t ws_cfg_alerts = {
+        .uri        = uri,
+        .buffer_size = 4096,
+    };
+
+    s_ws_alerts = esp_websocket_client_init(&ws_cfg_alerts);
+    ESP_ERROR_CHECK(esp_websocket_register_events(
+        s_ws_alerts,
+        WEBSOCKET_EVENT_ANY,
+        websocket_event_handler,
+        (void *) (intptr_t) WS_CHANNEL_ALERTS));
+
+    ESP_LOGI(TAG, "Connecting WebSocket alerts: %s", uri);
+    ESP_ERROR_CHECK(esp_websocket_client_start(s_ws_alerts));
 }
 
 // --- API publique ---

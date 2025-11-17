@@ -30,6 +30,7 @@ void net_client_init(event_bus_t *bus);
  * - Ouvre les WebSockets :
  *   - /ws/telemetry
  *   - /ws/events
+ *   - /ws/alerts
  *   (plus tard /ws/uart, /ws/can si besoin)
  */
 void net_client_start(void);

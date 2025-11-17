@@ -30,6 +30,11 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length);
 void remote_event_adapter_on_event_json(const char *json, size_t length);
 
 /**
+ * @brief Callback appelé quand un JSON de /ws/alerts est reçu.
+ */
+void remote_event_adapter_on_alerts_json(const char *json, size_t length);
+
+/**
  * @brief Callback appelé quand un JSON de statut MQTT est reçu.
  *
  *  Alignement logique avec SystemStatus.handleMqttStatus(status) :
