@@ -3,9 +3,10 @@
 #include "screen_dashboard.h"
 
 #include <stdio.h>
+#include "ui_i18n.h"
 
 // Helpers de style pour les cartes du dashboard
-static lv_obj_t *create_card(lv_obj_t *parent, const char *title)
+static lv_obj_t *create_card(lv_obj_t *parent, const char *title, lv_obj_t **out_title)
 {
     lv_obj_t *card = lv_obj_create(parent);
     lv_obj_set_width(card, LV_PCT(48));
@@ -18,6 +19,10 @@ static lv_obj_t *create_card(lv_obj_t *parent, const char *title)
     lv_obj_t *title_label = lv_label_create(card);
     lv_label_set_text(title_label, title);
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_18, 0);
+
+    if (out_title) {
+        *out_title = title_label;
+    }
 
     return card;
 }
@@ -40,6 +45,16 @@ static lv_obj_t *s_label_voltage = NULL;
 static lv_obj_t *s_label_status_wifi = NULL;
 static lv_obj_t *s_label_status_storage = NULL;
 static lv_obj_t *s_label_status_errors = NULL;
+
+static lv_obj_t *s_title_card_soc = NULL;
+static lv_obj_t *s_title_card_temp = NULL;
+static lv_obj_t *s_title_card_power = NULL;
+static lv_obj_t *s_title_card_status = NULL;
+
+static battery_status_t s_last_batt;
+static system_status_t s_last_sys;
+static bool s_has_batt = false;
+static bool s_has_sys = false;
 
 // --- Helpers mises à jour ---
 static lv_color_t color_ok(void)      { return lv_palette_main(LV_PALETTE_GREEN); }
@@ -108,9 +123,9 @@ static lv_obj_t *create_status_row(lv_obj_t *parent)
     s_label_status_storage = lv_label_create(row);
     s_label_status_errors  = lv_label_create(row);
 
-    set_status_label(s_label_status_wifi, "WiFi", color_neutral());
-    set_status_label(s_label_status_storage, "Storage", color_neutral());
-    set_status_label(s_label_status_errors, "Errors", color_neutral());
+    set_status_label(s_label_status_wifi, ui_i18n("dashboard.status.wifi"), color_neutral());
+    set_status_label(s_label_status_storage, ui_i18n("dashboard.status.storage"), color_neutral());
+    set_status_label(s_label_status_errors, ui_i18n("dashboard.status.errors"), color_neutral());
 
     return row;
 }
@@ -125,7 +140,7 @@ void screen_dashboard_create(lv_obj_t *parent)
                           LV_FLEX_ALIGN_START);
 
     // Carte SOC/SOH
-    lv_obj_t *card_soc = create_card(parent, "SOC / SOH");
+    lv_obj_t *card_soc = create_card(parent, ui_i18n("dashboard.card.soc"), &s_title_card_soc);
     s_meter_soc = create_meter_gauge(card_soc, "SOC", 0, 100, &s_meter_soc_scale, &s_meter_soc_needle);
     if (s_meter_soc_scale) {
         s_meter_soh_needle = lv_meter_add_needle_line(s_meter_soc, s_meter_soc_scale, 3,
@@ -133,11 +148,11 @@ void screen_dashboard_create(lv_obj_t *parent)
     }
 
     // Carte température
-    lv_obj_t *card_temp = create_card(parent, "Température");
+    lv_obj_t *card_temp = create_card(parent, ui_i18n("dashboard.card.temp"), &s_title_card_temp);
     s_meter_temp = create_meter_gauge(card_temp, "°C", 0, 80, &s_meter_temp_scale, &s_meter_temp_needle);
 
     // Carte puissance / courant (chart)
-    lv_obj_t *card_power = create_card(parent, "Puissance & Courant");
+    lv_obj_t *card_power = create_card(parent, ui_i18n("dashboard.card.power"), &s_title_card_power);
     s_chart_power = lv_chart_create(card_power);
     lv_obj_set_size(s_chart_power, LV_PCT(100), 160);
     lv_chart_set_type(s_chart_power, LV_CHART_TYPE_LINE);
@@ -154,7 +169,7 @@ void screen_dashboard_create(lv_obj_t *parent)
                                                  LV_CHART_AXIS_PRIMARY_Y);
 
     // Carte tension + statuts système
-    lv_obj_t *card_status = create_card(parent, "Statuts système");
+    lv_obj_t *card_status = create_card(parent, ui_i18n("dashboard.card.status"), &s_title_card_status);
     s_label_voltage = lv_label_create(card_status);
     lv_label_set_text(s_label_voltage, "--.- V");
     lv_obj_set_style_text_font(s_label_voltage, &lv_font_montserrat_22, 0);
@@ -165,6 +180,9 @@ void screen_dashboard_create(lv_obj_t *parent)
 void screen_dashboard_update_battery(const battery_status_t *status)
 {
     if (!status) return;
+
+    s_last_batt = *status;
+    s_has_batt = true;
 
     if (s_meter_soc && s_meter_soc_needle) {
         lv_meter_set_indicator_value(s_meter_soc, s_meter_soc_needle, (int) status->soc);
@@ -198,19 +216,41 @@ void screen_dashboard_update_system(const system_status_t *status)
 {
     if (!status) return;
 
+    s_last_sys = *status;
+    s_has_sys = true;
+
     if (s_label_status_wifi) {
         set_status_label(s_label_status_wifi,
-                         "WiFi",
+                         ui_i18n("dashboard.status.wifi"),
                          status->wifi_connected ? color_ok() : color_error());
     }
 
     if (s_label_status_storage) {
         lv_color_t color = status->storage_ok ? color_ok() : color_error();
-        set_status_label(s_label_status_storage, "Storage", color);
+        set_status_label(s_label_status_storage, ui_i18n("dashboard.status.storage"), color);
     }
 
     if (s_label_status_errors) {
         lv_color_t color = status->has_error ? color_warn() : color_ok();
-        set_status_label(s_label_status_errors, "Errors", color);
+        set_status_label(s_label_status_errors, ui_i18n("dashboard.status.errors"), color);
+    }
+}
+
+void screen_dashboard_refresh_texts(void)
+{
+    ui_i18n_label_set_text(s_title_card_soc, "dashboard.card.soc");
+    ui_i18n_label_set_text(s_title_card_temp, "dashboard.card.temp");
+    ui_i18n_label_set_text(s_title_card_power, "dashboard.card.power");
+    ui_i18n_label_set_text(s_title_card_status, "dashboard.card.status");
+
+    set_status_label(s_label_status_wifi, ui_i18n("dashboard.status.wifi"), color_neutral());
+    set_status_label(s_label_status_storage, ui_i18n("dashboard.status.storage"), color_neutral());
+    set_status_label(s_label_status_errors, ui_i18n("dashboard.status.errors"), color_neutral());
+
+    if (s_has_batt) {
+        screen_dashboard_update_battery(&s_last_batt);
+    }
+    if (s_has_sys) {
+        screen_dashboard_update_system(&s_last_sys);
     }
 }

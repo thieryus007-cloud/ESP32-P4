@@ -15,6 +15,7 @@ void screen_config_apply(const hmi_config_t *config);
 void screen_config_show_result(const cmd_result_t *result);
 void screen_config_set_loading(bool loading, const char *message);
 void screen_config_set_bus(event_bus_t *bus);
+void screen_config_refresh_texts(void);
 
 #ifdef __cplusplus
 }

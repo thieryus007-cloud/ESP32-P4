@@ -19,3 +19,4 @@ void screen_dashboard_update_battery(const battery_status_t *status);
  * @brief Met à jour les indicateurs système (WiFi / stockage / erreurs).
  */
 void screen_dashboard_update_system(const system_status_t *status);
+void screen_dashboard_refresh_texts(void);

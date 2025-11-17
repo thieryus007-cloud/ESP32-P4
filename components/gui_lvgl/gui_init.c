@@ -17,6 +17,7 @@
 #include "screen_history.h"
 #include "ui_notifications.h"
 #include "ui_theme.h"
+#include "ui_i18n.h"
 
 #include "event_bus.h"
 #include "event_types.h"
@@ -32,6 +33,21 @@ static const char *TAG = "GUI_INIT";
 
 // On garde un pointeur vers l'EventBus si besoin ultérieur
 static event_bus_t *s_bus = NULL;
+
+static lv_obj_t *s_tabview = NULL;
+static lv_obj_t *s_tab_dashboard = NULL;
+static lv_obj_t *s_tab_home = NULL;
+static lv_obj_t *s_tab_pack = NULL;
+static lv_obj_t *s_tab_cells = NULL;
+static lv_obj_t *s_tab_power = NULL;
+static lv_obj_t *s_tab_alerts = NULL;
+static lv_obj_t *s_tab_config = NULL;
+static lv_obj_t *s_tab_tbms_status = NULL;
+static lv_obj_t *s_tab_tbms_config = NULL;
+static lv_obj_t *s_tab_can_status = NULL;
+static lv_obj_t *s_tab_can_config = NULL;
+static lv_obj_t *s_tab_bms_control = NULL;
+static lv_obj_t *s_tab_history = NULL;
 
 /*
  * Pour rester thread-safe avec LVGL :
@@ -180,6 +196,52 @@ static void lvgl_apply_history_export(void *user_data)
         screen_history_show_export(&ctx->result);
         free(ctx);
     }
+}
+
+static void refresh_tab_labels(void *user_data)
+{
+    (void) user_data;
+    if (!s_tabview) {
+        return;
+    }
+
+    lv_tabview_set_tab_name(s_tabview, s_tab_dashboard, ui_i18n("tab.dashboard"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_home, ui_i18n("tab.home"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_pack, ui_i18n("tab.pack"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_cells, ui_i18n("tab.cells"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_power, ui_i18n("tab.power"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_alerts, ui_i18n("tab.alerts"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_config, ui_i18n("tab.config"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_tbms_status, ui_i18n("tab.tbms_status"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_tbms_config, ui_i18n("tab.tbms_config"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_can_status, ui_i18n("tab.can_status"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_can_config, ui_i18n("tab.can_config"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_bms_control, ui_i18n("tab.bms_control"));
+    lv_tabview_set_tab_name(s_tabview, s_tab_history, ui_i18n("tab.history"));
+}
+
+static void refresh_home_texts(void *user_data)
+{
+    (void) user_data;
+    screen_home_refresh_texts();
+}
+
+static void refresh_dashboard_texts(void *user_data)
+{
+    (void) user_data;
+    screen_dashboard_refresh_texts();
+}
+
+static void refresh_power_texts(void *user_data)
+{
+    (void) user_data;
+    screen_power_refresh_texts();
+}
+
+static void refresh_config_texts(void *user_data)
+{
+    (void) user_data;
+    screen_config_refresh_texts();
 }
 
 // --- Callbacks EventBus (contexte tasks "non LVGL") ---
@@ -489,6 +551,8 @@ void gui_init(event_bus_t *bus)
 {
     s_bus = bus;
 
+    ui_i18n_init();
+
     ESP_LOGI(TAG, "Initializing GUI (LVGL with dashboard + existing tabs: Home, Pack, Cells, Power, Config, TinyBMS, CAN, BMS Control)");
 
     // ⚠️ Hypothèse : LVGL + driver écran + esp_lvgl_port sont déjà initialisés
@@ -500,38 +564,44 @@ void gui_init(event_bus_t *bus)
     ui_theme_create_quick_menu(lv_layer_top());
 
     // Tabview avec Dashboard + 10 onglets historiques
-    lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 35);
+    s_tabview = lv_tabview_create(root, LV_DIR_TOP, 35);
 
-    lv_obj_t *tab_dashboard = lv_tabview_add_tab(tabview, "Dashboard");
-    lv_obj_t *tab_home   = lv_tabview_add_tab(tabview, "Home");
-    lv_obj_t *tab_pack   = lv_tabview_add_tab(tabview, "Pack");
-    lv_obj_t *tab_cells  = lv_tabview_add_tab(tabview, "Cells");
-    lv_obj_t *tab_power  = lv_tabview_add_tab(tabview, "Power");
-    lv_obj_t *tab_alerts = lv_tabview_add_tab(tabview, "Alerts");
-    lv_obj_t *tab_config = lv_tabview_add_tab(tabview, "Config");
-    lv_obj_t *tab_tbms_status = lv_tabview_add_tab(tabview, "TBMS Status");
-    lv_obj_t *tab_tbms_config = lv_tabview_add_tab(tabview, "TBMS Config");
-    lv_obj_t *tab_can_status = lv_tabview_add_tab(tabview, "CAN Status");
-    lv_obj_t *tab_can_config = lv_tabview_add_tab(tabview, "CAN Config");
-    lv_obj_t *tab_bms_control = lv_tabview_add_tab(tabview, "BMS Control");
-    lv_obj_t *tab_history = lv_tabview_add_tab(tabview, "History");
+    s_tab_dashboard = lv_tabview_add_tab(s_tabview, ui_i18n("tab.dashboard"));
+    s_tab_home   = lv_tabview_add_tab(s_tabview, ui_i18n("tab.home"));
+    s_tab_pack   = lv_tabview_add_tab(s_tabview, ui_i18n("tab.pack"));
+    s_tab_cells  = lv_tabview_add_tab(s_tabview, ui_i18n("tab.cells"));
+    s_tab_power  = lv_tabview_add_tab(s_tabview, ui_i18n("tab.power"));
+    s_tab_alerts = lv_tabview_add_tab(s_tabview, ui_i18n("tab.alerts"));
+    s_tab_config = lv_tabview_add_tab(s_tabview, ui_i18n("tab.config"));
+    s_tab_tbms_status = lv_tabview_add_tab(s_tabview, ui_i18n("tab.tbms_status"));
+    s_tab_tbms_config = lv_tabview_add_tab(s_tabview, ui_i18n("tab.tbms_config"));
+    s_tab_can_status = lv_tabview_add_tab(s_tabview, ui_i18n("tab.can_status"));
+    s_tab_can_config = lv_tabview_add_tab(s_tabview, ui_i18n("tab.can_config"));
+    s_tab_bms_control = lv_tabview_add_tab(s_tabview, ui_i18n("tab.bms_control"));
+    s_tab_history = lv_tabview_add_tab(s_tabview, ui_i18n("tab.history"));
 
-    screen_dashboard_create(tab_dashboard);
-    screen_home_create(tab_home);
-    screen_battery_create(tab_pack);
-    screen_cells_create(tab_cells);
-    screen_power_create(tab_power);
+    screen_dashboard_create(s_tab_dashboard);
+    screen_home_create(s_tab_home);
+    screen_battery_create(s_tab_pack);
+    screen_cells_create(s_tab_cells);
+    screen_power_create(s_tab_power);
     screen_alerts_set_bus(s_bus);
-    screen_alerts_create(tab_alerts);
+    screen_alerts_create(s_tab_alerts);
     screen_config_set_bus(s_bus);
-    screen_config_create(tab_config);
-    screen_tinybms_status_create(tab_tbms_status);
-    screen_tinybms_config_create(tab_tbms_config);
-    screen_can_status_create(tab_can_status);
-    screen_can_config_create(tab_can_config);
-    screen_bms_control_create(tab_bms_control);
+    screen_config_create(s_tab_config);
+    screen_tinybms_status_create(s_tab_tbms_status);
+    screen_tinybms_config_create(s_tab_tbms_config);
+    screen_can_status_create(s_tab_can_status);
+    screen_can_config_create(s_tab_can_config);
+    screen_bms_control_create(s_tab_bms_control);
     screen_history_set_bus(s_bus);
-    screen_history_create(tab_history);
+    screen_history_create(s_tab_history);
+
+    ui_i18n_register_listener(refresh_tab_labels, NULL);
+    ui_i18n_register_listener(refresh_home_texts, NULL);
+    ui_i18n_register_listener(refresh_dashboard_texts, NULL);
+    ui_i18n_register_listener(refresh_power_texts, NULL);
+    ui_i18n_register_listener(refresh_config_texts, NULL);
 
     // Abonnements EventBus
     if (s_bus) {
