@@ -472,7 +472,7 @@ npm start
 4. ✅ Module net_client (connexion S3 + WS/HTTP)
 5. ✅ Module remote_event_adapter
 6. ✅ Module modèle `telemetry_model` (statuts batterie/pack)
-7. ✅ Module modèle `system_events_model` (état système global)
+7. 🚧 Module modèle `system_events_model` (état système global)
 8. ✅ GUI LVGL v1 (lecture seule)
 9. ✅ GUI LVGL v2 (actions utilisateur)
 10. ✅ Extensions (config, historique, debug UART/CAN)
