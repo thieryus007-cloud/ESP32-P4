@@ -11,6 +11,7 @@
 #include "event_types.h"
 #include "event_bus.h"
 #include "net_client.h"
+#include "history_model.h"
 
 static const char *TAG = "REMOTE_ADAPTER";
 
@@ -719,6 +720,11 @@ void remote_event_adapter_on_http_response(const char *path,
         .data = &result,
     };
     event_bus_publish(s_bus, &evt_result);
+
+    if (strcmp(path, "/api/history") == 0) {
+        history_model_on_remote_history(status, body);
+        return;
+    }
 
     if (success && body && strlen(body) > 0) {
         cJSON *root = cJSON_Parse(body);

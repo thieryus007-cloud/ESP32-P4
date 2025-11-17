@@ -15,6 +15,7 @@
 #include "tinybms_client.h"
 #include "tinybms_model.h"
 #include "gui_init.h"
+#include "history_model.h"
 
 static const char *TAG = "HMI_MAIN";
 
@@ -40,6 +41,7 @@ void hmi_main_init(void)
     telemetry_model_init(&s_event_bus);        // modèle batterie / pack
     system_events_model_init(&s_event_bus);    // modèle statut système (wifi, storage, etc.)
     config_model_init(&s_event_bus);           // modèle config (plus tard)
+    history_model_init(&s_event_bus);          // historique local + backend
 
     // 3b) Init TinyBMS (UART direct)
     tinybms_client_init(&s_event_bus);         // Client UART TinyBMS
@@ -62,6 +64,7 @@ void hmi_main_start(void)
     telemetry_model_start();        // si besoin d'une task (sinon peut être vide)
     system_events_model_start();
     config_model_start();
+    history_model_start();
 
     // 2b) Démarrer TinyBMS
     tinybms_client_start();         // Connexion UART TinyBMS
