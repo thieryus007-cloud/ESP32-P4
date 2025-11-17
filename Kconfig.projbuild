@@ -27,3 +27,53 @@ config HMI_WIFI_FAILOVER_THRESHOLD
         événement de bascule automatique vers le mode autonome.
 
 endmenu
+
+menu "Network telemetry publisher"
+
+config NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    bool "Activer le publish MQTT/HTTP périodique"
+    default y
+    help
+        Quand activé, un point de télémétrie TinyBMS est échantillonné puis
+        envoyé vers HTTP/MQTT à intervalle régulier.
+
+config NETWORK_TELEMETRY_PERIOD_MS
+    int "Période d'envoi (ms)"
+    range 1000 60000
+    default 5000
+    depends on NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    help
+        Intervalle entre deux publications successives.
+
+config NETWORK_TELEMETRY_HTTP_PATH
+    string "Endpoint HTTP de publication"
+    default "/api/telemetry/local"
+    depends on NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    help
+        Route HTTP relative utilisée pour pousser les points de télémétrie.
+
+config NETWORK_TELEMETRY_MQTT_TOPIC
+    string "Topic MQTT"
+    default "tinybms/telemetry"
+    depends on NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    help
+        Topic MQTT sur lequel les télémétries sont publiées.
+
+config NETWORK_TELEMETRY_BUFFER_DEPTH
+    int "Taille du tampon offline"
+    range 1 128
+    default 32
+    depends on NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    help
+        Nombre maximum de points conservés en cas de perte réseau avant
+        reconnexion.
+
+config NETWORK_TELEMETRY_OFFLINE_BUFFER
+    bool "Activer le mode offline buffer"
+    default y
+    depends on NETWORK_TELEMETRY_PUBLISHER_ENABLED
+    help
+        Lorsque activé, les points produits hors-ligne sont empilés puis
+        rejoués à la reconnexion.
+
+endmenu
