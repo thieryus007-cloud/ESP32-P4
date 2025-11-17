@@ -250,3 +250,14 @@ diag_logger_status_t diagnostic_logger_get_status(void)
     };
     return status;
 }
+
+diag_logger_ring_info_t diagnostic_logger_get_ring_info(void)
+{
+    diag_logger_ring_info_t info = {
+        .used = s_ring.count,
+        .capacity = DIAG_LOG_MAX_ENTRIES,
+        .dropped = s_ring.dropped,
+        .healthy = s_ring.healthy,
+    };
+    return info;
+}

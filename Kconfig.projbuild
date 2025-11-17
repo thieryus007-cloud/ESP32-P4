@@ -28,6 +28,42 @@ config HMI_WIFI_FAILOVER_THRESHOLD
 
 endmenu
 
+menu "HMI persistent configuration"
+
+config HMI_ALERT_THRESHOLD_HIGH
+    int "Seuil haut d'alerte (mV)"
+    range 0 5000
+    default 4000
+
+config HMI_ALERT_THRESHOLD_LOW
+    int "Seuil bas d'alerte (mV)"
+    range 0 5000
+    default 3200
+
+config HMI_MQTT_BROKER_URI
+    string "URI du broker MQTT"
+    default "mqtt://broker.local"
+
+config HMI_MQTT_TOPIC
+    string "Topic MQTT par défaut"
+    default "tinybms/telemetry"
+
+config HMI_HTTP_ENDPOINT
+    string "Endpoint HTTP par défaut"
+    default "/api/telemetry/local"
+
+config HMI_LOG_RETENTION_DAYS
+    int "Rétention des logs diagnostics (jours)"
+    range 1 30
+    default 7
+
+config HMI_STATUS_PUBLISH_PERIOD_MS
+    int "Période de publication statut (ms)"
+    range 1000 600000
+    default 60000
+
+endmenu
+
 menu "Network telemetry publisher"
 
 config NETWORK_TELEMETRY_PUBLISHER_ENABLED

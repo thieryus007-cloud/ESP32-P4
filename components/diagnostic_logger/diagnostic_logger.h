@@ -21,9 +21,18 @@ typedef struct {
     bool     healthy;
 } diag_logger_status_t;
 
+typedef struct {
+    uint32_t used;
+    uint32_t capacity;
+    uint32_t dropped;
+    bool     healthy;
+} diag_logger_ring_info_t;
+
 esp_err_t diagnostic_logger_init(event_bus_t *bus);
 
 diag_logger_status_t diagnostic_logger_get_status(void);
+
+diag_logger_ring_info_t diagnostic_logger_get_ring_info(void);
 
 #ifdef __cplusplus
 }

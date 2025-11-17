@@ -13,6 +13,7 @@ struct event_bus {
         void            *user_ctx;
         bool             in_use;
     } subscribers[MAX_SUBSCRIBERS];
+    uint32_t published_total;
 };
 
 static const char *TAG = "EVENT_BUS";
@@ -59,6 +60,7 @@ bool event_bus_publish(event_bus_t *bus, const event_t *event)
     }
 
     // Dispatch synchrone très simple : tous les subscribers du type reçoivent l'event
+    bus->published_total++;
     for (int i = 0; i < MAX_SUBSCRIBERS; ++i) {
         if (bus->subscribers[i].in_use && bus->subscribers[i].type == event->type) {
             if (bus->subscribers[i].callback) {
@@ -68,4 +70,20 @@ bool event_bus_publish(event_bus_t *bus, const event_t *event)
     }
 
     return true;
+}
+
+event_bus_metrics_t event_bus_get_metrics(const event_bus_t *bus)
+{
+    event_bus_metrics_t m = {0};
+    if (!bus) {
+        return m;
+    }
+
+    for (int i = 0; i < MAX_SUBSCRIBERS; ++i) {
+        if (bus->subscribers[i].in_use) {
+            m.subscribers++;
+        }
+    }
+    m.published_total = bus->published_total;
+    return m;
 }

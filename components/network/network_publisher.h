@@ -21,6 +21,15 @@ extern "C" {
  */
 esp_err_t network_publisher_init(event_bus_t *bus);
 
+typedef struct {
+    uint64_t last_sync_ms;        // timestamp du dernier publish HTTP/MQTT réussi
+    uint32_t buffered_points;     // taille actuelle du tampon offline
+    uint32_t buffer_capacity;     // capacité max du tampon offline
+    uint32_t publish_errors;      // nombre de publish en erreur depuis le boot
+    uint32_t published_points;    // nombre total de points envoyés
+    uint32_t last_duration_ms;    // durée du dernier publish (build + envoi)
+} network_publisher_metrics_t;
+
 /**
  * @brief Démarre la tâche périodique d'envoi.
  *
@@ -28,6 +37,8 @@ esp_err_t network_publisher_init(event_bus_t *bus);
  * et peut être désactivée via CONFIG_NETWORK_TELEMETRY_PUBLISHER_ENABLED.
  */
 esp_err_t network_publisher_start(void);
+
+network_publisher_metrics_t network_publisher_get_metrics(void);
 
 #ifdef __cplusplus
 }

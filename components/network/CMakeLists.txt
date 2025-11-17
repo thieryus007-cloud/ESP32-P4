@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "network_publisher.c"
+    SRCS "network_publisher.c" "status_endpoint.c"
     INCLUDE_DIRS "."
-    REQUIRES event_bus event_types net_client freertos
+    REQUIRES event_bus event_types net_client freertos diagnostic_logger config_manager
 )
