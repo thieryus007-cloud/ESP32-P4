@@ -78,6 +78,7 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
   - `/ws/telemetry` - Flux de données de batterie
   - `/ws/events` - Flux d'événements système
 - **HTTP REST API** : Envoi de commandes et configuration
+- **Mode Connecté/Autonome** : un paramètre `menuconfig` (persisté en NVS) ou un toggle GUI (événement `EVENT_USER_INPUT_CHANGE_MODE`) permet de basculer entre « Connecté S3 » et « Autonome TinyBMS » pour activer ou non la télémétrie réseau.
 
 #### Communication directe (TinyBMS)
 - **RS485/UART** : ✅ **Implémenté** - Communication directe avec TinyBMS

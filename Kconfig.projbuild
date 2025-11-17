@@ -1,0 +1,12 @@
+menu "HMI operation mode"
+
+config HMI_DEFAULT_OPERATION_MODE
+    int "Mode par défaut (0 = Connecté S3, 1 = Autonome TinyBMS)"
+    range 0 1
+    default 0
+    help
+        Définit le mode de fonctionnement utilisé au premier démarrage.
+        0 : le firmware active la connectivité S3 (WiFi + WebSockets)
+        1 : mode autonome uniquement TinyBMS (aucune télémétrie réseau attendue)
+
+endmenu

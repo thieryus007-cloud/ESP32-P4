@@ -39,6 +39,8 @@ static system_status_t s_net_status = {
     .server_reachable = false,
     .storage_ok = true,
     .has_error = false,
+    .operation_mode = HMI_MODE_CONNECTED_S3,
+    .telemetry_expected = true,
 };
 
 // Config par défaut via menuconfig
@@ -308,7 +310,11 @@ static void publish_system_status(void)
         return;
     }
 
-    s_net_status.has_error = (!s_net_status.wifi_connected || !s_net_status.server_reachable);
+    if (!s_net_status.telemetry_expected) {
+        s_net_status.has_error = false;
+    } else {
+        s_net_status.has_error = (!s_net_status.wifi_connected || !s_net_status.server_reachable);
+    }
 
     event_t evt = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
@@ -324,6 +330,13 @@ void net_client_init(event_bus_t *bus)
     s_bus = bus;
     ESP_LOGI(TAG, "net_client initialized (bridge host=%s port=%d)",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
+}
+
+void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected)
+{
+    s_net_status.operation_mode   = mode;
+    s_net_status.telemetry_expected = telemetry_expected;
+    publish_system_status();
 }
 
 void net_client_start(void)

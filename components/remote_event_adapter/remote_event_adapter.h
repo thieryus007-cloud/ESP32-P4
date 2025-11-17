@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include "event_bus.h"
+#include "event_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,6 +19,11 @@ void remote_event_adapter_init(event_bus_t *bus);
  * @brief Démarre l'adapter (si une task dédiée est ajoutée plus tard).
  */
 void remote_event_adapter_start(void);
+
+/**
+ * @brief Met à jour le mode de fonctionnement (connecté/autonome).
+ */
+void remote_event_adapter_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected);
 
 /**
  * @brief Callback appelé quand un JSON de /ws/telemetry est reçu.
