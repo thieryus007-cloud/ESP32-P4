@@ -15,6 +15,8 @@
 #include "screen_can_config.h"
 #include "screen_bms_control.h"
 #include "screen_history.h"
+#include "ui_notifications.h"
+#include "ui_theme.h"
 
 #include "event_bus.h"
 #include "event_types.h"
@@ -492,6 +494,10 @@ void gui_init(event_bus_t *bus)
     // ⚠️ Hypothèse : LVGL + driver écran + esp_lvgl_port sont déjà initialisés
 
     lv_obj_t *root = lv_scr_act();
+
+    ui_theme_init(lv_display_get_default());
+    ui_notifications_init(s_bus);
+    ui_theme_create_quick_menu(lv_layer_top());
 
     // Tabview avec Dashboard + 10 onglets historiques
     lv_obj_t *tabview = lv_tabview_create(root, LV_DIR_TOP, 35);

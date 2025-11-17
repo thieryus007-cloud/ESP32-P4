@@ -29,6 +29,8 @@ typedef enum {
     EVENT_REMOTE_SYSTEM_EVENT,          // JSON brut → événements système
     EVENT_REMOTE_CONFIG_SNAPSHOT,       // non utilisé pour l'instant
     EVENT_REMOTE_CMD_RESULT,            // résultat retour /api ou WS commande
+    EVENT_NETWORK_REQUEST_STARTED,      // début requête réseau (HTTP/WS)
+    EVENT_NETWORK_REQUEST_FINISHED,     // fin requête réseau
     EVENT_ALERTS_ACTIVE_UPDATED,        // Liste des alertes actives (alert_list_t)
     EVENT_ALERTS_HISTORY_UPDATED,       // Historique des alertes (alert_list_t)
     EVENT_ALERT_FILTERS_UPDATED,        // Filtres/seuils appliqués aux alertes (alert_filters_t)
@@ -145,6 +147,17 @@ typedef struct {
     int   error_code;          // code interne / HTTP
     char  message[64];         // texte utilisateur
 } cmd_result_t;
+
+typedef struct {
+    char path[64];
+    char method[8];
+} network_request_t;
+
+typedef struct {
+    network_request_t request; // requête concernée
+    bool success;              // true si requête terminée avec succès
+    int  status;               // code HTTP ou erreur interne
+} network_request_status_t;
 
 /**
  * @brief  Entrée d'alerte (active ou historique)

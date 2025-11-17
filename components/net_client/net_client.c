@@ -13,6 +13,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "event_bus.h"
+#include "event_types.h"
 #include "remote_event_adapter.h"
 
 static const char *TAG = "NET_CLIENT";
@@ -243,6 +245,46 @@ static void websocket_start(void)
     ESP_ERROR_CHECK(esp_websocket_client_start(s_ws_alerts));
 }
 
+static void publish_request_started(const char *path, const char *method)
+{
+    if (!s_bus || !path || !method) {
+        return;
+    }
+
+    network_request_t req = { 0 };
+    strncpy(req.path, path, sizeof(req.path) - 1);
+    strncpy(req.method, method, sizeof(req.method) - 1);
+
+    event_t evt = {
+        .type = EVENT_NETWORK_REQUEST_STARTED,
+        .data = &req,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void publish_request_finished(const char *path,
+                                     const char *method,
+                                     bool success,
+                                     int status)
+{
+    if (!s_bus || !path || !method) {
+        return;
+    }
+
+    network_request_status_t info = {
+        .success = success,
+        .status = status,
+    };
+    strncpy(info.request.path, path, sizeof(info.request.path) - 1);
+    strncpy(info.request.method, method, sizeof(info.request.method) - 1);
+
+    event_t evt = {
+        .type = EVENT_NETWORK_REQUEST_FINISHED,
+        .data = &info,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
 // --- API publique ---
 
 void net_client_init(event_bus_t *bus)
@@ -283,6 +325,8 @@ bool net_client_send_http_request(const char *path,
         return false;
     }
 
+    publish_request_started(path, method);
+
     char url[128];
     snprintf(url, sizeof(url), "http://%s:%d%s",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT, path);
@@ -295,6 +339,7 @@ bool net_client_send_http_request(const char *path,
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) {
         ESP_LOGE(TAG, "Failed to init HTTP client");
+        publish_request_finished(path, method, false, -1);
         return false;
     }
 
@@ -329,12 +374,16 @@ bool net_client_send_http_request(const char *path,
 
         remote_event_adapter_on_http_response(path, method, status, resp_buf);
 
+        publish_request_finished(path, method,
+                                 (status >= 200 && status < 300), status);
+
         if (resp_buf) {
             free(resp_buf);
         }
     } else {
         ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
         esp_http_client_cleanup(client);
+        publish_request_finished(path, method, false, -1);
         return false;
     }
 
