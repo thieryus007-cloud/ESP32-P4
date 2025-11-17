@@ -16,6 +16,14 @@ Ce composant fait partie du plan d'intégration CAN BMS (voir `PLAN_BMS_CAN.md` 
 - **Thread-safe**: Double mutex (TWAI hardware + driver state)
 - **Event bus**: Intégration avec le bus d'événements ESP32-P4
 
+## Mise en route express
+
+1. Initialiser le bus d'événements global (`event_bus_init()`).
+2. Appeler `can_victron_init()` puis `can_victron_set_event_bus(&event_bus)` avant de lancer les tâches applicatives.
+3. Connecter les broches GPIO22 (TX) et GPIO21 (RX) au réseau CAN 500 kbps.
+4. Vérifier la réception du handshake 0x307 (événement `EVENT_CAN_MESSAGE_RX`) pour confirmer la présence du GX device.
+5. Démarrer `can_publisher_init()` si vous souhaitez publier les 19 trames Victron.
+
 ## Configuration GPIO
 
 ```c

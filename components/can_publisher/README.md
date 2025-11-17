@@ -10,6 +10,14 @@ Il contient les modules nécessaires pour:
 3. Gérer la state machine CVL (Charge Voltage Limit)
 4. Orchestrer la publication périodique des messages CAN
 
+## Guide d'intégration rapide
+
+- **Initialisation** : créer/initialiser le bus d'événements applicatif puis appeler `can_victron_init()` suivi de `can_publisher_init()`.
+- **Flux entrant** : publier `EVENT_TINYBMS_REGISTER_UPDATED` depuis `tinybms_client` pour que l'orchestrateur convertisse automatiquement les données UART.
+- **Flux sortant** : les 19 trames Victron sont envoyées via `can_victron_publish_frame()` avec un throttling à 1000 ms par défaut.
+- **Persistance énergie** : appeler `can_publisher_conversion_restore_energy_state()` au boot et `can_publisher_conversion_persist_energy_state()` lors de la mise en veille pour conserver les compteurs Wh.
+- **Observabilité** : récupérer les statistiques avec `can_publisher_get_stats()` et surveiller `EVENT_CVL_LIMITS_UPDATED` pour afficher les limites calculées côté GUI.
+
 ## Structure (après Phase 4)
 
 ```

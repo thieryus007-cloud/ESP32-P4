@@ -29,6 +29,13 @@ Exemple/mac-local/BMS/main/
 └── app_main.c            # Orchestration globale
 ```
 
+### État d'avancement rapide
+
+- ✅ Phase 1-3 répliquées : adaptation TinyBMS → UART, encodeurs CAN Victron, state machine CVL.
+- ✅ Phase 4 : orchestrateur CAN côté ESP32-P4 avec EventBus partagé.
+- ✅ Phase 5 (en cours de finalisation) : publication d'événements CAN (`EVENT_CAN_*`) et intégration avec la GUI/diagnostics.
+- 🚧 Reste à faire : validations terrain 500 kbps, intégration complète dans `hmi_main`, sécurisation NVS pour les compteurs d'énergie.
+
 ---
 
 ## 📋 Spécifications CAN (du projet BMS existant)
