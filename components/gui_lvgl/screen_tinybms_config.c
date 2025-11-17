@@ -8,6 +8,7 @@
 #include "tinybms_registers.h"
 #include "event_types.h"
 #include "esp_log.h"
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,24 +17,26 @@ static const char *TAG = "scr_tbms_config";
 
 typedef struct {
     const register_descriptor_t *desc;
+    lv_obj_t *row;
     lv_obj_t *input;
     lv_obj_t *hint;
+    lv_obj_t *status_chip;
+    lv_obj_t *label;
 } register_widget_t;
 
 static register_widget_t s_widgets[TINYBMS_REGISTER_COUNT];
-static lv_obj_t *s_container = NULL;
+static lv_obj_t *s_root = NULL;
+static lv_obj_t *s_tabview = NULL;
+static lv_obj_t *s_search_box = NULL;
 
-static const char* group_title(register_group_t group)
-{
-    switch (group) {
-        case REG_GROUP_BATTERY: return "Battery";
-        case REG_GROUP_CHARGER: return "Charger";
-        case REG_GROUP_SAFETY: return "Safety";
-        case REG_GROUP_ADVANCED: return "Advanced";
-        case REG_GROUP_SYSTEM: return "System";
-        default: return "Other";
-    }
-}
+typedef struct {
+    register_group_t group;
+    const char *title;
+    lv_obj_t *tab;
+    lv_obj_t *list;
+} group_container_t;
+
+static group_container_t s_groups[REG_GROUP_MAX];
 
 static void set_hint(register_widget_t *widget, const char *text, bool ok)
 {
@@ -45,6 +48,12 @@ static void set_hint(register_widget_t *widget, const char *text, bool ok)
     lv_obj_set_style_text_color(widget->hint,
                                 ok ? lv_color_hex(0x80FF80) : lv_color_hex(0xFF7070),
                                 0);
+
+    if (widget->input) {
+        lv_color_t border = ok ? lv_color_hex(0x35C759) : lv_color_hex(0xFF5555);
+        lv_obj_set_style_border_width(widget->input, 2, LV_PART_MAIN);
+        lv_obj_set_style_border_color(widget->input, border, LV_PART_MAIN);
+    }
 }
 
 static void populate_input(register_widget_t *widget, float user_value)
@@ -66,6 +75,14 @@ static void populate_input(register_widget_t *widget, float user_value)
                  widget->desc->precision,
                  user_value);
         lv_textarea_set_text(widget->input, buf);
+    }
+}
+
+static void reset_input_style(register_widget_t *widget)
+{
+    if (widget && widget->input) {
+        lv_obj_set_style_border_width(widget->input, 1, LV_PART_MAIN);
+        lv_obj_set_style_border_color(widget->input, lv_color_hex(0x404040), LV_PART_MAIN);
     }
 }
 
@@ -124,6 +141,7 @@ static void on_text_ready(lv_event_t *e)
         return;
     }
 
+    reset_input_style(widget);
     const char *text = lv_textarea_get_text(widget->input);
     if (text == NULL || text[0] == '\0') {
         return;
@@ -140,6 +158,7 @@ static void on_dropdown_changed(lv_event_t *e)
         return;
     }
 
+    reset_input_style(widget);
     uint16_t selected_index = lv_dropdown_get_selected(widget->input);
     if (selected_index < widget->desc->enum_count) {
         uint16_t value = widget->desc->enum_values[selected_index].value;
@@ -159,17 +178,6 @@ static void on_quick_restart(lv_event_t *e)
     tinybms_restart();
 }
 
-static lv_obj_t* create_section_header(lv_obj_t *parent, const char *text)
-{
-    lv_obj_t *header = lv_label_create(parent);
-    lv_label_set_text(header, text);
-    lv_obj_set_style_text_font(header, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(header, lv_color_hex(0x00AAFF), 0);
-    lv_obj_set_style_pad_top(header, 8, 0);
-    lv_obj_set_style_pad_bottom(header, 4, 0);
-    return header;
-}
-
 static void create_register_row(lv_obj_t *parent,
                                 register_widget_t *widget,
                                 const register_descriptor_t *desc)
@@ -185,8 +193,8 @@ static void create_register_row(lv_obj_t *parent,
     lv_obj_set_flex_flow(title_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(title_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *label = lv_label_create(title_row);
-    lv_label_set_text(label, desc->label);
+    widget->label = lv_label_create(title_row);
+    lv_label_set_text(widget->label, desc->label);
 
     lv_obj_t *unit = lv_label_create(title_row);
     lv_label_set_text(unit, desc->unit);
@@ -251,29 +259,194 @@ static void create_register_row(lv_obj_t *parent,
     widget->hint = lv_label_create(row);
     lv_label_set_text(widget->hint, hint);
     lv_obj_set_style_text_color(widget->hint, lv_color_hex(0x808080), 0);
+
+    widget->status_chip = lv_label_create(row);
+    lv_label_set_text(widget->status_chip, "Last read: --");
+    lv_obj_set_style_text_color(widget->status_chip, lv_color_hex(0xB0B0B0), 0);
+
+    widget->row = row;
+}
+
+static const char* group_tab_title(register_group_t group)
+{
+    switch (group) {
+        case REG_GROUP_BATTERY: return "Battery";
+        case REG_GROUP_CHARGER: return "Charger";
+        case REG_GROUP_SAFETY: return "Safety";
+        case REG_GROUP_ADVANCED: return "Advanced";
+        case REG_GROUP_SYSTEM: return "System";
+        default: return "Other";
+    }
+}
+
+static void on_tab_read_all(lv_event_t *e)
+{
+    (void)e;
+    tinybms_model_read_all();
+}
+
+static void on_tab_restart(lv_event_t *e)
+{
+    (void)e;
+    tinybms_restart();
+}
+
+static void on_tab_write_pending(lv_event_t *e)
+{
+    (void)e;
+    // Future: batch write pending values. Placeholder for UI consistency.
+}
+
+static lv_obj_t *create_actions_bar(lv_obj_t *parent)
+{
+    lv_obj_t *bar = lv_obj_create(parent);
+    lv_obj_remove_style_all(bar);
+    lv_obj_set_width(bar, LV_PCT(100));
+    lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_top(bar, 4, 0);
+    lv_obj_set_style_pad_bottom(bar, 8, 0);
+
+    lv_obj_t *label = lv_label_create(bar);
+    lv_label_set_text(label, "Actions: read / write / restart");
+    lv_obj_set_style_text_color(label, lv_color_hex(0x7DC8FF), 0);
+
+    lv_obj_t *btn_row = lv_obj_create(bar);
+    lv_obj_remove_style_all(btn_row);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_gap(btn_row, 8, 0);
+
+    lv_obj_t *btn_read = lv_btn_create(btn_row);
+    lv_obj_set_size(btn_read, 110, 32);
+    lv_label_set_text(lv_label_create(btn_read), "Read all");
+    lv_obj_add_event_cb(btn_read, on_tab_read_all, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *btn_write = lv_btn_create(btn_row);
+    lv_obj_set_size(btn_write, 120, 32);
+    lv_label_set_text(lv_label_create(btn_write), "Write pending");
+    lv_obj_add_event_cb(btn_write, on_tab_write_pending, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_state(btn_write, LV_STATE_DISABLED);
+
+    lv_obj_t *btn_restart = lv_btn_create(btn_row);
+    lv_obj_set_size(btn_restart, 110, 32);
+    lv_obj_set_style_bg_color(btn_restart, lv_color_hex(0xFF5555), 0);
+    lv_label_set_text(lv_label_create(btn_restart), "Restart");
+    lv_obj_add_event_cb(btn_restart, on_tab_restart, LV_EVENT_CLICKED, NULL);
+
+    return bar;
+}
+
+static void create_group_tab(group_container_t *group)
+{
+    group->tab = lv_tabview_add_tab(s_tabview, group_tab_title(group->group));
+    lv_obj_set_flex_flow(group->tab, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(group->tab, 8, 0);
+    lv_obj_set_flex_align(group->tab, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    create_actions_bar(group->tab);
+
+    group->list = lv_obj_create(group->tab);
+    lv_obj_set_width(group->list, LV_PCT(100));
+    lv_obj_set_height(group->list, LV_PCT(100));
+    lv_obj_set_flex_flow(group->list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(group->list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(group->list, 6, 0);
+    lv_obj_set_scrollbar_mode(group->list, LV_SCROLLBAR_MODE_AUTO);
+}
+
+static bool contains_case_insensitive(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle || *needle == '\0') {
+        return true;
+    }
+
+    size_t h_len = strlen(haystack);
+    size_t n_len = strlen(needle);
+    if (n_len > h_len) {
+        return false;
+    }
+
+    for (size_t i = 0; i <= h_len - n_len; i++) {
+        size_t j = 0;
+        for (; j < n_len; j++) {
+            char h = (char) tolower((unsigned char)haystack[i + j]);
+            char n = (char) tolower((unsigned char)needle[j]);
+            if (h != n) {
+                break;
+            }
+        }
+        if (j == n_len) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void apply_search_filter(void)
+{
+    if (!s_search_box) {
+        return;
+    }
+
+    const char *filter = lv_textarea_get_text(s_search_box);
+    for (int i = 0; i < TINYBMS_REGISTER_COUNT; i++) {
+        register_widget_t *w = &s_widgets[i];
+        if (!w->row || !w->label) {
+            continue;
+        }
+
+        bool visible = contains_case_insensitive(lv_label_get_text(w->label), filter);
+        if (visible) {
+            lv_obj_clear_flag(w->row, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(w->row, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+static void on_search_changed(lv_event_t *e)
+{
+    (void)e;
+    apply_search_filter();
 }
 
 void screen_tinybms_config_create(lv_obj_t *parent)
 {
-    s_container = lv_obj_create(parent);
-    lv_obj_set_size(s_container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(s_container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(s_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(s_container, 10, 0);
-    lv_obj_set_scrollbar_mode(s_container, LV_SCROLLBAR_MODE_AUTO);
+    s_root = lv_obj_create(parent);
+    lv_obj_set_size(s_root, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(s_root, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_root, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(s_root, 10, 0);
+    lv_obj_set_scrollbar_mode(s_root, LV_SCROLLBAR_MODE_AUTO);
 
-    lv_obj_t *title = lv_label_create(s_container);
+    lv_obj_t *title = lv_label_create(s_root);
     lv_label_set_text(title, "TinyBMS Configuration");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
 
-    lv_obj_t *quick = lv_obj_create(s_container);
-    lv_obj_set_width(quick, LV_PCT(95));
+    lv_obj_t *search_row = lv_obj_create(s_root);
+    lv_obj_remove_style_all(search_row);
+    lv_obj_set_width(search_row, LV_PCT(100));
+    lv_obj_set_flex_flow(search_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(search_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_gap(search_row, 8, 0);
+
+    lv_obj_t *search_label = lv_label_create(search_row);
+    lv_label_set_text(search_label, "Recherche registre");
+
+    s_search_box = lv_textarea_create(search_row);
+    lv_textarea_set_one_line(s_search_box, true);
+    lv_textarea_set_placeholder_text(s_search_box, "Nom ou description...");
+    lv_obj_set_width(s_search_box, 220);
+    lv_obj_add_event_cb(s_search_box, on_search_changed, LV_EVENT_VALUE_CHANGED, NULL);
+
+    lv_obj_t *quick = lv_obj_create(s_root);
+    lv_obj_set_width(quick, LV_PCT(100));
     lv_obj_set_flex_flow(quick, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(quick, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(quick, 6, 0);
 
     lv_obj_t *lbl = lv_label_create(quick);
-    lv_label_set_text(lbl, "Shortcuts: read all / restart TinyBMS");
+    lv_label_set_text(lbl, "Raccourcis globaux : lecture complète / redémarrage");
     lv_obj_set_style_text_color(lbl, lv_color_hex(0xA0E0FF), 0);
 
     lv_obj_t *btn_read = lv_btn_create(quick);
@@ -287,20 +460,25 @@ void screen_tinybms_config_create(lv_obj_t *parent)
     lv_obj_add_event_cb(btn_restart, on_quick_restart, LV_EVENT_CLICKED, NULL);
     lv_label_set_text(lv_label_create(btn_restart), "Restart");
 
+    s_tabview = lv_tabview_create(s_root, LV_DIR_TOP, 40);
+    lv_obj_set_size(s_tabview, LV_PCT(100), LV_PCT(100));
+
+    for (int g = 0; g < REG_GROUP_MAX; g++) {
+        s_groups[g].group = (register_group_t)g;
+        s_groups[g].title = group_tab_title((register_group_t)g);
+        create_group_tab(&s_groups[g]);
+    }
+
     const register_descriptor_t *catalog = tinybms_get_register_catalog();
-    register_group_t current_group = REG_GROUP_MAX;
     for (int i = 0; i < TINYBMS_REGISTER_COUNT; i++) {
         const register_descriptor_t *desc = &catalog[i];
         s_widgets[i].desc = desc;
 
-        if (desc->group != current_group) {
-            current_group = desc->group;
-            create_section_header(s_container, group_title(current_group));
-        }
-
-        create_register_row(s_container, &s_widgets[i], desc);
+        group_container_t *group = &s_groups[desc->group];
+        create_register_row(group->list, &s_widgets[i], desc);
     }
 
+    apply_search_filter();
     ESP_LOGI(TAG, "TinyBMS config screen created with %d registers", TINYBMS_REGISTER_COUNT);
 }
 
@@ -328,13 +506,18 @@ void screen_tinybms_config_apply_register(const tinybms_register_update_t *updat
                  update->user_value, widget->desc->unit);
         lv_label_set_text(widget->hint, hint);
         lv_obj_set_style_text_color(widget->hint, lv_color_hex(0xB0B0B0), 0);
+
+        if (widget->status_chip) {
+            lv_label_set_text(widget->status_chip, hint);
+            lv_obj_set_style_text_color(widget->status_chip, lv_color_hex(0x80C080), 0);
+        }
     }
 }
 
 void screen_tinybms_config_update(const tinybms_config_t *config)
 {
     (void)config;
-    if (!s_container) {
+    if (!s_root) {
         return;
     }
 
