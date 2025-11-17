@@ -2,6 +2,20 @@
 
 Interface Homme-Machine (HMI) pour système de gestion de batterie (BMS) basée sur ESP32-P4 avec écran tactile 7 pouces.
 
+## 📚 Sommaire rapide
+
+- [Présentation du projet](#-présentation-du-projet)
+- [Matériel requis](#-matériel-requis)
+- [Fonctionnalités](#-fonctionnalités)
+- [Architecture logicielle](#-architecture-logicielle)
+- [Structure du projet](#-structure-du-projet)
+- [Démarrage rapide](#-démarrage-rapide)
+- [Flux de données](#-flux-de-données)
+- [Événements système](#-événements-système)
+- [Serveur de test](#-serveur-de-test)
+- [État du développement](#-état-du-développement)
+- [Interfaces matérielles](#-interfaces-matérielles)
+
 ## 🎯 Présentation du projet
 
 Ce projet est une interface graphique avancée développée pour améliorer le projet **BMS (Battery Management System)** existant. Il fournit une interface tactile complète et intuitive pour visualiser et contrôler un système de gestion de batterie en temps réel.
@@ -21,6 +35,12 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
   - Écran tactile capacitif 7 pouces (800x480)
   - Interfaces RS485 et CAN intégrées
   - Support Ethernet
+
+### Modes de fonctionnement
+
+- **Connecté S3** : l'ESP32-P4 agit comme afficheur réseau pour un BMS ESP32-S3 (WebSocket + HTTP REST).
+- **Autonome TinyBMS** : l'ESP32-P4 dialogue directement avec un TinyBMS via RS485/UART et peut publier en MQTT/HTTP.
+- **CAN Victron (en cours d'intégration)** : le couple `can_victron` + `can_publisher` diffuse les trames Victron Energy pour compatibilité onduleurs/chargeurs.
 
 ## ✨ Fonctionnalités
 
@@ -264,6 +284,13 @@ ESP32-P4/
 - **Outils de développement ESP-IDF** configurés
 - **Carte ESP32-P4-WIFI6-Touch-LCD-7B**
 
+### Checklist environnement
+
+1. Installer l'ESP-IDF (script `install.sh`) et sourcer `export.sh` dans votre shell.
+2. Vérifier la version avec `idf.py --version` (>= 5.0 recommandé).
+3. Installer les dépendances Python de LVGL via `pip install -r $IDF_PATH/requirements.txt` si nécessaire.
+4. Connecter la carte en USB et repérer le port série (`ls /dev/ttyUSB*`).
+
 ### Dépendances
 
 - ESP-IDF framework
@@ -276,6 +303,9 @@ ESP32-P4/
 ### Compilation et flash
 
 ```bash
+# Initialiser l'environnement ESP-IDF si ce n'est pas fait
+. $IDF_PATH/export.sh
+
 # Cloner le projet
 git clone <repository-url>
 cd ESP32-P4
@@ -292,6 +322,18 @@ idf.py build
 # Flasher sur l'ESP32-P4
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
+
+### Configuration rapide par mode
+
+- **Mode connecté S3** :
+  - Renseigner SSID/mot de passe WiFi et l'hôte du bridge (`CONFIG_HMI_WIFI_*`, `CONFIG_HMI_BRIDGE_*`).
+  - S'assurer que le bridge expose `/ws/telemetry` et `/ws/events`.
+- **Mode TinyBMS autonome** :
+  - Activer le port RS485/UART1 (GPIO27/26) et vérifier le câblage A/B.
+  - Régler l'intervalle MQTT/HTTP dans `NETWORK_TELEMETRY_*` si la publication distante est souhaitée.
+- **Intégration CAN Victron** :
+  - Utiliser les GPIO 22 (TX) / 21 (RX) et la vitesse 500 kbps.
+  - Lancer `can_victron_init()` puis `can_publisher_init()` après l'EventBus pour diffuser les 19 trames Victron.
 
 ### Configuration WiFi
 
@@ -389,6 +431,14 @@ npm start
 - Édition interactive des registres TinyBMS dans GUI
 - Module de communication CAN
 - Support mise à jour OTA
+
+## 🛠️ Dépannage et vérifications rapides
+
+- **Connexion UART TinyBMS** : vérifier que `tinybms_client_get_stats()` retourne des compteurs de lectures > 0 et aucune erreur CRC.
+- **Flux WebSocket S3** : surveiller les logs `EVENT_REMOTE_TELEMETRY_UPDATE`; en l'absence d'événements, valider SSID/mot de passe et l'URL du bridge.
+- **Affichage LVGL** : si l'écran reste noir, vérifier l'appel à `gui_init()` et la présence du task LVGL dans `hmi_main`.
+- **CAN Victron** : confirmer que la tâche `can_victron_task` est démarrée et que les événements `EVENT_CAN_MESSAGE_RX` arrivent après le handshake 0x307.
+- **Diffusion MQTT/HTTP** : en mode autonome, activer le tampon offline (`NETWORK_TELEMETRY_OFFLINE_BUFFER`) pour éviter la perte de mesures pendant les coupures réseau.
 
 ## 🔌 Interfaces matérielles
 
