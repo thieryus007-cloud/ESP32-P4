@@ -18,6 +18,7 @@ void screen_home_update_system(const system_status_t *status);
  *        basé sur pack_stats_t (cell_balancing[]).
  */
 void screen_home_update_balancing(const pack_stats_t *stats);
+void screen_home_refresh_texts(void);
 
 #ifdef __cplusplus
 }

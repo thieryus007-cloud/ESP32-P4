@@ -13,6 +13,7 @@ void screen_power_create(lv_obj_t *parent);
 
 void screen_power_update(const battery_status_t *status);
 void screen_power_update_system(const system_status_t *status);
+void screen_power_refresh_texts(void);
 
 #ifdef __cplusplus
 }

@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "ui_i18n.h"
 
 static event_bus_t *s_bus = NULL;
 static hmi_config_t s_local_config = { 0 };
@@ -19,8 +20,27 @@ static lv_obj_t *s_ta_uart_baud = NULL;
 static lv_obj_t *s_ta_uart_parity = NULL;
 static lv_obj_t *s_status_label = NULL;
 static lv_obj_t *s_spinner = NULL;
+static lv_obj_t *s_dd_language = NULL;
 
-static lv_obj_t *create_section(lv_obj_t *parent, const char *title)
+static lv_obj_t *s_lbl_title = NULL;
+static lv_obj_t *s_lbl_section_wifi = NULL;
+static lv_obj_t *s_lbl_section_mqtt = NULL;
+static lv_obj_t *s_lbl_section_bus = NULL;
+static lv_obj_t *s_lbl_ssid = NULL;
+static lv_obj_t *s_lbl_password = NULL;
+static lv_obj_t *s_lbl_static_ip = NULL;
+static lv_obj_t *s_lbl_broker = NULL;
+static lv_obj_t *s_lbl_pub = NULL;
+static lv_obj_t *s_lbl_sub = NULL;
+static lv_obj_t *s_lbl_can = NULL;
+static lv_obj_t *s_lbl_uart_baud = NULL;
+static lv_obj_t *s_lbl_uart_parity = NULL;
+static lv_obj_t *s_lbl_language = NULL;
+
+static lv_obj_t *s_lbl_btn_reload = NULL;
+static lv_obj_t *s_lbl_btn_save = NULL;
+
+static lv_obj_t *create_section(lv_obj_t *parent, const char *title, lv_obj_t **out_label)
 {
     lv_obj_t *cont = lv_obj_create(parent);
     lv_obj_set_width(cont, LV_PCT(100));
@@ -36,12 +56,17 @@ static lv_obj_t *create_section(lv_obj_t *parent, const char *title)
     lv_obj_t *lbl = lv_label_create(cont);
     lv_label_set_text(lbl, title);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+
+    if (out_label) {
+        *out_label = lbl;
+    }
     return cont;
 }
 
 static lv_obj_t *create_text_field(lv_obj_t *parent,
                                    const char *label,
-                                   bool password)
+                                   bool password,
+                                   lv_obj_t **out_label)
 {
     lv_obj_t *row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
@@ -55,6 +80,10 @@ static lv_obj_t *create_text_field(lv_obj_t *parent,
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_password_mode(ta, password);
     lv_obj_set_width(ta, LV_PCT(100));
+
+    if (out_label) {
+        *out_label = lbl;
+    }
     return ta;
 }
 
@@ -64,6 +93,42 @@ static void set_status(const char *msg, lv_color_t color)
         lv_label_set_text(s_status_label, msg ? msg : "");
         lv_obj_set_style_text_color(s_status_label, color, 0);
     }
+}
+
+static void update_language_dropdown(void)
+{
+    if (!s_dd_language) return;
+    ui_language_t lang = ui_i18n_get_language();
+    lv_dropdown_set_selected(s_dd_language, (lang == UI_LANG_FR) ? 0 : 1);
+}
+
+static void apply_texts(void)
+{
+    if (s_lbl_title) {
+        ui_i18n_label_set_text(s_lbl_title, "config.title");
+    }
+    ui_i18n_label_set_text(s_lbl_section_wifi, "config.section.wifi");
+    ui_i18n_label_set_text(s_lbl_section_mqtt, "config.section.mqtt");
+    ui_i18n_label_set_text(s_lbl_section_bus, "config.section.bus");
+
+    ui_i18n_label_set_text(s_lbl_ssid, "config.label.ssid");
+    ui_i18n_label_set_text(s_lbl_password, "config.label.password");
+    ui_i18n_label_set_text(s_lbl_static_ip, "config.label.static_ip");
+    if (s_ta_static_ip) {
+        lv_textarea_set_placeholder_text(s_ta_static_ip, ui_i18n("config.placeholder.static_ip"));
+    }
+    ui_i18n_label_set_text(s_lbl_broker, "config.label.broker");
+    ui_i18n_label_set_text(s_lbl_pub, "config.label.pub");
+    ui_i18n_label_set_text(s_lbl_sub, "config.label.sub");
+    ui_i18n_label_set_text(s_lbl_can, "config.label.can");
+    ui_i18n_label_set_text(s_lbl_uart_baud, "config.label.uart_baud");
+    ui_i18n_label_set_text(s_lbl_uart_parity, "config.label.uart_parity");
+    ui_i18n_label_set_text(s_lbl_language, "config.label.language");
+
+    ui_i18n_label_set_text(s_lbl_btn_reload, "config.btn.reload");
+    ui_i18n_label_set_text(s_lbl_btn_save, "config.btn.save");
+
+    update_language_dropdown();
 }
 
 void screen_config_set_bus(event_bus_t *bus)
@@ -80,8 +145,9 @@ void screen_config_set_loading(bool loading, const char *message)
             lv_obj_add_flag(s_spinner, LV_OBJ_FLAG_HIDDEN);
         }
     }
-    set_status(message ? message : "", loading ? lv_palette_main(LV_PALETTE_BLUE)
-                                                : lv_palette_main(LV_PALETTE_GREY));
+    set_status(message ? message : "",
+               loading ? lv_palette_main(LV_PALETTE_BLUE)
+                       : lv_palette_main(LV_PALETTE_GREY));
 }
 
 static bool is_valid_ip(const char *ip)
@@ -125,15 +191,15 @@ static bool read_form(hmi_config_t *out)
     const char *uart_parity = lv_textarea_get_text(s_ta_uart_parity);
 
     if (!ssid || strlen(ssid) == 0) {
-        set_status("SSID requis", lv_palette_main(LV_PALETTE_RED));
+        set_status(ui_i18n("config.error.ssid"), lv_palette_main(LV_PALETTE_RED));
         return false;
     }
     if (!broker || strlen(broker) == 0) {
-        set_status("Broker MQTT requis", lv_palette_main(LV_PALETTE_RED));
+        set_status(ui_i18n("config.error.broker"), lv_palette_main(LV_PALETTE_RED));
         return false;
     }
     if (!is_valid_ip(ip)) {
-        set_status("IP statique invalide (xxx.xxx.xxx.xxx)", lv_palette_main(LV_PALETTE_RED));
+        set_status(ui_i18n("config.error.ip"), lv_palette_main(LV_PALETTE_RED));
         return false;
     }
 
@@ -149,11 +215,11 @@ static bool read_form(hmi_config_t *out)
     out->uart_baudrate = atoi(uart_baud);
 
     if (out->can_bitrate <= 0) {
-        set_status("Bitrate CAN invalide", lv_palette_main(LV_PALETTE_RED));
+        set_status(ui_i18n("config.error.can"), lv_palette_main(LV_PALETTE_RED));
         return false;
     }
     if (out->uart_baudrate <= 0) {
-        set_status("Baudrate UART invalide", lv_palette_main(LV_PALETTE_RED));
+        set_status(ui_i18n("config.error.baud"), lv_palette_main(LV_PALETTE_RED));
         return false;
     }
 
@@ -198,7 +264,7 @@ static void on_reload_event(lv_event_t *e)
         .data = &req,
     };
     event_bus_publish(s_bus, &evt);
-    screen_config_set_loading(true, "Chargement configuration...");
+    screen_config_set_loading(true, ui_i18n("config.status.loading"));
 }
 
 static void on_save_event(lv_event_t *e)
@@ -220,7 +286,17 @@ static void on_save_event(lv_event_t *e)
         .data = &req,
     };
     event_bus_publish(s_bus, &evt);
-    screen_config_set_loading(true, "Enregistrement...");
+    screen_config_set_loading(true, ui_i18n("config.status.saving"));
+}
+
+static void on_language_event(lv_event_t *e)
+{
+    (void) e;
+    if (!s_dd_language) return;
+
+    uint16_t sel = lv_dropdown_get_selected(s_dd_language);
+    ui_language_t lang = (sel == 0) ? UI_LANG_FR : UI_LANG_EN;
+    ui_i18n_set_language(lang);
 }
 
 void screen_config_create(lv_obj_t *parent)
@@ -232,28 +308,38 @@ void screen_config_create(lv_obj_t *parent)
                           LV_FLEX_ALIGN_START,
                           LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *title = lv_label_create(parent);
-    lv_label_set_text(title, "Configuration HMI / BMS");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+    s_lbl_title = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_lbl_title, &lv_font_montserrat_18, 0);
 
     // WiFi / IP
-    lv_obj_t *section_wifi = create_section(parent, "WiFi STA");
-    s_ta_ssid = create_text_field(section_wifi, "SSID", false);
-    s_ta_password = create_text_field(section_wifi, "Mot de passe", true);
-    s_ta_static_ip = create_text_field(section_wifi, "IP statique (optionnel)", false);
-    lv_textarea_set_placeholder_text(s_ta_static_ip, "192.168.1.50");
+    lv_obj_t *section_wifi = create_section(parent, ui_i18n("config.section.wifi"), &s_lbl_section_wifi);
+    s_ta_ssid = create_text_field(section_wifi, ui_i18n("config.label.ssid"), false, &s_lbl_ssid);
+    s_ta_password = create_text_field(section_wifi, ui_i18n("config.label.password"), true, &s_lbl_password);
+    s_ta_static_ip = create_text_field(section_wifi, ui_i18n("config.label.static_ip"), false, &s_lbl_static_ip);
+    lv_textarea_set_placeholder_text(s_ta_static_ip, ui_i18n("config.placeholder.static_ip"));
 
     // MQTT
-    lv_obj_t *section_mqtt = create_section(parent, "MQTT");
-    s_ta_mqtt_broker = create_text_field(section_mqtt, "Broker (host:port)", false);
-    s_ta_mqtt_pub = create_text_field(section_mqtt, "Topic publication", false);
-    s_ta_mqtt_sub = create_text_field(section_mqtt, "Topic souscription", false);
+    lv_obj_t *section_mqtt = create_section(parent, ui_i18n("config.section.mqtt"), &s_lbl_section_mqtt);
+    s_ta_mqtt_broker = create_text_field(section_mqtt, ui_i18n("config.label.broker"), false, &s_lbl_broker);
+    s_ta_mqtt_pub = create_text_field(section_mqtt, ui_i18n("config.label.pub"), false, &s_lbl_pub);
+    s_ta_mqtt_sub = create_text_field(section_mqtt, ui_i18n("config.label.sub"), false, &s_lbl_sub);
 
     // Bus
-    lv_obj_t *section_bus = create_section(parent, "Bus CAN & UART");
-    s_ta_can_bitrate = create_text_field(section_bus, "CAN bitrate (ex: 500000)", false);
-    s_ta_uart_baud = create_text_field(section_bus, "UART baudrate", false);
-    s_ta_uart_parity = create_text_field(section_bus, "UART parité (N/E/O)", false);
+    lv_obj_t *section_bus = create_section(parent, ui_i18n("config.section.bus"), &s_lbl_section_bus);
+    s_ta_can_bitrate = create_text_field(section_bus, ui_i18n("config.label.can"), false, &s_lbl_can);
+    s_ta_uart_baud = create_text_field(section_bus, ui_i18n("config.label.uart_baud"), false, &s_lbl_uart_baud);
+    s_ta_uart_parity = create_text_field(section_bus, ui_i18n("config.label.uart_parity"), false, &s_lbl_uart_parity);
+
+    lv_obj_t *row_language = lv_obj_create(section_bus);
+    lv_obj_remove_style_all(row_language);
+    lv_obj_set_width(row_language, LV_PCT(100));
+    lv_obj_set_flex_flow(row_language, LV_FLEX_FLOW_COLUMN);
+    s_lbl_language = lv_label_create(row_language);
+    ui_i18n_label_set_text(s_lbl_language, "config.label.language");
+    s_dd_language = lv_dropdown_create(row_language);
+    lv_dropdown_set_options_static(s_dd_language, "Français\nEnglish");
+    lv_obj_add_event_cb(s_dd_language, on_language_event, LV_EVENT_VALUE_CHANGED, NULL);
+    update_language_dropdown();
 
     // Boutons
     lv_obj_t *row_actions = lv_obj_create(parent);
@@ -267,13 +353,13 @@ void screen_config_create(lv_obj_t *parent)
 
     lv_obj_t *btn_reload = lv_btn_create(row_actions);
     lv_obj_add_event_cb(btn_reload, on_reload_event, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_reload = lv_label_create(btn_reload);
-    lv_label_set_text(lbl_reload, "Recharger");
+    s_lbl_btn_reload = lv_label_create(btn_reload);
+    ui_i18n_label_set_text(s_lbl_btn_reload, "config.btn.reload");
 
     lv_obj_t *btn_save = lv_btn_create(row_actions);
     lv_obj_add_event_cb(btn_save, on_save_event, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *lbl_save = lv_label_create(btn_save);
-    lv_label_set_text(lbl_save, "Sauvegarder");
+    s_lbl_btn_save = lv_label_create(btn_save);
+    ui_i18n_label_set_text(s_lbl_btn_save, "config.btn.save");
 
     // Statut + spinner
     lv_obj_t *row_status = lv_obj_create(parent);
@@ -290,9 +376,10 @@ void screen_config_create(lv_obj_t *parent)
     lv_obj_add_flag(s_spinner, LV_OBJ_FLAG_HIDDEN);
 
     s_status_label = lv_label_create(row_status);
-    lv_label_set_text(s_status_label, "Prêt");
+    set_status(ui_i18n("config.status.ready"), lv_palette_main(LV_PALETTE_GREY));
 
     apply_local_to_fields();
+    apply_texts();
 }
 
 void screen_config_apply(const hmi_config_t *config)
@@ -300,7 +387,7 @@ void screen_config_apply(const hmi_config_t *config)
     if (!config) return;
     s_local_config = *config;
     apply_local_to_fields();
-    screen_config_set_loading(false, "Configuration mise à jour");
+    screen_config_set_loading(false, ui_i18n("config.status.updated"));
 }
 
 void screen_config_show_result(const cmd_result_t *result)
@@ -314,5 +401,10 @@ void screen_config_show_result(const cmd_result_t *result)
     if (s_spinner) {
         lv_obj_add_flag(s_spinner, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+void screen_config_refresh_texts(void)
+{
+    apply_texts();
 }
 
