@@ -289,7 +289,26 @@ bool net_client_send_http_request(const char *path,
     if (err == ESP_OK) {
         int status = esp_http_client_get_status_code(client);
         ESP_LOGI(TAG, "HTTP %s %s -> status=%d", method, path, status);
-        // TODO: lire la réponse si besoin et publier EVENT_REMOTE_CMD_RESULT
+        char *resp_buf = NULL;
+        int   resp_len = 0;
+
+        int content_length = esp_http_client_get_content_length(client);
+        int buffer_size    = (content_length > 0 && content_length < 4096) ? (content_length + 1) : 1024;
+
+        resp_buf = (char *) malloc(buffer_size);
+        if (resp_buf) {
+            resp_len = esp_http_client_read_response(client, resp_buf, buffer_size - 1);
+            if (resp_len < 0) {
+                resp_len = 0;
+            }
+            resp_buf[resp_len] = '\0';
+        }
+
+        remote_event_adapter_on_http_response(path, method, status, resp_buf);
+
+        if (resp_buf) {
+            free(resp_buf);
+        }
     } else {
         ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));
         esp_http_client_cleanup(client);

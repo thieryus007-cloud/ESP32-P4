@@ -40,6 +40,7 @@ typedef enum {
     EVENT_USER_INPUT_CHANGE_MODE,       // futur
     EVENT_USER_INPUT_ACK_ALARM,         // futur
     EVENT_USER_INPUT_WRITE_CONFIG,      // futur
+    EVENT_USER_INPUT_RELOAD_CONFIG,     // recharger /api/config
 
     // --- Événements TinyBMS (UART direct) ---
     EVENT_TINYBMS_CONNECTED,            // TinyBMS connecté via UART
@@ -140,6 +141,27 @@ typedef struct {
 typedef struct {
     float target_soc;          // %
 } user_input_set_target_soc_t;
+
+typedef struct {
+    char wifi_ssid[32];
+    char wifi_password[64];
+    char static_ip[16];
+    char mqtt_broker[64];
+    char mqtt_topic_pub[64];
+    char mqtt_topic_sub[64];
+    int  can_bitrate;
+    int  uart_baudrate;
+    char uart_parity[2];
+} hmi_config_t;
+
+typedef struct {
+    hmi_config_t config;
+    bool mqtt_only;            // true -> POST /api/mqtt/config uniquement
+} user_input_write_config_t;
+
+typedef struct {
+    bool include_mqtt;         // true -> charger aussi /api/mqtt/config
+} user_input_reload_config_t;
 
 /**
  * @brief  Mise à jour d'un registre TinyBMS

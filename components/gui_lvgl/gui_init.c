@@ -52,6 +52,14 @@ typedef struct {
     tinybms_config_t config;
 } gui_tinybms_ctx_t;
 
+typedef struct {
+    hmi_config_t config;
+} gui_config_ctx_t;
+
+typedef struct {
+    cmd_result_t result;
+} gui_cmd_result_ctx_t;
+
 // --- Callbacks exécutés dans le contexte LVGL (via lv_async_call) ---
 
 static void lvgl_apply_battery_update(void *user_data)
@@ -91,6 +99,24 @@ static void lvgl_apply_pack_update(void *user_data)
         screen_dashboard_update_cells(&ctx->stats);
         // 🔹 Home : badge global de balancing
         screen_home_update_balancing(&ctx->stats);
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_config_update(void *user_data)
+{
+    gui_config_ctx_t *ctx = (gui_config_ctx_t *) user_data;
+    if (ctx) {
+        screen_config_apply(&ctx->config);
+        free(ctx);
+    }
+}
+
+static void lvgl_apply_cmd_result(void *user_data)
+{
+    gui_cmd_result_ctx_t *ctx = (gui_cmd_result_ctx_t *) user_data;
+    if (ctx) {
+        screen_config_show_result(&ctx->result);
         free(ctx);
     }
 }
@@ -168,6 +194,50 @@ static void pack_stats_event_handler(event_bus_t *bus,
     ctx->stats = *src;
 
     lv_async_call(lvgl_apply_pack_update, ctx);
+}
+
+static void config_event_handler(event_bus_t *bus,
+                                 const event_t *event,
+                                 void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const hmi_config_t *src = (const hmi_config_t *) event->data;
+    gui_config_ctx_t *ctx = (gui_config_ctx_t *) malloc(sizeof(gui_config_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_config_ctx_t");
+        return;
+    }
+
+    ctx->config = *src;
+    lv_async_call(lvgl_apply_config_update, ctx);
+}
+
+static void cmd_result_event_handler(event_bus_t *bus,
+                                     const event_t *event,
+                                     void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const cmd_result_t *src = (const cmd_result_t *) event->data;
+    gui_cmd_result_ctx_t *ctx = (gui_cmd_result_ctx_t *) malloc(sizeof(gui_cmd_result_ctx_t));
+    if (!ctx) {
+        ESP_LOGE(TAG, "Failed to alloc gui_cmd_result_ctx_t");
+        return;
+    }
+
+    ctx->result = *src;
+    lv_async_call(lvgl_apply_cmd_result, ctx);
 }
 
 // CVL limits updated handler
@@ -272,6 +342,7 @@ void gui_init(event_bus_t *bus)
     screen_battery_create(tab_pack);
     screen_cells_create(tab_cells);
     screen_power_create(tab_power);
+    screen_config_set_bus(s_bus);
     screen_config_create(tab_config);
     screen_tinybms_status_create(tab_tbms_status);
     screen_tinybms_config_create(tab_tbms_config);
@@ -316,6 +387,16 @@ void gui_init(event_bus_t *bus)
         event_bus_subscribe(s_bus,
                             EVENT_CVL_LIMITS_UPDATED,
                             cvl_limits_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_CONFIG_UPDATED,
+                            config_event_handler,
+                            NULL);
+
+        event_bus_subscribe(s_bus,
+                            EVENT_REMOTE_CMD_RESULT,
+                            cmd_result_event_handler,
                             NULL);
     }
 }
