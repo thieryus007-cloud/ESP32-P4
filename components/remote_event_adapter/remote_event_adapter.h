@@ -60,6 +60,11 @@ void remote_event_adapter_on_http_response(const char *path,
                                            int status,
                                            const char *body);
 
+/**
+ * @brief Signalement qu'une connectivité backend est revenue (WS reconnecté).
+ */
+void remote_event_adapter_on_network_online(void);
+
 #ifdef __cplusplus
 }
 #endif

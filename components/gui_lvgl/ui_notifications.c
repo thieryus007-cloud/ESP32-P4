@@ -18,6 +18,10 @@ typedef struct {
     int  status;
 } network_ctx_t;
 
+typedef struct {
+    system_status_t status;
+} net_status_ctx_t;
+
 static event_bus_t *s_bus                 = NULL;
 static lv_obj_t    *s_toast               = NULL;
 static lv_obj_t    *s_toast_label         = NULL;
@@ -27,6 +31,9 @@ static lv_obj_t    *s_loading_label       = NULL;
 static lv_obj_t    *s_loading_spinner     = NULL;
 static uint16_t     s_loading_requests    = 0;
 static char         s_last_request_label[80] = "";
+static lv_obj_t    *s_net_banner          = NULL;
+static lv_obj_t    *s_net_banner_label    = NULL;
+static system_status_t s_last_status      = {0};
 
 static void hide_toast(lv_timer_t *timer)
 {
@@ -127,6 +134,49 @@ static void update_loading(void)
                           (unsigned int) s_loading_requests);
 }
 
+static void ensure_network_banner(void)
+{
+    if (s_net_banner) {
+        return;
+    }
+
+    lv_obj_t *layer = lv_layer_top();
+    s_net_banner = lv_obj_create(layer);
+    lv_obj_set_style_bg_color(s_net_banner, lv_palette_main(LV_PALETTE_RED), 0);
+    lv_obj_set_style_bg_opa(s_net_banner, LV_OPA_90, 0);
+    lv_obj_set_style_pad_all(s_net_banner, 6, 0);
+    lv_obj_set_style_radius(s_net_banner, 0, 0);
+    lv_obj_set_style_border_width(s_net_banner, 0, 0);
+    lv_obj_set_width(s_net_banner, LV_PCT(100));
+    lv_obj_align(s_net_banner, LV_ALIGN_TOP_MID, 0, 0);
+
+    s_net_banner_label = lv_label_create(s_net_banner);
+    lv_label_set_text(s_net_banner_label, "");
+}
+
+static void update_network_banner(const system_status_t *status)
+{
+    ensure_network_banner();
+
+    bool offline  = !status->wifi_connected;
+    bool desync   = status->wifi_connected && !status->server_reachable;
+
+    if (!offline && !desync) {
+        lv_obj_add_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    lv_color_t color = offline ? lv_palette_main(LV_PALETTE_RED)
+                               : lv_palette_main(LV_PALETTE_ORANGE);
+    lv_obj_set_style_bg_color(s_net_banner, color, 0);
+
+    const char *msg = offline
+                          ? "Wi-Fi indisponible - affichage cache"
+                          : "Reconnexion au bridge...";
+    lv_label_set_text(s_net_banner_label, msg);
+    lv_obj_clear_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
+}
+
 static void lvgl_show_cmd_result(void *user_data)
 {
     cmd_result_ctx_t *ctx = (cmd_result_ctx_t *) user_data;
@@ -138,6 +188,18 @@ static void lvgl_show_cmd_result(void *user_data)
                            ? lv_palette_main(LV_PALETTE_GREEN)
                            : lv_palette_main(LV_PALETTE_RED);
     show_toast(ctx->result.message, color);
+    free(ctx);
+}
+
+static void lvgl_on_system_status(void *user_data)
+{
+    net_status_ctx_t *ctx = (net_status_ctx_t *) user_data;
+    if (!ctx) {
+        return;
+    }
+
+    s_last_status = ctx->status;
+    update_network_banner(&ctx->status);
     free(ctx);
 }
 
@@ -237,6 +299,23 @@ static void on_request_finished(event_bus_t *bus, const event_t *event, void *us
     lv_async_call(lvgl_on_request_finished, ctx);
 }
 
+static void on_system_status(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    net_status_ctx_t *ctx = (net_status_ctx_t *) malloc(sizeof(net_status_ctx_t));
+    if (!ctx) {
+        return;
+    }
+    ctx->status = *(const system_status_t *) event->data;
+    lv_async_call(lvgl_on_system_status, ctx);
+}
+
 void ui_notifications_attach(lv_obj_t *layer)
 {
     ensure_loading_created(layer);
@@ -252,5 +331,6 @@ void ui_notifications_init(event_bus_t *bus)
         event_bus_subscribe(s_bus, EVENT_REMOTE_CMD_RESULT, on_cmd_result, NULL);
         event_bus_subscribe(s_bus, EVENT_NETWORK_REQUEST_STARTED, on_request_started, NULL);
         event_bus_subscribe(s_bus, EVENT_NETWORK_REQUEST_FINISHED, on_request_finished, NULL);
+        event_bus_subscribe(s_bus, EVENT_SYSTEM_STATUS_UPDATED, on_system_status, NULL);
     }
 }

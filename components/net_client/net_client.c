@@ -34,6 +34,13 @@ static esp_websocket_client_handle_t s_ws_telemetry = NULL;
 static esp_websocket_client_handle_t s_ws_events    = NULL;
 static esp_websocket_client_handle_t s_ws_alerts    = NULL;
 
+static system_status_t s_net_status = {
+    .wifi_connected = false,
+    .server_reachable = false,
+    .storage_ok = true,
+    .has_error = false,
+};
+
 // Config par défaut via menuconfig
 #ifndef CONFIG_HMI_WIFI_SSID
 #define CONFIG_HMI_WIFI_SSID "YOUR_SSID"
@@ -75,11 +82,16 @@ static void wifi_event_handler(void *arg,
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
         ESP_LOGW(TAG, "WiFi disconnected");
+        s_net_status.wifi_connected = false;
+        s_net_status.server_reachable = false;
+        publish_system_status();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        s_net_status.wifi_connected = true;
+        publish_system_status();
     }
 }
 
@@ -149,9 +161,14 @@ static void websocket_event_handler(void *handler_args,
     switch (event_id) {
         case WEBSOCKET_EVENT_CONNECTED:
             ESP_LOGI(TAG, "WebSocket connected (channel=%d)", channel);
+            s_net_status.server_reachable = true;
+            publish_system_status();
+            remote_event_adapter_on_network_online();
             break;
         case WEBSOCKET_EVENT_DISCONNECTED:
             ESP_LOGW(TAG, "WebSocket disconnected (channel=%d)", channel);
+            s_net_status.server_reachable = false;
+            publish_system_status();
             break;
         case WEBSOCKET_EVENT_DATA:
             if (data->op_code == WS_TEXT_FRAME && data->data_len > 0) {
@@ -281,6 +298,21 @@ static void publish_request_finished(const char *path,
     event_t evt = {
         .type = EVENT_NETWORK_REQUEST_FINISHED,
         .data = &info,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void publish_system_status(void)
+{
+    if (!s_bus) {
+        return;
+    }
+
+    s_net_status.has_error = (!s_net_status.wifi_connected || !s_net_status.server_reachable);
+
+    event_t evt = {
+        .type = EVENT_SYSTEM_STATUS_UPDATED,
+        .data = &s_net_status,
     };
     event_bus_publish(s_bus, &evt);
 }
