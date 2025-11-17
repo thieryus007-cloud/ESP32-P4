@@ -359,6 +359,7 @@ static const char *get_firmware_version(void)
         const esp_app_desc_t *app = esp_app_get_description();
         if (app) {
             strncpy(firmware_version, app->version, sizeof(firmware_version) - 1);
+            firmware_version[sizeof(firmware_version) - 1] = '\0';
         }
     }
     return firmware_version;
@@ -480,6 +481,11 @@ esp_err_t stats_aggregator_export_to_flash(void)
     }
 
     cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        ESP_LOGE(TAG, "Failed to allocate JSON root object");
+        return ESP_ERR_NO_MEM;
+    }
+
     cJSON_AddStringToObject(root, "firmware", fw ? fw : "");
     export_summary_to_json(root, "day", &day, fw);
     export_summary_to_json(root, "week", &week, fw);
@@ -511,6 +517,15 @@ esp_err_t stats_aggregator_export_to_flash(void)
 
 bool stats_aggregator_send_http(const char *path)
 {
+    if (!s_state.initialized) {
+        ESP_LOGE(TAG, "Stats aggregator not initialized, cannot send HTTP");
+        return false;
+    }
+    if (!path || path[0] == '\0') {
+        ESP_LOGE(TAG, "Invalid HTTP path for stats export");
+        return false;
+    }
+
     const char *fw = get_firmware_version();
     stats_bucket_t day = aggregate_window(s_state.hourly, 24);
     merge_bucket(&day, &s_state.current_hour);
@@ -518,6 +533,10 @@ bool stats_aggregator_send_http(const char *path)
     merge_bucket(&week, &s_state.current_day);
 
     cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        ESP_LOGE(TAG, "Failed to allocate JSON root object");
+        return false;
+    }
     cJSON_AddStringToObject(root, "firmware", fw ? fw : "");
     export_summary_to_json(root, "day", &day, fw);
     export_summary_to_json(root, "week", &week, fw);

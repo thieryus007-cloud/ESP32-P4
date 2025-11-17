@@ -68,7 +68,10 @@ esp_err_t operation_mode_init(void)
         ESP_LOGW(TAG, "Using default mode (%d) (reason=%s)",
                  mode, esp_err_to_name(err));
         // Persist the default so next boot reads it without warning
-        save_mode_to_nvs(mode);
+        esp_err_t persist_err = save_mode_to_nvs(mode);
+        if (persist_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to persist default mode %d: %s", mode, esp_err_to_name(persist_err));
+        }
     }
 
     s_operation_mode = mode;
