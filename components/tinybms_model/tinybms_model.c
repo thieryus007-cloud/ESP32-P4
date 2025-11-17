@@ -6,6 +6,7 @@
 #include "tinybms_model.h"
 #include "tinybms_client.h"
 #include "event_types.h"
+#include "tinybms_rules.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -152,6 +153,9 @@ esp_err_t tinybms_model_init(event_bus_t *bus)
 
     // Subscribe to user write events
     event_bus_subscribe(bus, EVENT_USER_INPUT_TINYBMS_WRITE_REG, on_user_write_request, NULL);
+
+    // Initialise le moteur d'alertes TinyBMS
+    tinybms_rules_init(bus);
 
     g_model.initialized = true;
     ESP_LOGI(TAG, "TinyBMS model initialized with %d registers", TINYBMS_REGISTER_COUNT);
