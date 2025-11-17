@@ -220,9 +220,13 @@ void screen_dashboard_update_system(const system_status_t *status)
     s_has_sys = true;
 
     if (s_label_status_wifi) {
-        set_status_label(s_label_status_wifi,
-                         ui_i18n("dashboard.status.wifi"),
-                         status->wifi_connected ? color_ok() : color_error());
+        if (!status->telemetry_expected) {
+            set_status_label(s_label_status_wifi, "Autonome", lv_palette_main(LV_PALETTE_BLUE));
+        } else {
+            set_status_label(s_label_status_wifi,
+                             ui_i18n("dashboard.status.wifi"),
+                             status->wifi_connected ? color_ok() : color_error());
+        }
     }
 
     if (s_label_status_storage) {
