@@ -9,10 +9,27 @@
 
 #include "event_types.h"
 #include "event_bus.h"
+#include "net_client.h"
 
 static const char *TAG = "REMOTE_ADAPTER";
 
 static event_bus_t *s_bus = NULL;
+
+// Configuration locale (snapshot /api/config + /api/mqtt/config)
+static hmi_config_t s_config = {
+    .wifi_ssid     = CONFIG_HMI_WIFI_SSID,
+    .wifi_password = CONFIG_HMI_WIFI_PASSWORD,
+    .static_ip     = "",
+    .mqtt_broker   = CONFIG_HMI_BRIDGE_HOST,
+    .mqtt_topic_pub = "",
+    .mqtt_topic_sub = "",
+    .can_bitrate    = 500000,
+    .uart_baudrate  = 115200,
+    .uart_parity    = "N",
+};
+
+static hmi_config_t s_pending_config;
+static bool         s_has_pending_config = false;
 
 // Buffers statiques : évite malloc/free à chaque message
 static battery_status_t s_batt_status;
@@ -61,6 +78,88 @@ static int json_get_event_id(cJSON *obj, const char *key)
     return -1;
 }
 
+static void set_string_field(char *dst, size_t dst_size, cJSON *root, const char *key)
+{
+    if (!dst || dst_size == 0 || !root || !key) {
+        return;
+    }
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(root, key);
+    if (cJSON_IsString(item) && item->valuestring) {
+        strncpy(dst, item->valuestring, dst_size - 1);
+        dst[dst_size - 1] = '\0';
+    }
+}
+
+static void publish_config_update(void)
+{
+    event_t evt = {
+        .type = EVENT_CONFIG_UPDATED,
+        .data = &s_config,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void parse_main_config_json(cJSON *root);
+static void parse_mqtt_config_json(cJSON *root);
+
+static void handle_user_reload_config(event_bus_t *bus,
+                                      const event_t *event,
+                                      void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    const user_input_reload_config_t *req = (const user_input_reload_config_t *) event->data;
+    bool include_mqtt = true;
+    if (req) {
+        include_mqtt = req->include_mqtt;
+    }
+
+    net_client_send_http_request("/api/config", "GET", NULL, 0);
+    if (include_mqtt) {
+        net_client_send_http_request("/api/mqtt/config", "GET", NULL, 0);
+    }
+}
+
+static void handle_user_write_config(event_bus_t *bus,
+                                     const event_t *event,
+                                     void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    const user_input_write_config_t *req = (const user_input_write_config_t *) event->data;
+    if (!req) {
+        return;
+    }
+
+    s_pending_config = req->config;
+    s_has_pending_config = true;
+
+    char body_config[256];
+    snprintf(body_config, sizeof(body_config),
+             "{\"wifi_ssid\":\"%s\",\"wifi_password\":\"%s\",\"static_ip\":\"%s\",\"can_bitrate\":%d,\"uart_baudrate\":%d,\"uart_parity\":\"%s\"}",
+             req->config.wifi_ssid,
+             req->config.wifi_password,
+             req->config.static_ip,
+             req->config.can_bitrate,
+             req->config.uart_baudrate,
+             req->config.uart_parity);
+
+    net_client_send_http_request("/api/config", "POST", body_config, strlen(body_config));
+
+    char body_mqtt[256];
+    snprintf(body_mqtt, sizeof(body_mqtt),
+             "{\"mqtt_broker\":\"%s\",\"mqtt_topic_pub\":\"%s\",\"mqtt_topic_sub\":\"%s\"}",
+             req->config.mqtt_broker,
+             req->config.mqtt_topic_pub,
+             req->config.mqtt_topic_sub);
+
+    if (!req->mqtt_only) {
+        net_client_send_http_request("/api/mqtt/config", "POST", body_mqtt, strlen(body_mqtt));
+    }
+}
+
 // --- API publique ---
 
 void remote_event_adapter_init(event_bus_t *bus)
@@ -78,6 +177,9 @@ void remote_event_adapter_init(event_bus_t *bus)
     s_sys_status.has_error        = false;
 
     ESP_LOGI(TAG, "remote_event_adapter initialized");
+
+    event_bus_subscribe(bus, EVENT_USER_INPUT_WRITE_CONFIG, handle_user_write_config, NULL);
+    event_bus_subscribe(bus, EVENT_USER_INPUT_RELOAD_CONFIG, handle_user_reload_config, NULL);
 }
 
 void remote_event_adapter_start(void)
@@ -355,6 +457,50 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
     event_bus_publish(s_bus, &evt_sys);
 }
 
+void remote_event_adapter_on_http_response(const char *path,
+                                           const char *method,
+                                           int status,
+                                           const char *body)
+{
+    if (!s_bus || !path || !method) {
+        return;
+    }
+
+    bool success = (status >= 200 && status < 300);
+
+    cmd_result_t result = {
+        .success    = success,
+        .error_code = status,
+    };
+    snprintf(result.message, sizeof(result.message), "%s %s -> %d", method, path, status);
+
+    event_t evt_result = {
+        .type = EVENT_REMOTE_CMD_RESULT,
+        .data = &result,
+    };
+    event_bus_publish(s_bus, &evt_result);
+
+    if (success && body && strlen(body) > 0) {
+        cJSON *root = cJSON_Parse(body);
+        if (root) {
+            if (strcmp(path, "/api/config") == 0) {
+                parse_main_config_json(root);
+                publish_config_update();
+            } else if (strcmp(path, "/api/mqtt/config") == 0) {
+                parse_mqtt_config_json(root);
+                publish_config_update();
+            }
+            cJSON_Delete(root);
+        }
+    }
+
+    if (success && strcmp(method, "POST") == 0 && s_has_pending_config) {
+        s_config = s_pending_config;
+        s_has_pending_config = false;
+        publish_config_update();
+    }
+}
+
 // ============================================================================
 //  MQTT STATUS  (JSON → battery_status.mqtt_ok)
 // ============================================================================
@@ -394,4 +540,42 @@ void remote_event_adapter_on_mqtt_status_json(const char *json, size_t length)
         .data = &s_batt_status,
     };
     event_bus_publish(s_bus, &evt_batt);
+}
+
+// ============================================================================
+//  CONFIGURATION  (HTTP /api/config et /api/mqtt/config)
+// ============================================================================
+
+static void parse_main_config_json(cJSON *root)
+{
+    if (!root) {
+        return;
+    }
+
+    set_string_field(s_config.wifi_ssid, sizeof(s_config.wifi_ssid), root, "wifi_ssid");
+    set_string_field(s_config.wifi_password, sizeof(s_config.wifi_password), root, "wifi_password");
+    set_string_field(s_config.static_ip, sizeof(s_config.static_ip), root, "static_ip");
+
+    cJSON *can_bitrate = cJSON_GetObjectItemCaseSensitive(root, "can_bitrate");
+    if (cJSON_IsNumber(can_bitrate)) {
+        s_config.can_bitrate = can_bitrate->valueint;
+    }
+
+    cJSON *uart_baud = cJSON_GetObjectItemCaseSensitive(root, "uart_baudrate");
+    if (cJSON_IsNumber(uart_baud)) {
+        s_config.uart_baudrate = uart_baud->valueint;
+    }
+
+    set_string_field(s_config.uart_parity, sizeof(s_config.uart_parity), root, "uart_parity");
+}
+
+static void parse_mqtt_config_json(cJSON *root)
+{
+    if (!root) {
+        return;
+    }
+
+    set_string_field(s_config.mqtt_broker, sizeof(s_config.mqtt_broker), root, "mqtt_broker");
+    set_string_field(s_config.mqtt_topic_pub, sizeof(s_config.mqtt_topic_pub), root, "mqtt_topic_pub");
+    set_string_field(s_config.mqtt_topic_sub, sizeof(s_config.mqtt_topic_sub), root, "mqtt_topic_sub");
 }

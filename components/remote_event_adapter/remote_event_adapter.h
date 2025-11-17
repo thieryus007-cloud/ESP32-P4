@@ -47,6 +47,14 @@ void remote_event_adapter_on_event_json(const char *json, size_t length);
  */
 void remote_event_adapter_on_mqtt_status_json(const char *json, size_t length);
 
+/**
+ * @brief Callback pour toute réponse HTTP issue de net_client_send_http_request.
+ */
+void remote_event_adapter_on_http_response(const char *path,
+                                           const char *method,
+                                           int status,
+                                           const char *body);
+
 #ifdef __cplusplus
 }
 #endif
