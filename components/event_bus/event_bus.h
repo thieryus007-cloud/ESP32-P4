@@ -5,34 +5,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "event_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum {
-    EVENT_TYPE_NONE = 0,
-
-    // Événements "bruts" venant du S3 via JSON
-    EVENT_REMOTE_TELEMETRY_UPDATE,
-    EVENT_REMOTE_SYSTEM_EVENT,
-    EVENT_REMOTE_CONFIG_SNAPSHOT,
-    EVENT_REMOTE_CMD_RESULT,
-
-    // Modèle interne pour la GUI
-    EVENT_BATTERY_STATUS_UPDATED,
-    EVENT_PACK_STATS_UPDATED,
-    EVENT_SYSTEM_STATUS_UPDATED,
-    EVENT_CONFIG_UPDATED,
-
-    // Actions utilisateur depuis la GUI
-    EVENT_USER_INPUT_SET_TARGET_SOC,
-    EVENT_USER_INPUT_CHANGE_MODE,
-    EVENT_USER_INPUT_ACK_ALARM,
-    EVENT_USER_INPUT_WRITE_CONFIG,
-    EVENT_USER_INPUT_RELOAD_CONFIG,
-
-    EVENT_TYPE_MAX
-} event_type_t;
 
 /**
  * @brief Payload générique d'événement.
