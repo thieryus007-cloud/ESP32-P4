@@ -158,8 +158,13 @@ static void update_network_banner(const system_status_t *status)
 {
     ensure_network_banner();
 
-    bool offline  = !status->wifi_connected;
-    bool desync   = status->wifi_connected && !status->server_reachable;
+    if (!status->telemetry_expected || status->network_state == NETWORK_STATE_NOT_CONFIGURED) {
+        lv_obj_add_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    bool offline  = (status->network_state != NETWORK_STATE_ACTIVE);
+    bool desync   = (status->network_state == NETWORK_STATE_ACTIVE) && !status->server_reachable;
 
     if (!offline && !desync) {
         lv_obj_add_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
@@ -203,6 +208,12 @@ static void lvgl_on_system_status(void *user_data)
     free(ctx);
 }
 
+static void lvgl_on_failover(void *user_data)
+{
+    (void) user_data;
+    show_toast("WiFi en échec : bascule autonome", lv_palette_main(LV_PALETTE_ORANGE));
+}
+
 static void on_cmd_result(event_bus_t *bus, const event_t *event, void *user_ctx)
 {
     (void) bus;
@@ -218,6 +229,18 @@ static void on_cmd_result(event_bus_t *bus, const event_t *event, void *user_ctx
     }
     ctx->result = *(const cmd_result_t *) event->data;
     lv_async_call(lvgl_show_cmd_result, ctx);
+}
+
+static void on_network_failover(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    lv_async_call(lvgl_on_failover, NULL);
 }
 
 static void lvgl_on_request_started(void *user_data)
@@ -332,5 +355,6 @@ void ui_notifications_init(event_bus_t *bus)
         event_bus_subscribe(s_bus, EVENT_NETWORK_REQUEST_STARTED, on_request_started, NULL);
         event_bus_subscribe(s_bus, EVENT_NETWORK_REQUEST_FINISHED, on_request_finished, NULL);
         event_bus_subscribe(s_bus, EVENT_SYSTEM_STATUS_UPDATED, on_system_status, NULL);
+        event_bus_subscribe(s_bus, EVENT_NETWORK_FAILOVER_ACTIVATED, on_network_failover, NULL);
     }
 }

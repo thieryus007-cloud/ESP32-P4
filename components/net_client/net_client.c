@@ -25,6 +25,8 @@ static const char *TAG = "NET_CLIENT";
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
+static int s_fail_sequences = 0;
+static bool s_failover_triggered = false;
 
 // EventBus global pointer pour ce module
 static event_bus_t *s_bus = NULL;
@@ -39,6 +41,7 @@ static system_status_t s_net_status = {
     .server_reachable = false,
     .storage_ok = true,
     .has_error = false,
+    .network_state = NETWORK_STATE_NOT_CONFIGURED,
     .operation_mode = HMI_MODE_CONNECTED_S3,
     .telemetry_expected = true,
 };
@@ -58,6 +61,14 @@ static system_status_t s_net_status = {
 
 #ifndef CONFIG_HMI_BRIDGE_PORT
 #define CONFIG_HMI_BRIDGE_PORT 80
+#endif
+
+#ifndef CONFIG_HMI_WIFI_FAILOVER_ENABLED
+#define CONFIG_HMI_WIFI_FAILOVER_ENABLED 0
+#endif
+
+#ifndef CONFIG_HMI_WIFI_FAILOVER_THRESHOLD
+#define CONFIG_HMI_WIFI_FAILOVER_THRESHOLD 3
 #endif
 
 typedef enum {
@@ -86,6 +97,7 @@ static void wifi_event_handler(void *arg,
         ESP_LOGW(TAG, "WiFi disconnected");
         s_net_status.wifi_connected = false;
         s_net_status.server_reachable = false;
+        s_net_status.network_state = NETWORK_STATE_ERROR;
         publish_system_status();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
@@ -93,6 +105,7 @@ static void wifi_event_handler(void *arg,
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         s_net_status.wifi_connected = true;
+        s_net_status.network_state = NETWORK_STATE_ACTIVE;
         publish_system_status();
     }
 }
@@ -143,8 +156,16 @@ static void wifi_init_sta(void)
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to ap SSID:%s", CONFIG_HMI_WIFI_SSID);
+        s_fail_sequences = 0;
+        s_failover_triggered = false;
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to SSID:%s", CONFIG_HMI_WIFI_SSID);
+        s_fail_sequences++;
+        if (CONFIG_HMI_WIFI_FAILOVER_ENABLED && !s_failover_triggered &&
+            s_fail_sequences >= CONFIG_HMI_WIFI_FAILOVER_THRESHOLD) {
+            s_failover_triggered = true;
+            publish_failover_event();
+        }
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -312,13 +333,36 @@ static void publish_system_status(void)
 
     if (!s_net_status.telemetry_expected) {
         s_net_status.has_error = false;
+        s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+        s_net_status.server_reachable = false;
+        s_net_status.wifi_connected = false;
     } else {
-        s_net_status.has_error = (!s_net_status.wifi_connected || !s_net_status.server_reachable);
+        bool network_ok = (s_net_status.network_state == NETWORK_STATE_ACTIVE);
+        s_net_status.has_error = (!network_ok || !s_net_status.server_reachable);
     }
 
     event_t evt = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_net_status,
+    };
+    event_bus_publish(s_bus, &evt);
+}
+
+static void publish_failover_event(void)
+{
+    if (!s_bus) {
+        return;
+    }
+
+    network_failover_event_t info = {
+        .fail_count = s_fail_sequences,
+        .fail_threshold = CONFIG_HMI_WIFI_FAILOVER_THRESHOLD,
+        .new_mode = HMI_MODE_TINYBMS_AUTONOMOUS,
+    };
+
+    event_t evt = {
+        .type = EVENT_NETWORK_FAILOVER_ACTIVATED,
+        .data = &info,
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -336,6 +380,16 @@ void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_exp
 {
     s_net_status.operation_mode   = mode;
     s_net_status.telemetry_expected = telemetry_expected;
+
+    if (!telemetry_expected) {
+        s_fail_sequences = 0;
+        s_failover_triggered = false;
+        s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+    } else {
+        s_net_status.network_state = s_net_status.wifi_connected
+                                          ? NETWORK_STATE_ACTIVE
+                                          : NETWORK_STATE_ERROR;
+    }
     publish_system_status();
 }
 

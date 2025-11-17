@@ -9,4 +9,21 @@ config HMI_DEFAULT_OPERATION_MODE
         0 : le firmware active la connectivité S3 (WiFi + WebSockets)
         1 : mode autonome uniquement TinyBMS (aucune télémétrie réseau attendue)
 
+config HMI_WIFI_FAILOVER_ENABLED
+    bool "Activer la bascule automatique en mode autonome si le WiFi échoue"
+    default y
+    help
+        Lorsque activé, un nombre configurable d'échecs WiFi déclenchera
+        automatiquement une bascule vers le mode autonome TinyBMS. La GUI est
+        notifiée via un événement dédié.
+
+config HMI_WIFI_FAILOVER_THRESHOLD
+    int "Nombre d'échecs WiFi avant bascule"
+    range 1 10
+    default 3
+    depends on HMI_WIFI_FAILOVER_ENABLED
+    help
+        Nombre de séquences de reconnexion WiFi échouées avant de publier un
+        événement de bascule automatique vers le mode autonome.
+
 endmenu
