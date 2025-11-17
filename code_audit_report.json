@@ -1,0 +1,88 @@
+{
+  "overall": {
+    "files": 96,
+    "total_lines": 17327,
+    "code_lines": 13034,
+    "complexity": 1847
+  },
+  "by_extension": {
+    ".projbuild": {
+      "files": 1,
+      "total_lines": 115,
+      "code_lines": 94,
+      "complexity": 1
+    },
+    ".py": {
+      "files": 1,
+      "total_lines": 134,
+      "code_lines": 109,
+      "complexity": 40
+    },
+    "<no_ext>": {
+      "files": 1,
+      "total_lines": 29,
+      "code_lines": 24,
+      "complexity": 1
+    },
+    ".c": {
+      "files": 41,
+      "total_lines": 14405,
+      "code_lines": 11487,
+      "complexity": 1753
+    },
+    ".h": {
+      "files": 42,
+      "total_lines": 2561,
+      "code_lines": 1237,
+      "complexity": 42
+    },
+    ".txt": {
+      "files": 10,
+      "total_lines": 83,
+      "code_lines": 83,
+      "complexity": 10
+    }
+  },
+  "top_complexity": [
+    [
+      "components/can_publisher/conversion_table.c",
+      222
+    ],
+    [
+      "components/remote_event_adapter/remote_event_adapter.c",
+      203
+    ],
+    [
+      "components/can_victron/can_victron.c",
+      152
+    ],
+    [
+      "main/stats_aggregator.c",
+      78
+    ],
+    [
+      "components/net_client/net_client.c",
+      73
+    ],
+    [
+      "components/can_publisher/cvl_logic.c",
+      59
+    ],
+    [
+      "components/tinybms_client/tinybms_client.c",
+      57
+    ],
+    [
+      "components/gui_lvgl/screen_tinybms_config.c",
+      55
+    ],
+    [
+      "components/history_model/history_model.c",
+      52
+    ],
+    [
+      "components/gui_lvgl/gui_init.c",
+      51
+    ]
+  ]
+}
