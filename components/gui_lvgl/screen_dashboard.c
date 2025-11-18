@@ -223,9 +223,14 @@ void screen_dashboard_update_system(const system_status_t *status)
         if (!status->telemetry_expected) {
             set_status_label(s_label_status_wifi, "Autonome", lv_palette_main(LV_PALETTE_BLUE));
         } else {
-            set_status_label(s_label_status_wifi,
-                             ui_i18n("dashboard.status.wifi"),
-                             status->wifi_connected ? color_ok() : color_error());
+            lv_color_t color = status->wifi_connected ? color_ok() : color_error();
+            if (status->network_state == NETWORK_STATE_CONNECTING) {
+                color = color_warn();
+            } else if (status->network_state == NETWORK_STATE_NOT_CONFIGURED) {
+                color = color_warn();
+            }
+
+            set_status_label(s_label_status_wifi, ui_i18n("dashboard.status.wifi"), color);
         }
     }
 

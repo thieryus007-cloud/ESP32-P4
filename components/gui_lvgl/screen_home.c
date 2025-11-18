@@ -236,6 +236,9 @@ void screen_home_update_system(const system_status_t *status)
             if (status->network_state == NETWORK_STATE_NOT_CONFIGURED) {
                 c = color_warn();
                 text = "WiFi N/A";
+            } else if (status->network_state == NETWORK_STATE_CONNECTING) {
+                c = color_warn();
+                text = "Connexion...";
             } else if (status->network_state != NETWORK_STATE_ACTIVE) {
                 c = color_error();
             } else if (!status->server_reachable || !status->storage_ok) {

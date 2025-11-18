@@ -95,6 +95,8 @@ static void wifi_event_handler(void *arg,
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
+        s_net_status.network_state = NETWORK_STATE_CONNECTING;
+        publish_system_status();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         if (s_retry_num < 5) {
             esp_wifi_connect();
@@ -106,7 +108,8 @@ static void wifi_event_handler(void *arg,
         ESP_LOGW(TAG, "WiFi disconnected");
         s_net_status.wifi_connected = false;
         s_net_status.server_reachable = false;
-        s_net_status.network_state = NETWORK_STATE_ERROR;
+        s_net_status.network_state = (s_retry_num < 5) ? NETWORK_STATE_CONNECTING
+                                                       : NETWORK_STATE_ERROR;
         publish_system_status();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
@@ -189,6 +192,8 @@ static void wifi_init_sta(void)
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to SSID:%s", CONFIG_HMI_WIFI_SSID);
         s_fail_sequences++;
+        s_net_status.network_state = NETWORK_STATE_ERROR;
+        publish_system_status();
         if (CONFIG_HMI_WIFI_FAILOVER_ENABLED && !s_failover_triggered &&
             s_fail_sequences >= CONFIG_HMI_WIFI_FAILOVER_THRESHOLD) {
             s_failover_triggered = true;
@@ -406,8 +411,9 @@ static void publish_system_status(void)
         s_net_status.server_reachable = false;
         s_net_status.wifi_connected = false;
     } else {
-        bool network_ok = (s_net_status.network_state == NETWORK_STATE_ACTIVE);
-        s_net_status.has_error = (!network_ok || !s_net_status.server_reachable);
+        bool network_ready = (s_net_status.network_state == NETWORK_STATE_ACTIVE);
+        bool network_failed = (s_net_status.network_state == NETWORK_STATE_ERROR);
+        s_net_status.has_error = (network_failed || (network_ready && !s_net_status.server_reachable));
     }
 
     event_t evt = {
@@ -515,9 +521,13 @@ void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_exp
         s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
         s_net_status.has_error = false;
     } else {
-        s_net_status.network_state = s_net_status.wifi_connected
-                                          ? NETWORK_STATE_ACTIVE
-                                          : NETWORK_STATE_ERROR;
+        if (s_net_status.wifi_connected) {
+            s_net_status.network_state = NETWORK_STATE_ACTIVE;
+        } else if (s_net_status.network_state == NETWORK_STATE_CONNECTING) {
+            s_net_status.network_state = NETWORK_STATE_CONNECTING;
+        } else {
+            s_net_status.network_state = NETWORK_STATE_ERROR;
+        }
     }
     publish_system_status();
 }

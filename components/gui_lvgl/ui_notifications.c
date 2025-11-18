@@ -33,6 +33,7 @@ static uint16_t     s_loading_requests    = 0;
 static char         s_last_request_label[80] = "";
 static lv_obj_t    *s_net_banner          = NULL;
 static lv_obj_t    *s_net_banner_label    = NULL;
+static lv_obj_t    *s_net_banner_spinner  = NULL;
 static system_status_t s_last_status      = {0};
 
 static void hide_toast(lv_timer_t *timer)
@@ -149,7 +150,12 @@ static void ensure_network_banner(void)
     lv_obj_set_style_border_width(s_net_banner, 0, 0);
     lv_obj_set_width(s_net_banner, LV_PCT(100));
     lv_obj_align(s_net_banner, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_flex_flow(s_net_banner, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s_net_banner, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
+    s_net_banner_spinner = lv_spinner_create(s_net_banner, 800, 60);
+    lv_obj_set_size(s_net_banner_spinner, 18, 18);
+    lv_obj_add_flag(s_net_banner_spinner, LV_OBJ_FLAG_HIDDEN);
     s_net_banner_label = lv_label_create(s_net_banner);
     lv_label_set_text(s_net_banner_label, "");
 }
@@ -163,8 +169,17 @@ static void update_network_banner(const system_status_t *status)
         return;
     }
 
-    bool offline  = (status->network_state != NETWORK_STATE_ACTIVE);
-    bool desync   = (status->network_state == NETWORK_STATE_ACTIVE) && !status->server_reachable;
+    bool connecting = (status->network_state == NETWORK_STATE_CONNECTING);
+    if (connecting) {
+        lv_obj_set_style_bg_color(s_net_banner, lv_palette_main(LV_PALETTE_BLUE), 0);
+        lv_label_set_text(s_net_banner_label, "Connexion en cours...");
+        lv_obj_clear_flag(s_net_banner_spinner, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+
+    bool offline = (status->network_state == NETWORK_STATE_ERROR);
+    bool desync  = (status->network_state == NETWORK_STATE_ACTIVE) && !status->server_reachable;
 
     if (!offline && !desync) {
         lv_obj_add_flag(s_net_banner, LV_OBJ_FLAG_HIDDEN);
@@ -174,6 +189,7 @@ static void update_network_banner(const system_status_t *status)
     lv_color_t color = offline ? lv_palette_main(LV_PALETTE_RED)
                                : lv_palette_main(LV_PALETTE_ORANGE);
     lv_obj_set_style_bg_color(s_net_banner, color, 0);
+    lv_obj_add_flag(s_net_banner_spinner, LV_OBJ_FLAG_HIDDEN);
 
     const char *msg = offline
                           ? "Wi-Fi indisponible - affichage cache"

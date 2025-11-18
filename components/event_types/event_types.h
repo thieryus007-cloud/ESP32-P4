@@ -16,6 +16,7 @@ typedef enum {
 
 typedef enum {
     NETWORK_STATE_NOT_CONFIGURED = 0,  // réseau non attendu ou non configuré
+    NETWORK_STATE_CONNECTING,          // tentative en cours
     NETWORK_STATE_ERROR,               // tentative en échec
     NETWORK_STATE_ACTIVE,              // WiFi et bridge accessibles
 } network_state_t;
