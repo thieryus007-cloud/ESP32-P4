@@ -43,11 +43,14 @@ static event_bus_t s_event_bus;
 static hmi_operation_mode_t s_operation_mode = HMI_MODE_CONNECTED_S3;
 static bool s_remote_initialized = false;
 static bool s_remote_started     = false;
+static system_status_t s_last_system_status;
+static bool            s_has_last_status = false;
 
 static void hmi_create_core_tasks(void);
 static void publish_operation_mode_state(bool telemetry_expected);
 static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void *user_ctx);
 static void handle_network_failover(event_bus_t *bus, const event_t *event, void *user_ctx);
+static void handle_system_status(event_bus_t *bus, const event_t *event, void *user_ctx);
 static void ensure_remote_modules_started(bool telemetry_expected);
 static void ensure_remote_modules_stopped(bool telemetry_expected);
 
@@ -57,6 +60,8 @@ void hmi_main_init(void)
 
     // 1) Init EventBus
     event_bus_init(&s_event_bus);
+
+    event_bus_subscribe(&s_event_bus, EVENT_SYSTEM_STATUS_UPDATED, handle_system_status, NULL);
 
     // Config persistante (seuils, destinations, etc.)
     config_manager_init();
@@ -180,10 +185,20 @@ static void publish_operation_mode_state(bool telemetry_expected)
         .server_reachable = false,
         .storage_ok = true,
         .has_error = false,
-        .network_state = telemetry_expected ? NETWORK_STATE_ERROR : NETWORK_STATE_NOT_CONFIGURED,
+        .network_state = telemetry_expected ? NETWORK_STATE_CONNECTING : NETWORK_STATE_NOT_CONFIGURED,
         .operation_mode = s_operation_mode,
         .telemetry_expected = telemetry_expected,
     };
+
+    if (telemetry_expected && s_has_last_status && s_last_system_status.telemetry_expected) {
+        status.wifi_connected   = s_last_system_status.wifi_connected;
+        status.server_reachable = s_last_system_status.server_reachable;
+        status.storage_ok       = s_last_system_status.storage_ok;
+        status.has_error        = s_last_system_status.has_error;
+        status.network_state    = s_last_system_status.network_state;
+    } else if (telemetry_expected && s_remote_started) {
+        status.network_state = NETWORK_STATE_CONNECTING;
+    }
 
     event_t evt_sys = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
@@ -191,6 +206,19 @@ static void publish_operation_mode_state(bool telemetry_expected)
         .data_size = sizeof(status),
     };
     event_bus_publish(&s_event_bus, &evt_sys);
+}
+
+static void handle_system_status(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    s_last_system_status = *(const system_status_t *) event->data;
+    s_has_last_status    = true;
 }
 
 static void ensure_remote_modules_started(bool telemetry_expected)
