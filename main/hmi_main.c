@@ -18,6 +18,7 @@
 #include "tinybms_model.h"
 #include "network_publisher.h"
 #include "status_endpoint.h"
+#include "mqtt_gateway.h"
 #include "config_manager.h"
 #include "gui_init.h"
 #include "history_model.h"
@@ -76,6 +77,7 @@ void hmi_main_init(void)
     stats_aggregator_init(&s_event_bus);       // agrégation locale des stats 24h/7j
     network_publisher_init(&s_event_bus);      // publication périodique MQTT/HTTP
     status_endpoint_init(&s_event_bus);        // exposition statut backend
+    mqtt_gateway_init(&s_event_bus);            // passerelle MQTT TinyBMS (local + MQTT)
 
     // 3b) Init TinyBMS (UART direct)
     tinybms_client_init(&s_event_bus);         // Client UART TinyBMS
@@ -115,6 +117,7 @@ void hmi_main_start(void)
 
     // 2b) Démarrer TinyBMS
     tinybms_client_start();         // Connexion UART TinyBMS
+    mqtt_gateway_start();
 
     gui_start();                    // si la GUI a besoin d'une task spécifique (en plus de LVGL)
 }
