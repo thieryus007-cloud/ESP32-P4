@@ -14,7 +14,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include <string.h>
+#include <sys/param.h>
 
 static const char *TAG = "tinybms_client";
 
@@ -26,6 +28,8 @@ static struct {
     tinybms_stats_t stats;
     bool initialized;
 } g_ctx = {0};
+
+static QueueHandle_t g_uart_evt_queue = NULL;
 
 static void publish_stats_event(void);
 
@@ -109,18 +113,26 @@ static esp_err_t init_uart(void)
         return ret;
     }
 
-    // Install UART driver with RX buffer
-    const int uart_buffer_size = 1024;
+    // Install UART driver with RX/TX buffers and event queue
+    const int rx_buffer_size = 2 * TINYBMS_MAX_FRAME_LEN;
+    const int tx_buffer_size = TINYBMS_MAX_FRAME_LEN;
     ret = uart_driver_install(TINYBMS_UART_NUM,
-                              uart_buffer_size,
-                              0, // No TX buffer (blocking mode)
-                              0, // No event queue
-                              NULL,
+                              rx_buffer_size,
+                              tx_buffer_size,
+                              8, // Event queue depth
+                              &g_uart_evt_queue,
                               0);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to install UART driver: %s", esp_err_to_name(ret));
         return ret;
     }
+
+    // Tune RX/TX policies to reduce blocking
+    uart_set_rx_timeout(TINYBMS_UART_NUM, 8);
+    uart_set_rx_full_threshold(TINYBMS_UART_NUM, TINYBMS_MAX_FRAME_LEN / 2);
+    uart_set_tx_fifo_full_threshold(TINYBMS_UART_NUM, UART_FIFO_LEN / 2);
+
+    uart_flush_input(TINYBMS_UART_NUM);
 
     ESP_LOGI(TAG, "UART initialized on GPIO%d(TXD)/GPIO%d(RXD)",
              TINYBMS_UART_TXD_PIN, TINYBMS_UART_RXD_PIN);
@@ -136,15 +148,13 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
     uint8_t tx_frame[TINYBMS_READ_FRAME_LEN];
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
+    const size_t min_frame_len = 5; // preamble + len + cmd + CRC
 
     // Build request frame
     esp_err_t ret = tinybms_build_read_frame(tx_frame, address);
     if (ret != ESP_OK) {
         return ret;
     }
-
-    // Flush UART buffers
-    uart_flush(TINYBMS_UART_NUM);
 
     // Send request
     int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, TINYBMS_READ_FRAME_LEN);
@@ -153,40 +163,75 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
         return ESP_FAIL;
     }
 
-    // Wait for TX complete
-    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(100));
+    // Wait for TX complete (non-blocking thanks to TX buffer)
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
 
     // Read response with timeout
     TickType_t start_time = xTaskGetTickCount();
     TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
 
-    while ((xTaskGetTickCount() - start_time) < timeout_ticks) {
-        int len = uart_read_bytes(TINYBMS_UART_NUM,
-                                  &rx_buffer[rx_len],
-                                  sizeof(rx_buffer) - rx_len,
-                                  pdMS_TO_TICKS(50));
+    TickType_t deadline = start_time + timeout_ticks;
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
 
-        if (len > 0) {
-            rx_len += len;
-
-            // Try to extract frame
-            const uint8_t *frame_start;
-            size_t frame_len;
-            ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
-
-            if (ret == ESP_OK) {
-                // Valid frame received, parse it
-                ret = tinybms_parse_read_response(frame_start, frame_len, value);
-                if (ret == ESP_OK) {
-                    ESP_LOGD(TAG, "Read 0x%04X from register 0x%04X", *value, address);
-                    g_ctx.stats.reads_ok++;
-                    return ESP_OK;
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM,
+                                              &rx_buffer[rx_len],
+                                              to_read,
+                                              0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
                 }
-            } else if (ret == ESP_ERR_INVALID_CRC) {
-                g_ctx.stats.crc_errors++;
-                ESP_LOGW(TAG, "CRC error on read response");
-                return ESP_ERR_INVALID_CRC;
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
             }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        // Try to extract frame only when enough data is available
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            ret = tinybms_parse_read_response(frame_start, frame_len, value);
+            if (ret == ESP_OK) {
+                ESP_LOGD(TAG, "Read 0x%04X from register 0x%04X", *value, address);
+                g_ctx.stats.reads_ok++;
+                return ESP_OK;
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            g_ctx.stats.crc_errors++;
+            ESP_LOGW(TAG, "CRC error on read response");
+            uart_flush_input(TINYBMS_UART_NUM);
+            rx_len = 0;
+            return ESP_ERR_INVALID_CRC;
         }
     }
 
@@ -204,15 +249,13 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
     uint8_t tx_frame[TINYBMS_WRITE_FRAME_LEN];
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
+    const size_t min_frame_len = 5; // preamble + len + cmd + CRC
 
     // Build write frame
     esp_err_t ret = tinybms_build_write_frame(tx_frame, address, value);
     if (ret != ESP_OK) {
         return ret;
     }
-
-    // Flush UART buffers
-    uart_flush(TINYBMS_UART_NUM);
 
     // Send write command
     int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, TINYBMS_WRITE_FRAME_LEN);
@@ -221,49 +264,82 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
         return ESP_FAIL;
     }
 
-    // Wait for TX complete
-    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(100));
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
 
     // Wait for ACK/NACK
     TickType_t start_time = xTaskGetTickCount();
     TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
 
-    while ((xTaskGetTickCount() - start_time) < timeout_ticks) {
-        int len = uart_read_bytes(TINYBMS_UART_NUM,
-                                  &rx_buffer[rx_len],
-                                  sizeof(rx_buffer) - rx_len,
-                                  pdMS_TO_TICKS(50));
+    TickType_t deadline = start_time + timeout_ticks;
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
 
-        if (len > 0) {
-            rx_len += len;
-
-            // Try to extract frame
-            const uint8_t *frame_start;
-            size_t frame_len;
-            ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
-
-            if (ret == ESP_OK) {
-                // Valid frame received, check ACK/NACK
-                bool is_ack;
-                uint8_t error_code;
-                ret = tinybms_parse_ack(frame_start, frame_len, &is_ack, &error_code);
-
-                if (ret == ESP_OK) {
-                    if (is_ack) {
-                        ESP_LOGD(TAG, "Write ACK for register 0x%04X = 0x%04X", address, value);
-                        g_ctx.stats.writes_ok++;
-                        return ESP_OK;
-                    } else {
-                        ESP_LOGW(TAG, "Write NACK for register 0x%04X (error: 0x%02X)",
-                                 address, error_code);
-                        g_ctx.stats.nacks++;
-                        return ESP_FAIL;
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM,
+                                              &rx_buffer[rx_len],
+                                              to_read,
+                                              0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
                     }
                 }
-            } else if (ret == ESP_ERR_INVALID_CRC) {
-                g_ctx.stats.crc_errors++;
-                return ESP_ERR_INVALID_CRC;
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected during write, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
             }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            bool is_ack;
+            uint8_t error_code;
+            ret = tinybms_parse_ack(frame_start, frame_len, &is_ack, &error_code);
+
+            if (ret == ESP_OK) {
+                if (is_ack) {
+                    ESP_LOGD(TAG, "Write ACK for register 0x%04X = 0x%04X", address, value);
+                    g_ctx.stats.writes_ok++;
+                    return ESP_OK;
+                } else {
+                    ESP_LOGW(TAG, "Write NACK for register 0x%04X (error: 0x%02X)",
+                             address, error_code);
+                    g_ctx.stats.nacks++;
+                    return ESP_FAIL;
+                }
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            g_ctx.stats.crc_errors++;
+            uart_flush_input(TINYBMS_UART_NUM);
+            rx_len = 0;
+            return ESP_ERR_INVALID_CRC;
         }
     }
 
