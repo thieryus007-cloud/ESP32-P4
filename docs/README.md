@@ -6,6 +6,7 @@ Ce répertoire centralise la documentation des modules composant le firmware HMI
 
 - `modules/` : fiches individuelles par module.
 - Ajouter de nouvelles fiches pour tout composant créé ou modifié afin de conserver une vue à jour du flux.
+- `persistence.md` : résumé des données stockées en NVS (modes, configuration, caches et langue UI).
 
 ## Flux global (résumé)
 
