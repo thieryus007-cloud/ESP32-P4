@@ -248,6 +248,14 @@ diag_logger_status_t diagnostic_logger_get_status(void)
         .dropped = s_ring.dropped,
         .healthy = s_ring.healthy,
     };
+
+    event_bus_queue_metrics_t metrics = {0};
+    if (event_bus_get_queue_metrics(s_bus, &metrics)) {
+        status.event_queue_capacity = metrics.queue_capacity;
+        status.event_queue_depth    = metrics.messages_waiting;
+        status.event_queue_drops    = metrics.dropped_events;
+        status.event_queue_ready    = true;
+    }
     return status;
 }
 

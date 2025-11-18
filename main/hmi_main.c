@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 
 #include "event_bus.h"
 #include "event_types.h"
@@ -26,6 +27,16 @@
 #include "stats_aggregator.h"
 
 static const char *TAG = "HMI_MAIN";
+
+#ifndef EVENT_BUS_TASK_STACK_SIZE
+#define EVENT_BUS_TASK_STACK_SIZE 5120
+#endif
+
+#ifdef CONFIG_LVGL_TASK_PRIORITY
+#define EVENT_BUS_TASK_PRIORITY (CONFIG_LVGL_TASK_PRIORITY + 1)
+#else
+#define EVENT_BUS_TASK_PRIORITY 6
+#endif
 
 // EventBus global pour ce firmware HMI
 static event_bus_t s_event_bus;
@@ -124,8 +135,28 @@ void hmi_main_start(void)
 
 static void hmi_create_core_tasks(void)
 {
-    // Si tu veux une task de dispatch EventBus dédiée, tu peux la créer ici
-    // ex: xTaskCreate(event_bus_dispatch_task, "event_dispatch", 4096, &s_event_bus, 5, NULL);
+    BaseType_t rc;
+
+#ifdef CONFIG_FREERTOS_UNICORE
+    rc = xTaskCreate(event_bus_dispatch_task,
+                     "event_dispatch",
+                     EVENT_BUS_TASK_STACK_SIZE,
+                     &s_event_bus,
+                     EVENT_BUS_TASK_PRIORITY,
+                     NULL);
+#else
+    rc = xTaskCreatePinnedToCore(event_bus_dispatch_task,
+                                 "event_dispatch",
+                                 EVENT_BUS_TASK_STACK_SIZE,
+                                 &s_event_bus,
+                                 EVENT_BUS_TASK_PRIORITY,
+                                 NULL,
+                                 tskNO_AFFINITY);
+#endif
+
+    if (rc != pdPASS) {
+        ESP_LOGE(TAG, "Failed to start event dispatch task (rc=%ld)", (long) rc);
+    }
 }
 
 static void publish_operation_mode_state(bool telemetry_expected)
@@ -138,6 +169,7 @@ static void publish_operation_mode_state(bool telemetry_expected)
     event_t evt_mode = {
         .type = EVENT_OPERATION_MODE_CHANGED,
         .data = &mode_evt,
+        .data_size = sizeof(mode_evt),
     };
     event_bus_publish(&s_event_bus, &evt_mode);
 
@@ -154,6 +186,7 @@ static void publish_operation_mode_state(bool telemetry_expected)
     event_t evt_sys = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &status,
+        .data_size = sizeof(status),
     };
     event_bus_publish(&s_event_bus, &evt_sys);
 }

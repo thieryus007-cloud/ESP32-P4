@@ -2,8 +2,9 @@
 #ifndef EVENT_BUS_H
 #define EVENT_BUS_H
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 
 #include "event_types.h"
 
@@ -20,7 +21,8 @@ extern "C" {
  */
 typedef struct {
     event_type_t type;
-    void        *data;   // pointeur vers struct spécifique (lifetime gérée par l'émetteur ou le bus)
+    void        *data;       // pointeur vers struct spécifique (lifetime gérée par l'émetteur ou le bus)
+    size_t       data_size;  // taille du payload si le bus doit en faire une copie
 } event_t;
 
 struct event_bus;
@@ -39,6 +41,12 @@ typedef struct {
     uint32_t subscribers;     // slots occupés
     uint32_t published_total; // nombre d'événements dispatchés
 } event_bus_metrics_t;
+
+typedef struct {
+    uint32_t queue_capacity;     // taille de la queue principale
+    uint32_t messages_waiting;   // nb d'events en attente dans la queue
+    uint32_t dropped_events;     // nb d'events perdus faute de place
+} event_bus_queue_metrics_t;
 
 /**
  * @brief Initialiser l'EventBus
@@ -67,6 +75,10 @@ bool event_bus_subscribe(event_bus_t *bus,
 bool event_bus_publish(event_bus_t *bus, const event_t *event);
 
 event_bus_metrics_t event_bus_get_metrics(const event_bus_t *bus);
+
+bool event_bus_get_queue_metrics(const event_bus_t *bus, event_bus_queue_metrics_t *out);
+
+void event_bus_dispatch_task(void *ctx);
 
 #ifdef __cplusplus
 }

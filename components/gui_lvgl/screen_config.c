@@ -264,6 +264,7 @@ static void on_reload_event(lv_event_t *e)
     event_t evt = {
         .type = EVENT_USER_INPUT_RELOAD_CONFIG,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
     screen_config_set_loading(true, ui_i18n("config.status.loading"));
@@ -280,6 +281,7 @@ static void on_reconnect_event(lv_event_t *e)
     event_t evt = {
         .type = EVENT_USER_INPUT_CHANGE_MODE,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
     set_status(ui_i18n("config.status.reconnect"), lv_palette_main(LV_PALETTE_BLUE));
@@ -302,6 +304,7 @@ static void on_save_event(lv_event_t *e)
     event_t evt = {
         .type = EVENT_USER_INPUT_WRITE_CONFIG,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
     screen_config_set_loading(true, ui_i18n("config.status.saving"));

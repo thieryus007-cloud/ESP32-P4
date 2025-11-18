@@ -194,6 +194,7 @@ static void publish_alert_list(event_type_t type, const alert_list_t *list)
     event_t evt = {
         .type = type,
         .data = &filtered,
+        .data_size = sizeof(filtered),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -207,6 +208,7 @@ static void publish_alert_filters(void)
     event_t evt = {
         .type = EVENT_ALERT_FILTERS_UPDATED,
         .data = &s_alert_filters,
+        .data_size = sizeof(s_alert_filters),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -260,6 +262,7 @@ static void publish_config_update(void)
     event_t evt = {
         .type = EVENT_CONFIG_UPDATED,
         .data = &s_config,
+        .data_size = sizeof(s_config),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -377,12 +380,14 @@ static void publish_cached_state(void)
         event_t evt_batt = {
             .type = EVENT_BATTERY_STATUS_UPDATED,
             .data = &s_batt_status,
+            .data_size = sizeof(s_batt_status),
         };
         event_bus_publish(s_bus, &evt_batt);
 
         event_t evt_pack = {
             .type = EVENT_PACK_STATS_UPDATED,
             .data = &s_pack_stats,
+            .data_size = sizeof(s_pack_stats),
         };
         event_bus_publish(s_bus, &evt_pack);
     }
@@ -539,6 +544,7 @@ void remote_event_adapter_set_operation_mode(hmi_operation_mode_t mode, bool tel
     event_t evt = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_sys_status,
+        .data_size = sizeof(s_sys_status),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -690,12 +696,14 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
     event_t evt_batt = {
         .type = EVENT_BATTERY_STATUS_UPDATED,
         .data = &s_batt_status,
+        .data_size = sizeof(s_batt_status),
     };
     event_bus_publish(s_bus, &evt_batt);
 
     event_t evt_pack = {
         .type = EVENT_PACK_STATS_UPDATED,
         .data = &s_pack_stats,
+        .data_size = sizeof(s_pack_stats),
     };
     event_bus_publish(s_bus, &evt_pack);
 }
@@ -820,6 +828,7 @@ void remote_event_adapter_on_event_json(const char *json, size_t length)
     event_t evt_sys = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_sys_status,
+        .data_size = sizeof(s_sys_status),
     };
     event_bus_publish(s_bus, &evt_sys);
 }
@@ -883,6 +892,7 @@ void remote_event_adapter_on_http_response(const char *path,
     event_t evt_result = {
         .type = EVENT_REMOTE_CMD_RESULT,
         .data = &result,
+        .data_size = sizeof(result),
     };
     event_bus_publish(s_bus, &evt_result);
 
@@ -967,6 +977,7 @@ void remote_event_adapter_on_mqtt_status_json(const char *json, size_t length)
     event_t evt_batt = {
         .type = EVENT_BATTERY_STATUS_UPDATED,
         .data = &s_batt_status,
+        .data_size = sizeof(s_batt_status),
     };
     event_bus_publish(s_bus, &evt_batt);
 }

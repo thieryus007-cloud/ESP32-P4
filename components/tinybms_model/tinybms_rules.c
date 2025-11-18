@@ -70,6 +70,7 @@ static void publish_counters(void)
     event_t evt = {
         .type = EVENT_TINYBMS_ALERT_COUNTERS,
         .data = &counters,
+        .data_size = sizeof(counters),
     };
     event_bus_publish(s_ctx.bus, &evt);
 }
@@ -88,6 +89,7 @@ static void publish_alert(const alert_entry_t *alert, bool active)
     event_t evt = {
         .type = active ? EVENT_TINYBMS_ALERT_TRIGGERED : EVENT_TINYBMS_ALERT_RECOVERED,
         .data = &payload,
+        .data_size = sizeof(payload),
     };
     event_bus_publish(s_ctx.bus, &evt);
 }
