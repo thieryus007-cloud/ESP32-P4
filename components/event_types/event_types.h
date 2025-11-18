@@ -55,6 +55,7 @@ typedef enum {
     EVENT_NETWORK_FAILOVER_ACTIVATED,   // network_failover_event_t
     EVENT_OPERATION_MODE_CHANGED,       // operation_mode_event_t
     EVENT_CONFIG_UPDATED,               // si on gère la config locale
+    EVENT_MQTT_STATUS_UPDATED,          // mqtt_status_event_t
 
     // --- Événements émis par la GUI (user actions) ---
     EVENT_USER_INPUT_SET_TARGET_SOC,    // user_input_set_target_soc_t
@@ -228,6 +229,12 @@ typedef struct {
     int  uart_baudrate;
     char uart_parity[2];
 } hmi_config_t;
+
+typedef struct {
+    bool enabled;
+    bool connected;
+    char reason[64];
+} mqtt_status_event_t;
 
 typedef struct {
     hmi_config_t config;

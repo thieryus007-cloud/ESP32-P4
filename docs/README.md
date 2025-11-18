@@ -15,4 +15,4 @@ Ce répertoire centralise la documentation des modules composant le firmware HMI
 4. Les modèles (`telemetry_model`, `system_events_model`, `tinybms_model`, etc.) dérivent des structures métiers et republient des mises à jour consommées par la GUI LVGL.
 5. Les modules de diffusion (`network_publisher`, `can_publisher`) exportent la télémétrie vers l'extérieur.
 
-Consultez les fiches de `modules/` pour les détails spécifiques.
+Consultez les fiches de `modules/` pour les détails spécifiques, notamment `mqtt_gateway.md` pour la passerelle MQTT TinyBMS.
