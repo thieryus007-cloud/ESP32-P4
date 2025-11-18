@@ -45,6 +45,7 @@ static void publish_mqtt_status(bool connected, const char *reason)
     event_t evt = {
         .type = EVENT_MQTT_STATUS_UPDATED,
         .data = &status,
+        .data_size = sizeof(status),
     };
     event_bus_publish(s_state.bus, &evt);
 }
@@ -222,6 +223,7 @@ static void publish_config_snapshot(void)
     event_t evt = {
         .type = EVENT_CONFIG_UPDATED,
         .data = &cfg,
+        .data_size = sizeof(cfg),
     };
     event_bus_publish(s_state.bus, &evt);
 }

@@ -105,6 +105,7 @@ static void publish_snapshot(history_range_t range,
     event_t evt = {
         .type = EVENT_HISTORY_UPDATED,
         .data = &snapshot,
+        .data_size = sizeof(snapshot),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -287,6 +288,7 @@ publish:
     event_t evt = {
         .type = EVENT_HISTORY_EXPORTED,
         .data = &result,
+        .data_size = sizeof(result),
     };
     event_bus_publish(s_bus, &evt);
 }

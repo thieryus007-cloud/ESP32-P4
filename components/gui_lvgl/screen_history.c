@@ -37,6 +37,7 @@ static void publish_request(history_range_t range)
     event_t evt = {
         .type = EVENT_USER_INPUT_REQUEST_HISTORY,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -50,6 +51,7 @@ static void publish_export(history_range_t range)
     event_t evt = {
         .type = EVENT_USER_INPUT_EXPORT_HISTORY,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
 }

@@ -40,12 +40,14 @@ static void publish_updates(void)
     event_t evt_batt = {
         .type = EVENT_BATTERY_STATUS_UPDATED,
         .data = &s_state.batt,
+        .data_size = sizeof(s_state.batt),
     };
     event_bus_publish(s_state.bus, &evt_batt);
 
     event_t evt_pack = {
         .type = EVENT_PACK_STATS_UPDATED,
         .data = &s_state.pack,
+        .data_size = sizeof(s_state.pack),
     };
     event_bus_publish(s_state.bus, &evt_pack);
 

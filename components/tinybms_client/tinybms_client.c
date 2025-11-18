@@ -53,6 +53,7 @@ static void publish_uart_log(const char *action, uint16_t address, esp_err_t res
     event_t evt = {
         .type = EVENT_TINYBMS_UART_LOG,
         .data = &entry,
+        .data_size = sizeof(entry),
     };
     event_bus_publish(g_ctx.bus, &evt);
 }
@@ -71,6 +72,7 @@ static void publish_stats_event(void)
     event_t evt = {
         .type = EVENT_TINYBMS_STATS_UPDATED,
         .data = &stats_evt,
+        .data_size = sizeof(stats_evt),
     };
     event_bus_publish(g_ctx.bus, &evt);
 }

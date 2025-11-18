@@ -86,6 +86,7 @@ static void update_cache_and_publish(uint16_t address, uint16_t raw_value)
         event_t evt = {
             .type = EVENT_TINYBMS_REGISTER_UPDATED,
             .data = &update,
+            .data_size = sizeof(update),
         };
 
         event_bus_publish(g_model.bus, &evt);

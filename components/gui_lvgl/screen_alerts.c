@@ -59,6 +59,7 @@ static void publish_filters(void)
     event_t evt = {
         .type = EVENT_USER_INPUT_UPDATE_ALERT_FILTERS,
         .data = &filters,
+        .data_size = sizeof(filters),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -75,6 +76,7 @@ static void publish_ack(int alert_id)
     event_t evt = {
         .type = EVENT_USER_INPUT_ACK_ALERT,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
 }

@@ -362,6 +362,7 @@ static void publish_request_started(const char *path, const char *method)
     event_t evt = {
         .type = EVENT_NETWORK_REQUEST_STARTED,
         .data = &req,
+        .data_size = sizeof(req),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -385,6 +386,7 @@ static void publish_request_finished(const char *path,
     event_t evt = {
         .type = EVENT_NETWORK_REQUEST_FINISHED,
         .data = &info,
+        .data_size = sizeof(info),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -408,6 +410,7 @@ static void publish_system_status(void)
     event_t evt = {
         .type = EVENT_SYSTEM_STATUS_UPDATED,
         .data = &s_net_status,
+        .data_size = sizeof(s_net_status),
     };
     event_bus_publish(s_bus, &evt);
 }
@@ -427,6 +430,7 @@ static void publish_failover_event(void)
     event_t evt = {
         .type = EVENT_NETWORK_FAILOVER_ACTIVATED,
         .data = &info,
+        .data_size = sizeof(info),
     };
     event_bus_publish(s_bus, &evt);
 }

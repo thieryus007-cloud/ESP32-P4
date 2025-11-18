@@ -19,6 +19,10 @@ typedef enum {
 typedef struct {
     uint32_t dropped;
     bool     healthy;
+    uint32_t event_queue_capacity;
+    uint32_t event_queue_depth;
+    uint32_t event_queue_drops;
+    bool     event_queue_ready;
 } diag_logger_status_t;
 
 typedef struct {
