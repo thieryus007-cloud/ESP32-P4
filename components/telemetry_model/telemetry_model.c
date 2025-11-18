@@ -225,6 +225,23 @@ static void on_operation_mode(event_bus_t *bus, const event_t *event, void *user
     ESP_LOGI(TAG, "Operation mode changed: telemetry_expected=%d", s_state.telemetry_expected);
 }
 
+static void on_mqtt_status(event_bus_t *bus, const event_t *event, void *user_ctx)
+{
+    (void) bus;
+    (void) user_ctx;
+
+    if (!event || !event->data) {
+        return;
+    }
+
+    const mqtt_status_event_t *status = (const mqtt_status_event_t *) event->data;
+    bool mqtt_ok = status->enabled && status->connected;
+    if (s_state.batt.mqtt_ok != mqtt_ok) {
+        s_state.batt.mqtt_ok = mqtt_ok;
+        publish_updates();
+    }
+}
+
 esp_err_t telemetry_model_init(event_bus_t *bus)
 {
     if (s_state.initialized) {
@@ -244,6 +261,7 @@ esp_err_t telemetry_model_init(event_bus_t *bus)
     event_bus_subscribe(bus, EVENT_TINYBMS_CONNECTED, on_tinybms_connected, NULL);
     event_bus_subscribe(bus, EVENT_TINYBMS_DISCONNECTED, on_tinybms_disconnected, NULL);
     event_bus_subscribe(bus, EVENT_OPERATION_MODE_CHANGED, on_operation_mode, NULL);
+    event_bus_subscribe(bus, EVENT_MQTT_STATUS_UPDATED, on_mqtt_status, NULL);
 
     s_state.initialized = true;
     ESP_LOGI(TAG, "telemetry_model initialized");

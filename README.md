@@ -100,6 +100,7 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
 - **HTTP REST API** : Envoi de commandes et configuration
 - **Mode Connecté/Autonome** : un paramètre `menuconfig` (persisté en NVS) ou un toggle GUI (événement `EVENT_USER_INPUT_CHANGE_MODE`) permet de basculer entre « Connecté S3 » et « Autonome TinyBMS » pour activer ou non la télémétrie réseau.
 - **Publisher périodique MQTT/HTTP** : un module `network_publisher` expédie un sous-ensemble des mesures TinyBMS (voltage, courant, puissance, SOC, SOH, température, min/max/delta cellules) avec un tampon « offline » rejoué à la reconnexion.
+- **Passerelle MQTT TinyBMS** : `mqtt_gateway` publie les registres TinyBMS lus sur l’UART et accepte des commandes JSON (lecture/écriture) sur le topic de souscription configuré, en réutilisant l’interface de configuration existante côté HMI.
 
   **Schéma des topics/payloads**
 
