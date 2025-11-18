@@ -523,6 +523,29 @@ void remote_event_adapter_start(void)
     ESP_LOGI(TAG, "remote_event_adapter start (no separate task)");
 }
 
+void remote_event_adapter_stop(void)
+{
+    ESP_LOGI(TAG, "remote_event_adapter stop");
+
+    s_has_pending_config = false;
+
+    s_sys_status.wifi_connected = false;
+    s_sys_status.server_reachable = false;
+    s_sys_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+    s_sys_status.operation_mode = HMI_MODE_TINYBMS_AUTONOMOUS;
+    s_sys_status.telemetry_expected = false;
+    s_sys_status.has_error = false;
+
+    if (s_bus) {
+        event_t evt = {
+            .type = EVENT_SYSTEM_STATUS_UPDATED,
+            .data = &s_sys_status,
+            .data_size = sizeof(s_sys_status),
+        };
+        event_bus_publish(s_bus, &evt);
+    }
+}
+
 void remote_event_adapter_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected)
 {
     s_sys_status.operation_mode    = mode;

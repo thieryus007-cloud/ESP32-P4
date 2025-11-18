@@ -32,6 +32,9 @@ static bool s_failover_triggered = false;
 static esp_event_handler_instance_t s_wifi_any_id;
 static esp_event_handler_instance_t s_ip_got_ip;
 
+static void websocket_stop(void);
+static void wifi_stop(void);
+
 // EventBus global pointer pour ce module
 static event_bus_t *s_bus = NULL;
 
@@ -507,13 +510,10 @@ void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_exp
     s_net_status.telemetry_expected = telemetry_expected;
 
     if (!telemetry_expected) {
-        s_fail_sequences = 0;
-        s_failover_triggered = false;
-        websocket_stop();
-        wifi_stop();
         s_net_status.wifi_connected = false;
         s_net_status.server_reachable = false;
         s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+        s_net_status.has_error = false;
     } else {
         s_net_status.network_state = s_net_status.wifi_connected
                                           ? NETWORK_STATE_ACTIVE
@@ -527,6 +527,25 @@ void net_client_start(void)
     ESP_LOGI(TAG, "Starting net_client: WiFi + WebSockets");
     wifi_init_sta();
     websocket_start();
+}
+
+void net_client_stop(void)
+{
+    ESP_LOGI(TAG, "Stopping net_client");
+
+    websocket_stop();
+    wifi_stop();
+
+    s_fail_sequences = 0;
+    s_failover_triggered = false;
+
+    s_net_status.wifi_connected = false;
+    s_net_status.server_reachable = false;
+    s_net_status.network_state = NETWORK_STATE_NOT_CONFIGURED;
+    s_net_status.has_error = false;
+    s_net_status.telemetry_expected = false;
+
+    publish_system_status();
 }
 
 bool net_client_send_command_ws(const char *data, size_t len)

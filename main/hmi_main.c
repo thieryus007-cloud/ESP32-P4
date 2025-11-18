@@ -49,6 +49,7 @@ static void publish_operation_mode_state(bool telemetry_expected);
 static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void *user_ctx);
 static void handle_network_failover(event_bus_t *bus, const event_t *event, void *user_ctx);
 static void ensure_remote_modules_started(bool telemetry_expected);
+static void ensure_remote_modules_stopped(bool telemetry_expected);
 
 void hmi_main_init(void)
 {
@@ -114,6 +115,7 @@ void hmi_main_start(void)
 
     if (telemetry_expected && s_remote_initialized) {
         ensure_remote_modules_started(telemetry_expected);
+        publish_operation_mode_state(telemetry_expected);
     } else {
         publish_operation_mode_state(telemetry_expected);
     }
@@ -194,7 +196,6 @@ static void publish_operation_mode_state(bool telemetry_expected)
 static void ensure_remote_modules_started(bool telemetry_expected)
 {
     if (!telemetry_expected) {
-        publish_operation_mode_state(telemetry_expected);
         return;
     }
 
@@ -212,6 +213,23 @@ static void ensure_remote_modules_started(bool telemetry_expected)
         remote_event_adapter_start();
         s_remote_started = true;
     }
+}
+
+static void ensure_remote_modules_stopped(bool telemetry_expected)
+{
+    if (!s_remote_initialized) {
+        publish_operation_mode_state(telemetry_expected);
+        return;
+    }
+
+    if (s_remote_started) {
+        net_client_stop();
+        remote_event_adapter_stop();
+        s_remote_started = false;
+    }
+
+    net_client_set_operation_mode(s_operation_mode, telemetry_expected);
+    remote_event_adapter_set_operation_mode(s_operation_mode, telemetry_expected);
 
     publish_operation_mode_state(telemetry_expected);
 }
@@ -238,12 +256,9 @@ static void handle_user_change_mode(event_bus_t *bus, const event_t *event, void
 
     if (telemetry_expected) {
         ensure_remote_modules_started(telemetry_expected);
-    } else {
-        if (s_remote_initialized) {
-            net_client_set_operation_mode(s_operation_mode, telemetry_expected);
-            remote_event_adapter_set_operation_mode(s_operation_mode, telemetry_expected);
-        }
         publish_operation_mode_state(telemetry_expected);
+    } else {
+        ensure_remote_modules_stopped(telemetry_expected);
     }
 }
 
@@ -275,9 +290,10 @@ static void handle_network_failover(event_bus_t *bus, const event_t *event, void
     s_operation_mode = failover->new_mode;
     bool telemetry_expected = (s_operation_mode == HMI_MODE_CONNECTED_S3);
 
-    if (s_remote_initialized) {
-        net_client_set_operation_mode(s_operation_mode, telemetry_expected);
-        remote_event_adapter_set_operation_mode(s_operation_mode, telemetry_expected);
+    if (telemetry_expected) {
+        ensure_remote_modules_started(telemetry_expected);
+        publish_operation_mode_state(telemetry_expected);
+    } else {
+        ensure_remote_modules_stopped(telemetry_expected);
     }
-    publish_operation_mode_state(telemetry_expected);
 }

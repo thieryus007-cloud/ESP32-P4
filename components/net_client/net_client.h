@@ -42,6 +42,11 @@ void net_client_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_exp
 void net_client_start(void);
 
 /**
+ * @brief Arrêter le client réseau (WS + WiFi) et libérer les ressources.
+ */
+void net_client_stop(void);
+
+/**
  * @brief Envoyer un message texte sur le WebSocket "commandes"
  *
  * @param data   buffer JSON

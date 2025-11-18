@@ -21,6 +21,11 @@ void remote_event_adapter_init(event_bus_t *bus);
 void remote_event_adapter_start(void);
 
 /**
+ * @brief Arrête l'adapter et remet l'état système en mode sans télémétrie.
+ */
+void remote_event_adapter_stop(void);
+
+/**
  * @brief Met à jour le mode de fonctionnement (connecté/autonome).
  */
 void remote_event_adapter_set_operation_mode(hmi_operation_mode_t mode, bool telemetry_expected);
