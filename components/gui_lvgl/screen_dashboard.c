@@ -263,3 +263,8 @@ void screen_dashboard_refresh_texts(void)
         screen_dashboard_update_system(&s_last_sys);
     }
 }
+
+void screen_dashboard_update_cells(const pack_stats_t *stats)
+{
+    (void) stats;
+}

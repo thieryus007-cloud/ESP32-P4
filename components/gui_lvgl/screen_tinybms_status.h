@@ -45,6 +45,19 @@ void screen_tinybms_status_append_log(const tinybms_uart_log_entry_t *entry);
 
 #ifdef __cplusplus
 }
+
+namespace gui {
+
+class ScreenTinybmsStatus {
+public:
+    explicit ScreenTinybmsStatus(lv_obj_t *parent) { screen_tinybms_status_create(parent); }
+
+    void update_connection(bool connected) { screen_tinybms_status_update_connection(connected); }
+    void update_stats(const tinybms_stats_t &stats) { screen_tinybms_status_update_stats(&stats); }
+    void append_log(const tinybms_uart_log_entry_t &entry) { screen_tinybms_status_append_log(&entry); }
+};
+
+}  // namespace gui
 #endif
 
 #endif // SCREEN_TINYBMS_STATUS_H
