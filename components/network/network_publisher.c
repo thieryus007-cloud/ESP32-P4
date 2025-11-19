@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/portmacro.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -54,6 +55,17 @@ typedef struct {
 static publisher_state_t s_state = {
     .enable_offline_buffer = CONFIG_NETWORK_TELEMETRY_OFFLINE_BUFFER,
 };
+static portMUX_TYPE s_state_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static inline void state_lock(void)
+{
+    portENTER_CRITICAL(&s_state_lock);
+}
+
+static inline void state_unlock(void)
+{
+    portEXIT_CRITICAL(&s_state_lock);
+}
 
 static uint64_t get_time_ms(void)
 {
@@ -67,10 +79,11 @@ static bool is_publisher_enabled(void)
 
 static void buffer_push(const telemetry_point_t *pt)
 {
-    if (!s_state.enable_offline_buffer || !pt) {
+    if (!pt || !s_state.enable_offline_buffer) {
         return;
     }
 
+    state_lock();
     if (s_state.count == TELEMETRY_BUFFER_DEPTH) {
         s_state.tail = (s_state.tail + 1) % TELEMETRY_BUFFER_DEPTH;
         s_state.count--;
@@ -79,42 +92,56 @@ static void buffer_push(const telemetry_point_t *pt)
     s_state.buffer[s_state.head] = *pt;
     s_state.head = (s_state.head + 1) % TELEMETRY_BUFFER_DEPTH;
     s_state.count++;
+    state_unlock();
 }
 
 static bool buffer_pop(telemetry_point_t *out)
 {
-    if (!out || s_state.count == 0) {
+    if (!out) {
+        return false;
+    }
+
+    state_lock();
+    if (s_state.count == 0) {
+        state_unlock();
         return false;
     }
 
     *out = s_state.buffer[s_state.tail];
     s_state.tail = (s_state.tail + 1) % TELEMETRY_BUFFER_DEPTH;
     s_state.count--;
+    state_unlock();
     return true;
 }
 
 static bool build_point(telemetry_point_t *out)
 {
-    if (!out || !s_state.has_batt) {
+    if (!out) {
         return false;
     }
 
     memset(out, 0, sizeof(*out));
-    out->timestamp_ms  = get_time_ms();
-    out->voltage_v     = s_state.last_batt.voltage;
-    out->current_a     = s_state.last_batt.current;
-    out->power_w       = s_state.last_batt.power;
-    out->soc_pct       = s_state.last_batt.soc;
-    out->soh_pct       = s_state.last_batt.soh;
-    out->temperature_c = s_state.last_batt.temperature;
 
-    if (s_state.has_pack) {
-        out->cell_min_mv   = s_state.last_pack.cell_min;
-        out->cell_max_mv   = s_state.last_pack.cell_max;
-        out->cell_delta_mv = s_state.last_pack.cell_delta;
+    state_lock();
+    bool has_batt = s_state.has_batt;
+    if (has_batt) {
+        out->timestamp_ms  = get_time_ms();
+        out->voltage_v     = s_state.last_batt.voltage;
+        out->current_a     = s_state.last_batt.current;
+        out->power_w       = s_state.last_batt.power;
+        out->soc_pct       = s_state.last_batt.soc;
+        out->soh_pct       = s_state.last_batt.soh;
+        out->temperature_c = s_state.last_batt.temperature;
+
+        if (s_state.has_pack) {
+            out->cell_min_mv   = s_state.last_pack.cell_min;
+            out->cell_max_mv   = s_state.last_pack.cell_max;
+            out->cell_delta_mv = s_state.last_pack.cell_delta;
+        }
     }
+    state_unlock();
 
-    return true;
+    return has_batt;
 }
 
 static bool publish_http(const telemetry_point_t *pt)
@@ -182,28 +209,41 @@ static bool publish_point(const telemetry_point_t *pt)
     uint64_t start_us = esp_timer_get_time();
     bool mqtt_ok = publish_mqtt(pt);
     bool http_ok = publish_http(pt);
-    s_state.last_duration_ms = (uint32_t) ((esp_timer_get_time() - start_us) / 1000ULL);
+    uint32_t duration_ms = (uint32_t) ((esp_timer_get_time() - start_us) / 1000ULL);
+
+    state_lock();
+    s_state.last_duration_ms = duration_ms;
     if (mqtt_ok && http_ok) {
         s_state.published_points++;
         s_state.last_sync_ms = get_time_ms();
-        return true;
+    } else {
+        s_state.publish_errors++;
     }
+    state_unlock();
 
-    s_state.publish_errors++;
-    return false;
+    return mqtt_ok && http_ok;
 }
 
 static void flush_buffer_if_online(void)
 {
-    if (!s_state.connected || s_state.count == 0) {
-        return;
-    }
+    while (1) {
+        state_lock();
+        bool connected = s_state.connected;
+        size_t buffered = s_state.count;
+        state_unlock();
 
-    telemetry_point_t cached = {0};
-    while (buffer_pop(&cached)) {
+        if (!connected || buffered == 0) {
+            return;
+        }
+
+        telemetry_point_t cached = {0};
+        if (!buffer_pop(&cached)) {
+            return;
+        }
+
         if (!publish_point(&cached)) {
             buffer_push(&cached);
-            break;
+            return;
         }
     }
 }
@@ -219,11 +259,18 @@ static void publisher_task(void *arg)
         }
 
         telemetry_point_t point = {0};
+        bool connected = false;
+        state_lock();
+        connected = s_state.connected;
+        state_unlock();
+
         if (build_point(&point)) {
-            if (s_state.connected) {
+            if (connected) {
                 if (!publish_point(&point)) {
                     buffer_push(&point);
+                    state_lock();
                     s_state.connected = false; // force un retry après reconnection détectée
+                    state_unlock();
                 } else {
                     flush_buffer_if_online();
                 }
@@ -245,8 +292,10 @@ static void on_battery_status(event_bus_t *bus, const event_t *event, void *user
         return;
     }
 
+    state_lock();
     s_state.last_batt = *(const battery_status_t *) event->data;
     s_state.has_batt = true;
+    state_unlock();
 }
 
 static void on_pack_stats(event_bus_t *bus, const event_t *event, void *user_ctx)
@@ -258,8 +307,10 @@ static void on_pack_stats(event_bus_t *bus, const event_t *event, void *user_ctx
         return;
     }
 
+    state_lock();
     s_state.last_pack = *(const pack_stats_t *) event->data;
     s_state.has_pack = true;
+    state_unlock();
 }
 
 static void on_system_status(event_bus_t *bus, const event_t *event, void *user_ctx)
@@ -274,12 +325,22 @@ static void on_system_status(event_bus_t *bus, const event_t *event, void *user_
     const system_status_t *status = (const system_status_t *) event->data;
     bool now_connected = status->telemetry_expected && status->wifi_connected && status->server_reachable;
 
-    if (now_connected && !s_state.connected) {
-        ESP_LOGI(TAG, "Network reachable again, flushing telemetry buffer (%d)", (int) s_state.count);
+    bool was_connected;
+    size_t buffered;
+
+    state_lock();
+    was_connected = s_state.connected;
+    buffered = s_state.count;
+    if (now_connected) {
         s_state.connected = true;
-        flush_buffer_if_online();
-    } else if (!now_connected) {
+    } else {
         s_state.connected = false;
+    }
+    state_unlock();
+
+    if (now_connected && !was_connected) {
+        ESP_LOGI(TAG, "Network reachable again, flushing telemetry buffer (%d)", (int) buffered);
+        flush_buffer_if_online();
     }
 }
 
@@ -308,14 +369,15 @@ esp_err_t network_publisher_init(event_bus_t *bus)
 
 network_publisher_metrics_t network_publisher_get_metrics(void)
 {
-    network_publisher_metrics_t m = {
-        .last_sync_ms = s_state.last_sync_ms,
-        .buffered_points = (uint32_t) s_state.count,
-        .buffer_capacity = TELEMETRY_BUFFER_DEPTH,
-        .publish_errors = s_state.publish_errors,
-        .published_points = s_state.published_points,
-        .last_duration_ms = s_state.last_duration_ms,
-    };
+    network_publisher_metrics_t m = {0};
+    state_lock();
+    m.last_sync_ms = s_state.last_sync_ms;
+    m.buffered_points = (uint32_t) s_state.count;
+    m.buffer_capacity = TELEMETRY_BUFFER_DEPTH;
+    m.publish_errors = s_state.publish_errors;
+    m.published_points = s_state.published_points;
+    m.last_duration_ms = s_state.last_duration_ms;
+    state_unlock();
     return m;
 }
 

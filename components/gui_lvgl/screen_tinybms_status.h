@@ -40,9 +40,7 @@ void screen_tinybms_status_update_connection(bool connected);
  * @param crc_errors CRC errors
  * @param timeouts Timeouts
  */
-void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed,
-                                         uint32_t writes_ok, uint32_t writes_failed,
-                                         uint32_t crc_errors, uint32_t timeouts);
+void screen_tinybms_status_update_stats(const tinybms_stats_t *stats);
 void screen_tinybms_status_append_log(const tinybms_uart_log_entry_t *entry);
 
 #ifdef __cplusplus

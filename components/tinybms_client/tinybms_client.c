@@ -13,25 +13,129 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "freertos/queue.h"
 #include <string.h>
 #include <sys/param.h>
+#include <limits.h>
+#include <stdio.h>
 
 static const char *TAG = "tinybms_client";
+
+#define TINYBMS_CLIENT_QUEUE_DEPTH 10
+
+typedef enum {
+    TINYBMS_REQ_READ = 0,
+    TINYBMS_REQ_WRITE,
+} tinybms_request_type_t;
+
+typedef struct {
+    tinybms_request_type_t type;
+    uint16_t address;
+    uint16_t value;
+    uint16_t *out_value;
+    uint16_t *verified_value;
+    TaskHandle_t requester;
+    uint64_t enqueue_us;
+} tinybms_request_t;
 
 // Module state
 static struct {
     event_bus_t *bus;
-    SemaphoreHandle_t uart_mutex;
     tinybms_state_t state;
     tinybms_stats_t stats;
     bool initialized;
+    QueueHandle_t request_queue;
+    TaskHandle_t worker_task;
+    uint64_t latency_acc_us;
+    uint32_t latency_samples;
 } g_ctx = {0};
 
 static QueueHandle_t g_uart_evt_queue = NULL;
+static portMUX_TYPE s_stats_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static void publish_stats_event(void);
+static void tinybms_client_worker_task(void *arg);
+
+static inline void stats_increment(uint32_t *field)
+{
+    portENTER_CRITICAL(&s_stats_lock);
+    (*field)++;
+    portEXIT_CRITICAL(&s_stats_lock);
+}
+
+static void stats_record_latency(uint64_t start_us)
+{
+    uint64_t duration_us = esp_timer_get_time() - start_us;
+    portENTER_CRITICAL(&s_stats_lock);
+    g_ctx.latency_acc_us += duration_us;
+    g_ctx.latency_samples++;
+    if (g_ctx.latency_samples > 0) {
+        g_ctx.stats.avg_latency_ms = (uint32_t) ((g_ctx.latency_acc_us / g_ctx.latency_samples) / 1000ULL);
+    }
+    portEXIT_CRITICAL(&s_stats_lock);
+}
+
+static void stats_update_queue_depth(void)
+{
+    if (!g_ctx.request_queue) {
+        return;
+    }
+
+    UBaseType_t depth = uxQueueMessagesWaiting(g_ctx.request_queue);
+    portENTER_CRITICAL(&s_stats_lock);
+    if (depth > g_ctx.stats.queue_depth_max) {
+        g_ctx.stats.queue_depth_max = depth;
+    }
+    portEXIT_CRITICAL(&s_stats_lock);
+}
+
+static void stats_update_result(tinybms_request_type_t type, esp_err_t result)
+{
+    portENTER_CRITICAL(&s_stats_lock);
+    if (type == TINYBMS_REQ_READ) {
+        if (result == ESP_OK) {
+            g_ctx.stats.reads_ok++;
+        } else {
+            g_ctx.stats.reads_failed++;
+        }
+    } else if (type == TINYBMS_REQ_WRITE) {
+        if (result == ESP_OK) {
+            g_ctx.stats.writes_ok++;
+        } else {
+            g_ctx.stats.writes_failed++;
+        }
+    }
+
+    if (result == ESP_ERR_TIMEOUT) {
+        g_ctx.stats.timeouts++;
+    } else if (result == ESP_ERR_INVALID_CRC) {
+        g_ctx.stats.crc_errors++;
+    } else if (result == ESP_ERR_INVALID_RESPONSE) {
+        g_ctx.stats.nacks++;
+    }
+    portEXIT_CRITICAL(&s_stats_lock);
+}
+
+static TickType_t request_timeout_ticks(void)
+{
+    uint32_t wait_ms = (TINYBMS_TIMEOUT_MS + 100) * (TINYBMS_RETRY_COUNT + 1);
+    return pdMS_TO_TICKS(wait_ms);
+}
+
+static esp_err_t enqueue_request(tinybms_request_t *req)
+{
+    if (!g_ctx.request_queue || !req) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    req->enqueue_us = esp_timer_get_time();
+    if (xQueueSend(g_ctx.request_queue, req, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    stats_update_queue_depth();
+    return ESP_OK;
+}
 
 static void publish_uart_log(const char *action, uint16_t address, esp_err_t result,
                              const char *detail)
@@ -68,8 +172,13 @@ static void publish_stats_event(void)
         return;
     }
 
+    tinybms_stats_t snapshot;
+    portENTER_CRITICAL(&s_stats_lock);
+    snapshot = g_ctx.stats;
+    portEXIT_CRITICAL(&s_stats_lock);
+
     tinybms_stats_event_t stats_evt = {
-        .stats = g_ctx.stats,
+        .stats = snapshot,
         .timestamp_ms = (uint64_t)(esp_timer_get_time() / 1000ULL),
     };
 
@@ -138,6 +247,103 @@ static esp_err_t init_uart(void)
              TINYBMS_UART_TXD_PIN, TINYBMS_UART_RXD_PIN);
 
     return ESP_OK;
+}
+
+static esp_err_t perform_read_with_retry(uint16_t address, uint16_t *value)
+{
+    esp_err_t ret = ESP_FAIL;
+    uint16_t local_value = 0;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = read_register_internal(address, &local_value);
+        if (ret == ESP_OK) {
+            if (value) {
+                *value = local_value;
+            }
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+    return ret;
+}
+
+static esp_err_t perform_write_with_retry(uint16_t address, uint16_t value)
+{
+    esp_err_t ret = ESP_FAIL;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = write_register_internal(address, value);
+        if (ret == ESP_OK) {
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+    return ret;
+}
+
+static esp_err_t verify_write(uint16_t address, uint16_t expected, uint16_t *readback_out)
+{
+    vTaskDelay(pdMS_TO_TICKS(50));
+    uint16_t readback = 0;
+    esp_err_t ret = perform_read_with_retry(address, &readback);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    if (readback != expected) {
+        ESP_LOGW(TAG, "Write verification mismatch: wrote 0x%04X read 0x%04X", expected, readback);
+        return ESP_FAIL;
+    }
+
+    if (readback_out) {
+        *readback_out = readback;
+    }
+    return ESP_OK;
+}
+
+static void tinybms_client_worker_task(void *arg)
+{
+    (void) arg;
+    tinybms_request_t req;
+
+    while (1) {
+        if (xQueueReceive(g_ctx.request_queue, &req, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+
+        esp_err_t ret = ESP_FAIL;
+        char detail[64];
+        detail[0] = '\0';
+
+        if (req.type == TINYBMS_REQ_READ) {
+            ret = perform_read_with_retry(req.address, req.out_value);
+            if (ret == ESP_OK && req.out_value) {
+                snprintf(detail, sizeof(detail), "value=0x%04X", *req.out_value);
+            }
+            publish_uart_log("read", req.address, ret, detail);
+        } else if (req.type == TINYBMS_REQ_WRITE) {
+            ret = perform_write_with_retry(req.address, req.value);
+            if (ret == ESP_OK) {
+                ret = verify_write(req.address, req.value, req.verified_value);
+                if (ret == ESP_OK) {
+                    snprintf(detail, sizeof(detail), "written=0x%04X", req.value);
+                }
+            }
+            publish_uart_log("write", req.address, ret, detail);
+        }
+
+        stats_update_result(req.type, ret);
+        stats_record_latency(req.enqueue_us);
+        publish_stats_event();
+
+        if (req.requester) {
+            xTaskNotify(req.requester, (uint32_t) ret, eSetValueWithOverwrite);
+        }
+    }
 }
 
 /**
@@ -223,11 +429,9 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
             ret = tinybms_parse_read_response(frame_start, frame_len, value);
             if (ret == ESP_OK) {
                 ESP_LOGD(TAG, "Read 0x%04X from register 0x%04X", *value, address);
-                g_ctx.stats.reads_ok++;
                 return ESP_OK;
             }
         } else if (ret == ESP_ERR_INVALID_CRC) {
-            g_ctx.stats.crc_errors++;
             ESP_LOGW(TAG, "CRC error on read response");
             uart_flush_input(TINYBMS_UART_NUM);
             rx_len = 0;
@@ -236,7 +440,6 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
     }
 
     // Timeout
-    g_ctx.stats.timeouts++;
     ESP_LOGW(TAG, "Timeout reading register 0x%04X", address);
     return ESP_ERR_TIMEOUT;
 }
@@ -326,17 +529,14 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
             if (ret == ESP_OK) {
                 if (is_ack) {
                     ESP_LOGD(TAG, "Write ACK for register 0x%04X = 0x%04X", address, value);
-                    g_ctx.stats.writes_ok++;
                     return ESP_OK;
                 } else {
                     ESP_LOGW(TAG, "Write NACK for register 0x%04X (error: 0x%02X)",
                              address, error_code);
-                    g_ctx.stats.nacks++;
-                    return ESP_FAIL;
+                    return ESP_ERR_INVALID_RESPONSE;
                 }
             }
         } else if (ret == ESP_ERR_INVALID_CRC) {
-            g_ctx.stats.crc_errors++;
             uart_flush_input(TINYBMS_UART_NUM);
             rx_len = 0;
             return ESP_ERR_INVALID_CRC;
@@ -344,7 +544,6 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
     }
 
     // Timeout
-    g_ctx.stats.timeouts++;
     ESP_LOGW(TAG, "Timeout waiting for write ACK (register 0x%04X)", address);
     return ESP_ERR_TIMEOUT;
 }
@@ -369,18 +568,29 @@ esp_err_t tinybms_client_init(event_bus_t *bus)
     g_ctx.bus = bus;
     g_ctx.state = TINYBMS_STATE_DISCONNECTED;
 
-    // Create mutex for UART access
-    g_ctx.uart_mutex = xSemaphoreCreateMutex();
-    if (g_ctx.uart_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create UART mutex");
-        return ESP_ERR_NO_MEM;
-    }
-
     // Initialize UART
     esp_err_t ret = init_uart();
     if (ret != ESP_OK) {
-        vSemaphoreDelete(g_ctx.uart_mutex);
         return ret;
+    }
+
+    g_ctx.request_queue = xQueueCreate(TINYBMS_CLIENT_QUEUE_DEPTH, sizeof(tinybms_request_t));
+    if (g_ctx.request_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create TinyBMS request queue");
+        return ESP_ERR_NO_MEM;
+    }
+
+    BaseType_t task_ok = xTaskCreate(tinybms_client_worker_task,
+                                     "tinybms_io",
+                                     4096,
+                                     NULL,
+                                     6,
+                                     &g_ctx.worker_task);
+    if (task_ok != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create TinyBMS worker task");
+        vQueueDelete(g_ctx.request_queue);
+        g_ctx.request_queue = NULL;
+        return ESP_FAIL;
     }
 
     g_ctx.initialized = true;
@@ -435,43 +645,25 @@ esp_err_t tinybms_read_register(uint16_t address, uint16_t *value)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Take mutex with timeout
-    if (xSemaphoreTake(g_ctx.uart_mutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
-        ESP_LOGE(TAG, "Failed to take UART mutex");
+    tinybms_request_t req = {
+        .type = TINYBMS_REQ_READ,
+        .address = address,
+        .out_value = value,
+        .verified_value = NULL,
+        .requester = xTaskGetCurrentTaskHandle(),
+    };
+
+    esp_err_t err = enqueue_request(&req);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    uint32_t notify_value = 0;
+    if (xTaskNotifyWait(0, ULONG_MAX, &notify_value, request_timeout_ticks()) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
 
-    // Try read with retry
-    esp_err_t ret = ESP_FAIL;
-    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; retry++) {
-        ret = read_register_internal(address, value);
-        if (ret == ESP_OK) {
-            break;
-        }
-
-        if (retry < TINYBMS_RETRY_COUNT - 1) {
-            ESP_LOGD(TAG, "Retry %d/%d for register 0x%04X",
-                     retry + 1, TINYBMS_RETRY_COUNT, address);
-            g_ctx.stats.retries++;
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-    }
-
-    if (ret != ESP_OK) {
-        g_ctx.stats.reads_failed++;
-    }
-
-    xSemaphoreGive(g_ctx.uart_mutex);
-
-    char detail[48];
-    if (ret == ESP_OK) {
-        snprintf(detail, sizeof(detail), "value=0x%04X", *value);
-    } else {
-        detail[0] = '\0';
-    }
-    publish_uart_log("read", address, ret, detail);
-    publish_stats_event();
-    return ret;
+    return (esp_err_t) notify_value;
 }
 
 esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
@@ -481,64 +673,26 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
         return ESP_ERR_INVALID_STATE;
     }
 
-    // Take mutex with timeout
-    if (xSemaphoreTake(g_ctx.uart_mutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
-        ESP_LOGE(TAG, "Failed to take UART mutex");
+    tinybms_request_t req = {
+        .type = TINYBMS_REQ_WRITE,
+        .address = address,
+        .value = value,
+        .out_value = NULL,
+        .verified_value = verified_value,
+        .requester = xTaskGetCurrentTaskHandle(),
+    };
+
+    esp_err_t err = enqueue_request(&req);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    uint32_t notify_value = 0;
+    if (xTaskNotifyWait(0, ULONG_MAX, &notify_value, request_timeout_ticks()) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
 
-    esp_err_t ret = ESP_FAIL;
-
-    // Try write with retry
-    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; retry++) {
-        ret = write_register_internal(address, value);
-        if (ret == ESP_OK) {
-            break;
-        }
-
-        if (retry < TINYBMS_RETRY_COUNT - 1) {
-            ESP_LOGD(TAG, "Retry %d/%d for write to 0x%04X",
-                     retry + 1, TINYBMS_RETRY_COUNT, address);
-            g_ctx.stats.retries++;
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-    }
-
-    // Verify write by reading back
-    if (ret == ESP_OK) {
-        uint16_t readback;
-        vTaskDelay(pdMS_TO_TICKS(50)); // Small delay before readback
-
-        ret = read_register_internal(address, &readback);
-        if (ret == ESP_OK) {
-            if (readback == value) {
-                ESP_LOGI(TAG, "Write verified: register 0x%04X = 0x%04X", address, value);
-                if (verified_value != NULL) {
-                    *verified_value = readback;
-                }
-            } else {
-                ESP_LOGW(TAG, "Write verification failed: wrote 0x%04X, read 0x%04X",
-                         value, readback);
-                ret = ESP_FAIL;
-            }
-        }
-    }
-
-    if (ret != ESP_OK) {
-        g_ctx.stats.writes_failed++;
-    }
-
-    xSemaphoreGive(g_ctx.uart_mutex);
-
-    char detail[64];
-    if (ret == ESP_OK) {
-        snprintf(detail, sizeof(detail), "written=0x%04X", value);
-    } else {
-        detail[0] = '\0';
-    }
-    publish_uart_log("write", address, ret, detail);
-    publish_stats_event();
-    return ret;
+    return (esp_err_t) notify_value;
 }
 
 esp_err_t tinybms_restart(void)
@@ -562,13 +716,19 @@ esp_err_t tinybms_get_stats(tinybms_stats_t *stats)
         return ESP_ERR_INVALID_ARG;
     }
 
+    portENTER_CRITICAL(&s_stats_lock);
     memcpy(stats, &g_ctx.stats, sizeof(tinybms_stats_t));
+    portEXIT_CRITICAL(&s_stats_lock);
     return ESP_OK;
 }
 
 void tinybms_reset_stats(void)
 {
+    portENTER_CRITICAL(&s_stats_lock);
     memset(&g_ctx.stats, 0, sizeof(tinybms_stats_t));
+    g_ctx.latency_acc_us = 0;
+    g_ctx.latency_samples = 0;
+    portEXIT_CRITICAL(&s_stats_lock);
     ESP_LOGI(TAG, "Statistics reset");
     publish_stats_event();
 }

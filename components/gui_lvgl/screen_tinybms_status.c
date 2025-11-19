@@ -209,11 +209,9 @@ void screen_tinybms_status_update_connection(bool connected)
     }, ctx);
 }
 
-void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed,
-                                         uint32_t writes_ok, uint32_t writes_failed,
-                                         uint32_t crc_errors, uint32_t timeouts)
+void screen_tinybms_status_update_stats(const tinybms_stats_t *stats)
 {
-    if (ui.label_stats_reads == NULL) {
+    if (ui.label_stats_reads == NULL || stats == NULL) {
         return;
     }
 
@@ -222,12 +220,7 @@ void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed
         lv_obj_t *label_reads;
         lv_obj_t *label_writes;
         lv_obj_t *label_errors;
-        uint32_t reads_ok;
-        uint32_t reads_failed;
-        uint32_t writes_ok;
-        uint32_t writes_failed;
-        uint32_t crc_errors;
-        uint32_t timeouts;
+        tinybms_stats_t stats;
     } stats_ctx_t;
 
     stats_ctx_t *ctx = malloc(sizeof(stats_ctx_t));
@@ -238,28 +231,30 @@ void screen_tinybms_status_update_stats(uint32_t reads_ok, uint32_t reads_failed
     ctx->label_reads = ui.label_stats_reads;
     ctx->label_writes = ui.label_stats_writes;
     ctx->label_errors = ui.label_stats_errors;
-    ctx->reads_ok = reads_ok;
-    ctx->reads_failed = reads_failed;
-    ctx->writes_ok = writes_ok;
-    ctx->writes_failed = writes_failed;
-    ctx->crc_errors = crc_errors;
-    ctx->timeouts = timeouts;
+    ctx->stats = *stats;
 
     lv_async_call([](void *arg) {
         stats_ctx_t *c = (stats_ctx_t *)arg;
 
         char buf[64];
 
-        snprintf(buf, sizeof(buf), "Reads: %lu OK / %lu Failed",
-                 c->reads_ok, c->reads_failed);
+        snprintf(buf, sizeof(buf), "Reads: %lu OK / %lu Failed (avg %lums)",
+                 (unsigned long) c->stats.reads_ok,
+                 (unsigned long) c->stats.reads_failed,
+                 (unsigned long) c->stats.avg_latency_ms);
         lv_label_set_text(c->label_reads, buf);
 
-        snprintf(buf, sizeof(buf), "Writes: %lu OK / %lu Failed",
-                 c->writes_ok, c->writes_failed);
+        snprintf(buf, sizeof(buf), "Writes: %lu OK / %lu Failed (queue max %lu)",
+                 (unsigned long) c->stats.writes_ok,
+                 (unsigned long) c->stats.writes_failed,
+                 (unsigned long) c->stats.queue_depth_max);
         lv_label_set_text(c->label_writes, buf);
 
-        snprintf(buf, sizeof(buf), "Errors: %lu CRC / %lu Timeout",
-                 c->crc_errors, c->timeouts);
+        snprintf(buf, sizeof(buf), "Errors: %lu CRC / %lu Timeout / %lu NACK / %lu Retry",
+                 (unsigned long) c->stats.crc_errors,
+                 (unsigned long) c->stats.timeouts,
+                 (unsigned long) c->stats.nacks,
+                 (unsigned long) c->stats.retries);
         lv_label_set_text(c->label_errors, buf);
 
         lv_obj_invalidate(c->label_reads);
