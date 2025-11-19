@@ -12,6 +12,8 @@
 
 namespace gui {
 
+class ScreenHome;
+
 struct BatteryContext {
     battery_status_t status{};
 };
@@ -148,6 +150,8 @@ private:
     lv_obj_t    *tab_can_config_ = nullptr;
     lv_obj_t    *tab_bms_ctrl_   = nullptr;
     lv_obj_t    *tab_history_    = nullptr;
+
+    std::unique_ptr<ScreenHome> screen_home_;
 };
 
 }  // namespace gui
