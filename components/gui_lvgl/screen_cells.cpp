@@ -1,7 +1,8 @@
 #include "screen_cells.h"
 
-#include <stdio.h>
-#include <stdarg.h>
+#include <cstdio>
+
+#include "gui_format.hpp"
 
 static lv_obj_t *s_label_min       = NULL;
 static lv_obj_t *s_label_max       = NULL;
@@ -19,16 +20,9 @@ static lv_obj_t *s_cell_labels[MAX_CELLS];
 static float s_last_min_mv = 0.0f;
 static float s_last_max_mv = 0.0f;
 
-static void set_label_fmt(lv_obj_t *label, const char *fmt, ...)
-{
-    if (!label || !fmt) return;
-    char buf[64];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    lv_label_set_text(label, buf);
-}
+using gui::set_label_textf;
+
+extern "C" {
 
 void screen_cells_create(lv_obj_t *parent)
 {
@@ -103,7 +97,7 @@ void screen_cells_create(lv_obj_t *parent)
         // Label "Cxx"
         lv_obj_t *lbl = lv_label_create(col);
         char tmp[16];
-        snprintf(tmp, sizeof(tmp), "C%02d", i + 1);
+        std::snprintf(tmp, sizeof(tmp), "C%02d", i + 1);
         lv_label_set_text(lbl, tmp);
 
         s_cell_bars[i]   = bar;
@@ -124,28 +118,28 @@ void screen_cells_update_cells(const pack_stats_t *stats)
 
     // Stats globales
     if (stats->cell_count > 0) {
-        set_label_fmt(s_label_min,   "Min: %.1f mV", stats->cell_min);
-        set_label_fmt(s_label_max,   "Max: %.1f mV", stats->cell_max);
-        set_label_fmt(s_label_delta, "Δ: %.1f mV",   stats->cell_delta);
-        set_label_fmt(s_label_avg,   "Avg: %.1f mV", stats->cell_avg);
+        set_label_textf(s_label_min,   "Min: {:.1f} mV", stats->cell_min);
+        set_label_textf(s_label_max,   "Max: {:.1f} mV", stats->cell_max);
+        set_label_textf(s_label_delta, "Δ: {:.1f} mV",   stats->cell_delta);
+        set_label_textf(s_label_avg,   "Avg: {:.1f} mV", stats->cell_avg);
     } else {
-        set_label_fmt(s_label_min,   "Min: -- mV");
-        set_label_fmt(s_label_max,   "Max: -- mV");
-        set_label_fmt(s_label_delta, "Δ: -- mV");
-        set_label_fmt(s_label_avg,   "Avg: -- mV");
+        set_label_textf(s_label_min,   "Min: -- mV");
+        set_label_textf(s_label_max,   "Max: -- mV");
+        set_label_textf(s_label_delta, "Δ: -- mV");
+        set_label_textf(s_label_avg,   "Avg: -- mV");
     }
 
     // Seuils balancing (si fournis)
     if (stats->bal_start_mv > 0.0f) {
-        set_label_fmt(s_label_bal_start, "Bal start: %.1f mV", stats->bal_start_mv);
+        set_label_textf(s_label_bal_start, "Bal start: {:.1f} mV", stats->bal_start_mv);
     } else {
-        set_label_fmt(s_label_bal_start, "Bal start: -- mV");
+        set_label_textf(s_label_bal_start, "Bal start: -- mV");
     }
 
     if (stats->bal_stop_mv > 0.0f) {
-        set_label_fmt(s_label_bal_stop, "Bal stop: %.1f mV", stats->bal_stop_mv);
+        set_label_textf(s_label_bal_stop, "Bal stop: {:.1f} mV", stats->bal_stop_mv);
     } else {
-        set_label_fmt(s_label_bal_stop, "Bal stop: -- mV");
+        set_label_textf(s_label_bal_stop, "Bal stop: -- mV");
     }
 
     s_last_min_mv = stats->cell_min;
@@ -205,9 +199,9 @@ void screen_cells_update_cells(const pack_stats_t *stats)
             // Label : on ajoute une étoile si balancing actif
             char tmp[16];
             if (stats->balancing[i]) {
-                snprintf(tmp, sizeof(tmp), "C%02u*", (unsigned)(i + 1));
+                std::snprintf(tmp, sizeof(tmp), "C%02u*", static_cast<unsigned>(i + 1));
             } else {
-                snprintf(tmp, sizeof(tmp), "C%02u", (unsigned)(i + 1));
+                std::snprintf(tmp, sizeof(tmp), "C%02u", static_cast<unsigned>(i + 1));
             }
             lv_label_set_text(lbl, tmp);
 
@@ -219,8 +213,10 @@ void screen_cells_update_cells(const pack_stats_t *stats)
                                       LV_PART_INDICATOR);
 
             char tmp[16];
-            snprintf(tmp, sizeof(tmp), "C%02u", (unsigned)(i + 1));
+            std::snprintf(tmp, sizeof(tmp), "C%02u", static_cast<unsigned>(i + 1));
             lv_label_set_text(lbl, tmp);
         }
     }
 }
+
+}  // extern "C"

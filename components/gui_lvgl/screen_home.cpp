@@ -5,8 +5,6 @@
 #include "screen_home.h"
 
 #include <algorithm>
-#include <array>
-#include <cstdio>
 #include <memory>
 #include <optional>
 #include <string>
@@ -14,6 +12,7 @@
 
 #include "lvgl.h"
 
+#include "gui_format.hpp"
 #include "ui_i18n.h"
 
 namespace gui {
@@ -45,33 +44,7 @@ private:
     std::string  key_;
 };
 
-lv_color_t color_ok() { return lv_palette_main(LV_PALETTE_GREEN); }
-lv_color_t color_warn() { return lv_palette_main(LV_PALETTE_YELLOW); }
-lv_color_t color_error() { return lv_palette_main(LV_PALETTE_RED); }
-lv_color_t color_neutral() { return lv_palette_main(LV_PALETTE_GREY); }
-
-void set_status_label(lv_obj_t *label, const char *text, lv_color_t color)
-{
-    if (!label) return;
-    lv_label_set_text(label, text);
-    lv_obj_set_style_text_color(label, color, 0);
-}
-
 constexpr const char *kAutonomousText = "Autonome";
-
-template <typename... Args>
-std::string format_value(const char *fmt, Args... args)
-{
-    std::array<char, 64> buffer{};
-    int                  written = std::snprintf(buffer.data(), buffer.size(), fmt, args...);
-    if (written < 0) {
-        return {};
-    }
-    if (static_cast<size_t>(written) >= buffer.size()) {
-        written = buffer.size() - 1;
-    }
-    return std::string(buffer.data(), static_cast<size_t>(written));
-}
 
 }  // namespace
 
@@ -158,12 +131,12 @@ public:
                               LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_CENTER);
 
-        status_bms_label_  = lv_label_create(row_status);
-        status_can_label_  = lv_label_create(row_status);
-        status_mqtt_label_ = lv_label_create(row_status);
-        status_wifi_label_ = lv_label_create(row_status);
-        status_bal_label_  = lv_label_create(row_status);
-        status_alm_label_  = lv_label_create(row_status);
+        status_bms_label_.reset(lv_label_create(row_status));
+        status_can_label_.reset(lv_label_create(row_status));
+        status_mqtt_label_.reset(lv_label_create(row_status));
+        status_wifi_label_.reset(lv_label_create(row_status));
+        status_bal_label_.reset(lv_label_create(row_status));
+        status_alm_label_.reset(lv_label_create(row_status));
 
         apply_static_texts();
     }
@@ -173,34 +146,25 @@ public:
         last_battery_ = status;
 
         if (soc_value_) {
-            auto text = format_value("%.1f %%", status.soc);
-            lv_label_set_text(soc_value_, text.c_str());
+            set_label_textf(soc_value_, "{:.1f} %", status.soc);
         }
         if (voltage_value_) {
-            auto text = format_value("%.2f V", status.voltage);
-            lv_label_set_text(voltage_value_, text.c_str());
+            set_label_textf(voltage_value_, "{:.2f} V", status.voltage);
         }
         if (current_value_) {
-            auto text = format_value("%.2f A", status.current);
-            lv_label_set_text(current_value_, text.c_str());
+            set_label_textf(current_value_, "{:.2f} A", status.current);
         }
         if (power_value_) {
-            auto text = format_value("%.0f W", status.power);
-            lv_label_set_text(power_value_, text.c_str());
+            set_label_textf(power_value_, "{:.0f} W", status.power);
         }
         if (temp_value_) {
-            auto text = format_value("%.1f °C", status.temperature);
-            lv_label_set_text(temp_value_, text.c_str());
+            set_label_textf(temp_value_, "{:.1f} °C", status.temperature);
         }
 
-        if (status_bms_label_) {
-            set_status_label(status_bms_label_, ui_i18n("home.status.bms"),
-                             status.bms_ok ? color_ok() : color_error());
-        }
-        if (status_can_label_) {
-            set_status_label(status_can_label_, ui_i18n("home.status.can"),
-                             status.can_ok ? color_ok() : color_error());
-        }
+        status_bms_label_.set(ui_i18n("home.status.bms"),
+                              status.bms_ok ? StatusState::Ok : StatusState::Error);
+        status_can_label_.set(ui_i18n("home.status.can"),
+                              status.can_ok ? StatusState::Ok : StatusState::Error);
 
         update_mqtt_badge(status);
     }
@@ -209,49 +173,40 @@ public:
     {
         last_system_ = status;
 
-        if (status_wifi_label_) {
-            if (!status.telemetry_expected) {
-                set_status_label(status_wifi_label_, kAutonomousText, lv_palette_main(LV_PALETTE_BLUE));
+        if (!status.telemetry_expected) {
+            status_wifi_label_.set_with_palette(kAutonomousText, LV_PALETTE_BLUE);
+        } else {
+            const char *text = ui_i18n("home.status.wifi");
+            StatusState state = StatusState::Neutral;
+
+            if (status.network_state == NETWORK_STATE_NOT_CONFIGURED) {
+                state = StatusState::Warn;
+                text  = "WiFi N/A";
+            } else if (status.network_state == NETWORK_STATE_CONNECTING) {
+                state = StatusState::Warn;
+                text  = "Connexion...";
+            } else if (status.network_state != NETWORK_STATE_ACTIVE) {
+                state = StatusState::Error;
+            } else if (!status.server_reachable || !status.storage_ok) {
+                state = StatusState::Warn;
+            } else if (status.has_error) {
+                state = StatusState::Error;
             } else {
-                lv_color_t color = color_neutral();
-                const char *text = ui_i18n("home.status.wifi");
-
-                if (status.network_state == NETWORK_STATE_NOT_CONFIGURED) {
-                    color = color_warn();
-                    text  = "WiFi N/A";
-                } else if (status.network_state == NETWORK_STATE_CONNECTING) {
-                    color = color_warn();
-                    text  = "Connexion...";
-                } else if (status.network_state != NETWORK_STATE_ACTIVE) {
-                    color = color_error();
-                } else if (!status.server_reachable || !status.storage_ok) {
-                    color = color_warn();
-                } else if (status.has_error) {
-                    color = color_error();
-                } else {
-                    color = color_ok();
-                }
-
-                set_status_label(status_wifi_label_, text, color);
+                state = StatusState::Ok;
             }
+
+            status_wifi_label_.set(text, state);
         }
 
-        if (status_alm_label_) {
-            if (status.has_error) {
-                set_status_label(status_alm_label_, ui_i18n("home.status.alm"), color_error());
-            } else {
-                set_status_label(status_alm_label_, ui_i18n("home.status.alm"), color_neutral());
-            }
-        }
+        status_alm_label_.set(ui_i18n("home.status.alm"),
+                              status.has_error ? StatusState::Error : StatusState::Neutral);
 
         if (!status.telemetry_expected) {
-            if (status_mqtt_label_) {
-                set_status_label(status_mqtt_label_, kAutonomousText, lv_palette_main(LV_PALETTE_BLUE));
-            }
+            status_mqtt_label_.set_with_palette(kAutonomousText, LV_PALETTE_BLUE);
         } else if (last_battery_) {
             update_mqtt_badge(*last_battery_);
-        } else if (status_mqtt_label_) {
-            set_status_label(status_mqtt_label_, ui_i18n("home.status.mqtt"), color_neutral());
+        } else {
+            status_mqtt_label_.set(ui_i18n("home.status.mqtt"), StatusState::Neutral);
         }
     }
 
@@ -263,12 +218,8 @@ public:
             last_pack_stats_.reset();
         }
 
-        if (!status_bal_label_) {
-            return;
-        }
-
         if (!stats || stats->cell_count == 0) {
-            set_status_label(status_bal_label_, ui_i18n("home.status.bal"), color_neutral());
+            status_bal_label_.set(ui_i18n("home.status.bal"), StatusState::Neutral);
             return;
         }
 
@@ -282,10 +233,9 @@ public:
         }
 
         if (any_balancing) {
-            set_status_label(status_bal_label_, ui_i18n("home.status.bal"),
-                             lv_palette_main(LV_PALETTE_ORANGE));
+            status_bal_label_.set_with_palette(ui_i18n("home.status.bal"), LV_PALETTE_ORANGE);
         } else {
-            set_status_label(status_bal_label_, ui_i18n("home.status.bal"), color_neutral());
+            status_bal_label_.set(ui_i18n("home.status.bal"), StatusState::Neutral);
         }
     }
 
@@ -315,27 +265,23 @@ private:
         power_title_.apply();
         temp_title_.apply();
 
-        set_status_label(status_bms_label_, ui_i18n("home.status.bms"), color_neutral());
-        set_status_label(status_can_label_, ui_i18n("home.status.can"), color_neutral());
-        set_status_label(status_mqtt_label_, ui_i18n("home.status.mqtt"), color_neutral());
-        set_status_label(status_wifi_label_, ui_i18n("home.status.wifi"), color_neutral());
-        set_status_label(status_bal_label_, ui_i18n("home.status.bal"), color_neutral());
-        set_status_label(status_alm_label_, ui_i18n("home.status.alm"), color_neutral());
+        status_bms_label_.set(ui_i18n("home.status.bms"), StatusState::Neutral);
+        status_can_label_.set(ui_i18n("home.status.can"), StatusState::Neutral);
+        status_mqtt_label_.set(ui_i18n("home.status.mqtt"), StatusState::Neutral);
+        status_wifi_label_.set(ui_i18n("home.status.wifi"), StatusState::Neutral);
+        status_bal_label_.set(ui_i18n("home.status.bal"), StatusState::Neutral);
+        status_alm_label_.set(ui_i18n("home.status.alm"), StatusState::Neutral);
     }
 
     void update_mqtt_badge(const battery_status_t &status)
     {
-        if (!status_mqtt_label_) {
-            return;
-        }
-
         if (last_system_ && !last_system_->telemetry_expected) {
-            set_status_label(status_mqtt_label_, kAutonomousText, lv_palette_main(LV_PALETTE_BLUE));
+            status_mqtt_label_.set_with_palette(kAutonomousText, LV_PALETTE_BLUE);
             return;
         }
 
-        set_status_label(status_mqtt_label_, ui_i18n("home.status.mqtt"),
-                         status.mqtt_ok ? color_ok() : color_error());
+        status_mqtt_label_.set(ui_i18n("home.status.mqtt"),
+                               status.mqtt_ok ? StatusState::Ok : StatusState::Error);
     }
 
     TranslatableLabel soc_title_;
@@ -350,12 +296,12 @@ private:
     lv_obj_t *power_value_{nullptr};
     lv_obj_t *temp_value_{nullptr};
 
-    lv_obj_t *status_bms_label_{nullptr};
-    lv_obj_t *status_can_label_{nullptr};
-    lv_obj_t *status_mqtt_label_{nullptr};
-    lv_obj_t *status_wifi_label_{nullptr};
-    lv_obj_t *status_bal_label_{nullptr};
-    lv_obj_t *status_alm_label_{nullptr};
+    StatusLabel status_bms_label_;
+    StatusLabel status_can_label_;
+    StatusLabel status_mqtt_label_;
+    StatusLabel status_wifi_label_;
+    StatusLabel status_bal_label_;
+    StatusLabel status_alm_label_;
 
     std::optional<battery_status_t> last_battery_;
     std::optional<system_status_t>  last_system_;

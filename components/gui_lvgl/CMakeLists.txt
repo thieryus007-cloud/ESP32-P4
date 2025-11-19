@@ -3,9 +3,9 @@ idf_component_register(
          "ui_i18n.c"
          "screen_home.cpp"
          "screen_dashboard.c"
-         "screen_battery.c"
-         "screen_cells.c"
-         "screen_power.c"
+         "screen_battery.cpp"
+         "screen_cells.cpp"
+         "screen_power.cpp"
          "screen_config.c"
          "screen_alerts.c"
          "screen_tinybms_status.c"
@@ -16,6 +16,6 @@ idf_component_register(
          "screen_history.c"
          "ui_notifications.c"
          "ui_theme.c"
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "." "include"
     REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher
 )
