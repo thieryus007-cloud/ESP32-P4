@@ -1,4 +1,4 @@
-// components/net_client/net_client.c
+// components/net_client/net_client.cpp
 
 #include "net_client.h"
 
@@ -53,15 +53,20 @@ static esp_websocket_client_handle_t s_ws_telemetry = NULL;
 static esp_websocket_client_handle_t s_ws_events    = NULL;
 static esp_websocket_client_handle_t s_ws_alerts    = NULL;
 
-static system_status_t s_net_status = {
-    .wifi_connected = false,
-    .server_reachable = false,
-    .storage_ok = true,
-    .has_error = false,
-    .network_state = NETWORK_STATE_NOT_CONFIGURED,
-    .operation_mode = HMI_MODE_CONNECTED_S3,
-    .telemetry_expected = true,
-};
+static constexpr system_status_t make_default_status(void)
+{
+    return system_status_t{
+        false,
+        false,
+        true,
+        false,
+        NETWORK_STATE_NOT_CONFIGURED,
+        HMI_MODE_CONNECTED_S3,
+        true,
+    };
+}
+
+static system_status_t s_net_status = make_default_status();
 
 static void publish_system_status(void);
 
@@ -306,13 +311,12 @@ static void websocket_start(void)
     // 1. Telemetry (Flux sortant important, entrant faible)
     snprintf(uri, sizeof(uri), "ws://%s:%d/ws/telemetry",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
-    esp_websocket_client_config_t cfg_telemetry = {
-        .uri = uri,
-        .buffer_size = WS_BUFFER_SIZE_LOW_THROUGHPUT,  // RX
-        .buffer_size_tx = WS_BUFFER_SIZE_HIGH_THROUGHPUT, // TX (Important pour json telemetry)
-        .disable_auto_reconnect = false,
-        .reconnect_timeout_ms = 5000,
-    };
+    esp_websocket_client_config_t cfg_telemetry = {};
+    cfg_telemetry.uri = uri;
+    cfg_telemetry.buffer_size = WS_BUFFER_SIZE_LOW_THROUGHPUT;  // RX
+    cfg_telemetry.buffer_size_tx = WS_BUFFER_SIZE_HIGH_THROUGHPUT; // TX (Important pour json telemetry)
+    cfg_telemetry.disable_auto_reconnect = false;
+    cfg_telemetry.reconnect_timeout_ms = 5000;
     s_ws_telemetry = esp_websocket_client_init(&cfg_telemetry);
     esp_websocket_register_events(s_ws_telemetry, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)WS_CHANNEL_TELEMETRY);
     esp_websocket_client_start(s_ws_telemetry);
@@ -320,11 +324,10 @@ static void websocket_start(void)
     // 2. Events (Flux entrant/sortant moyen)
     snprintf(uri, sizeof(uri), "ws://%s:%d/ws/events",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
-    esp_websocket_client_config_t cfg_events = {
-        .uri = uri,
-        .buffer_size = WS_BUFFER_SIZE_LOW_THROUGHPUT,
-        .buffer_size_tx = WS_BUFFER_SIZE_LOW_THROUGHPUT,
-    };
+    esp_websocket_client_config_t cfg_events = {};
+    cfg_events.uri = uri;
+    cfg_events.buffer_size = WS_BUFFER_SIZE_LOW_THROUGHPUT;
+    cfg_events.buffer_size_tx = WS_BUFFER_SIZE_LOW_THROUGHPUT;
     s_ws_events = esp_websocket_client_init(&cfg_events);
     esp_websocket_register_events(s_ws_events, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)WS_CHANNEL_EVENTS);
     esp_websocket_client_start(s_ws_events);
@@ -332,11 +335,10 @@ static void websocket_start(void)
     // 3. Alerts (Flux très faible)
     snprintf(uri, sizeof(uri), "ws://%s:%d/ws/alerts",
              CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT);
-    esp_websocket_client_config_t cfg_alerts = {
-        .uri = uri,
-        .buffer_size = 1024, // Minimum vital
-        .buffer_size_tx = 1024,
-    };
+    esp_websocket_client_config_t cfg_alerts = {};
+    cfg_alerts.uri = uri;
+    cfg_alerts.buffer_size = 1024; // Minimum vital
+    cfg_alerts.buffer_size_tx = 1024;
     s_ws_alerts = esp_websocket_client_init(&cfg_alerts);
     esp_websocket_register_events(s_ws_alerts, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)WS_CHANNEL_ALERTS);
     esp_websocket_client_start(s_ws_alerts);
@@ -367,20 +369,30 @@ static void websocket_stop(void)
 static void publish_request_started(const char *path, const char *method)
 {
     if (!s_bus) return;
-    network_request_t req = { 0 };
+    network_request_t req = {};
     strlcpy(req.path, path, sizeof(req.path));
     strlcpy(req.method, method, sizeof(req.method));
-    event_t evt = { .type = EVENT_NETWORK_REQUEST_STARTED, .data = &req, .data_size = sizeof(req) };
+
+    event_t evt = {};
+    evt.type = EVENT_NETWORK_REQUEST_STARTED;
+    evt.data = &req;
+    evt.data_size = sizeof(req);
     event_bus_publish(s_bus, &evt);
 }
 
 static void publish_request_finished(const char *path, const char *method, bool success, int status)
 {
     if (!s_bus) return;
-    network_request_status_t info = { .success = success, .status = status };
+    network_request_status_t info = {};
+    info.success = success;
+    info.status = status;
     strlcpy(info.request.path, path, sizeof(info.request.path));
     strlcpy(info.request.method, method, sizeof(info.request.method));
-    event_t evt = { .type = EVENT_NETWORK_REQUEST_FINISHED, .data = &info, .data_size = sizeof(info) };
+
+    event_t evt = {};
+    evt.type = EVENT_NETWORK_REQUEST_FINISHED;
+    evt.data = &info;
+    evt.data_size = sizeof(info);
     event_bus_publish(s_bus, &evt);
 }
 
@@ -408,23 +420,25 @@ static void publish_system_status(void)
         return;
     }
 
-    event_t evt = {
-        .type = EVENT_SYSTEM_STATUS_UPDATED,
-        .data = &status_copy,
-        .data_size = sizeof(status_copy),
-    };
+    event_t evt = {};
+    evt.type = EVENT_SYSTEM_STATUS_UPDATED;
+    evt.data = &status_copy;
+    evt.data_size = sizeof(status_copy);
     event_bus_publish(s_bus, &evt);
 }
 
 static void publish_failover_event(void)
 {
     if (!s_bus) return;
-    network_failover_event_t info = {
-        .fail_count = s_fail_sequences,
-        .fail_threshold = CONFIG_HMI_WIFI_FAILOVER_THRESHOLD,
-        .new_mode = HMI_MODE_TINYBMS_AUTONOMOUS,
-    };
-    event_t evt = { .type = EVENT_NETWORK_FAILOVER_ACTIVATED, .data = &info, .data_size = sizeof(info) };
+    network_failover_event_t info = {};
+    info.fail_count = s_fail_sequences;
+    info.fail_threshold = CONFIG_HMI_WIFI_FAILOVER_THRESHOLD;
+    info.new_mode = HMI_MODE_TINYBMS_AUTONOMOUS;
+
+    event_t evt = {};
+    evt.type = EVENT_NETWORK_FAILOVER_ACTIVATED;
+    evt.data = &info;
+    evt.data_size = sizeof(info);
     event_bus_publish(s_bus, &evt);
 }
 
@@ -447,6 +461,10 @@ static void tinybms_alert_event_handler(event_bus_t *bus, const event_t *event, 
 }
 
 // --- API publique ---
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void net_client_init(event_bus_t *bus)
 {
@@ -527,12 +545,11 @@ bool net_client_send_http_request(const char *path,
     char url[128];
     snprintf(url, sizeof(url), "http://%s:%d%s", CONFIG_HMI_BRIDGE_HOST, CONFIG_HMI_BRIDGE_PORT, path);
 
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 5000,
-        .buffer_size = 1024, // Buffer interne RX HTTP
-        .buffer_size_tx = 1024,
-    };
+    esp_http_client_config_t cfg = {};
+    cfg.url = url;
+    cfg.timeout_ms = 5000;
+    cfg.buffer_size = 1024; // Buffer interne RX HTTP
+    cfg.buffer_size_tx = 1024;
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) {
@@ -590,3 +607,7 @@ bool net_client_send_http_request(const char *path,
     publish_request_finished(path, method, success, status);
     return success;
 }
+
+#ifdef __cplusplus
+}
+#endif

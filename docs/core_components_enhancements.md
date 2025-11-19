@@ -416,19 +416,15 @@ bool validate_event_data(const T& data) {
 
 ```
 event_bus/
-├── event_bus.c                    # Implementation C originale (conservée)
-├── event_bus.h                    # API C publique (inchangée)
-├── event_bus_core.hpp             # ✨ NOUVEAU: Interface C++ moderne
-├── event_bus_core.cpp             # ✨ NOUVEAU: Implémentation C++
-└── CMakeLists.txt                 # ✨ MODIFIÉ
+├── event_bus.cpp                  # Implémentation C++ consolidée
+├── event_bus.h                    # API C publique (compat C)
+└── CMakeLists.txt                 # Déclaration du composant
 ```
 
-**Composants :**
-- `ScopedMutex` : RAII mutex management
-- `PayloadPool` : Memory pool pour réduire fragmentation
-- `SubscriberRegistry` : Thread-safe subscriber management
-- `EventBus` : Main bus implementation
-- `BusStatistics` : Métriques détaillées
+**Points clés :**
+- Conversion du fichier C historique en `.cpp` unique.
+- API C conservée pour compatibilité avec les modules restants.
+- Gestion centralisée de la queue FreeRTOS dans `event_bus_t`.
 
 ### diagnostic_logger C++
 
@@ -535,20 +531,17 @@ diag_logger_status_t diagnostic_logger_get_status(void);
 
 **Phase 2** : Nouveaux modules peuvent utiliser API C++ :
 
-```cpp
-// event_bus C++ API
-#include "event_bus_core.hpp"
+```c
+// API C conservée
+#include "event_bus.h"
 
-auto& bus = event_bus::EventBus::instance();
-uint64_t sub_id = bus.subscribe(EVENT_FOO, my_callback, nullptr);
+static event_bus_t s_bus;
 
-// Unsubscribe quand terminé
-bus.unsubscribe(sub_id);
-
-// Métriques
-auto metrics = bus.get_metrics();
-ESP_LOGI(TAG, "Pool hits: %u%%",
-         100 * metrics.pool_hits / metrics.published_total);
+void setup_bus(void)
+{
+    event_bus_init(&s_bus);
+    event_bus_subscribe(&s_bus, EVENT_FOO, my_callback, NULL);
+}
 ```
 
 ---
