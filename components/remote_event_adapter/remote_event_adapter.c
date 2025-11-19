@@ -3,12 +3,16 @@
 #include "remote_event_adapter.h"
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 
 #include "event_types.h"
 #include "event_bus.h"
@@ -58,6 +62,21 @@ typedef struct {
 static bool s_cache_loaded = false;
 static bool s_has_cached_telemetry = false;
 static bool s_has_cached_config = false;
+static bool s_pending_telemetry_flush = false;
+static bool s_pending_config_flush = false;
+static uint64_t s_last_flush_us = 0;
+static esp_timer_handle_t s_flush_timer = NULL;
+static portMUX_TYPE s_cache_lock = portMUX_INITIALIZER_UNLOCKED;
+
+#ifndef CONFIG_REMOTE_EVENT_CACHE_FLUSH_INTERVAL_MS
+#define CONFIG_REMOTE_EVENT_CACHE_FLUSH_INTERVAL_MS 5000
+#endif
+#define CACHE_FLUSH_INTERVAL_US ((uint64_t) CONFIG_REMOTE_EVENT_CACHE_FLUSH_INTERVAL_MS * 1000ULL)
+
+static void flush_cache(bool force);
+static void schedule_cache_flush(void);
+static void mark_telemetry_dirty(void);
+static void mark_config_dirty(void);
 
 // --- Helpers JSON ---
 
@@ -324,23 +343,91 @@ static esp_err_t save_blob(const char *key, const void *data, size_t len)
     return err;
 }
 
-static void save_cached_telemetry(void)
+static void flush_cache(bool force)
 {
-    cache_telemetry_t cache = {
-        .batt = s_batt_status,
-        .pack = s_pack_stats,
-    };
+    cache_telemetry_t telemetry_snapshot = {0};
+    hmi_config_t config_snapshot = {0};
+    bool flush_telemetry = false;
+    bool flush_config = false;
+    uint64_t now = esp_timer_get_time();
 
-    if (save_blob(NVS_KEY_TELE, &cache, sizeof(cache)) == ESP_OK) {
-        s_has_cached_telemetry = true;
+    portENTER_CRITICAL(&s_cache_lock);
+    bool due = force || (now - s_last_flush_us) >= CACHE_FLUSH_INTERVAL_US;
+    if (due && (s_pending_telemetry_flush || s_pending_config_flush)) {
+        if (s_pending_telemetry_flush) {
+            telemetry_snapshot.batt = s_batt_status;
+            telemetry_snapshot.pack = s_pack_stats;
+            s_pending_telemetry_flush = false;
+            flush_telemetry = true;
+        }
+        if (s_pending_config_flush) {
+            config_snapshot = s_config;
+            s_pending_config_flush = false;
+            flush_config = true;
+        }
+        s_last_flush_us = now;
+    }
+    portEXIT_CRITICAL(&s_cache_lock);
+
+    if (flush_telemetry) {
+        if (save_blob(NVS_KEY_TELE, &telemetry_snapshot, sizeof(telemetry_snapshot)) == ESP_OK) {
+            s_has_cached_telemetry = true;
+        }
+    }
+
+    if (flush_config) {
+        if (save_blob(NVS_KEY_CONFIG, &config_snapshot, sizeof(config_snapshot)) == ESP_OK) {
+            s_has_cached_config = true;
+        }
+    }
+
+    schedule_cache_flush();
+}
+
+static void flush_timer_cb(void *arg)
+{
+    (void) arg;
+    flush_cache(true);
+}
+
+static void schedule_cache_flush(void)
+{
+    if (!s_flush_timer) {
+        return;
+    }
+
+    bool dirty = false;
+    portENTER_CRITICAL(&s_cache_lock);
+    dirty = s_pending_telemetry_flush || s_pending_config_flush;
+    portEXIT_CRITICAL(&s_cache_lock);
+
+    if (!dirty) {
+        return;
+    }
+
+    if (!esp_timer_is_active(s_flush_timer)) {
+        esp_timer_start_once(s_flush_timer, CACHE_FLUSH_INTERVAL_US);
     }
 }
 
-static void save_cached_config(void)
+static void mark_telemetry_dirty(void)
 {
-    if (save_blob(NVS_KEY_CONFIG, &s_config, sizeof(s_config)) == ESP_OK) {
-        s_has_cached_config = true;
-    }
+    bool force = (s_flush_timer == NULL);
+    portENTER_CRITICAL(&s_cache_lock);
+    s_pending_telemetry_flush = true;
+    portEXIT_CRITICAL(&s_cache_lock);
+
+    flush_cache(force);
+}
+
+static void mark_config_dirty(void)
+{
+    bool force = (s_flush_timer == NULL);
+    portENTER_CRITICAL(&s_cache_lock);
+    s_pending_config_flush = true;
+    portEXIT_CRITICAL(&s_cache_lock);
+
+    flush_cache(force);
 }
 
 static void load_cached_state(void)
@@ -507,6 +594,17 @@ void remote_event_adapter_init(event_bus_t *bus)
         publish_cached_state();
     }
 
+    if (!s_flush_timer) {
+        esp_timer_create_args_t args = {
+            .callback = flush_timer_cb,
+            .name = "rem_evt_flush",
+        };
+        esp_err_t err = esp_timer_create(&args, &s_flush_timer);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to create flush timer: %s", esp_err_to_name(err));
+        }
+    }
+
     ESP_LOGI(TAG, "remote_event_adapter initialized");
 
     event_bus_subscribe(bus, EVENT_USER_INPUT_WRITE_CONFIG, handle_user_write_config, NULL);
@@ -516,6 +614,9 @@ void remote_event_adapter_init(event_bus_t *bus)
     event_bus_subscribe(bus, EVENT_USER_INPUT_UPDATE_ALERT_FILTERS, handle_user_update_filters, NULL);
 
     publish_alert_filters();
+
+    // s_flush_timer peut être NULL si la création a échoué; on force un flush immédiat
+    flush_cache(true);
 }
 
 void remote_event_adapter_start(void)
@@ -712,7 +813,7 @@ void remote_event_adapter_on_telemetry_json(const char *json, size_t length)
 
     cJSON_Delete(root);
 
-    save_cached_telemetry();
+    mark_telemetry_dirty();
 
     // --- Publication des événements « propres » ---
 
@@ -958,7 +1059,7 @@ void remote_event_adapter_on_http_response(const char *path,
     if (success && strcmp(method, "POST") == 0 && s_has_pending_config) {
         s_config = s_pending_config;
         s_has_pending_config = false;
-        save_cached_config();
+        mark_config_dirty();
         publish_config_update();
     }
 }
@@ -1030,7 +1131,7 @@ static void parse_main_config_json(cJSON *root)
     }
 
     set_string_field(s_config.uart_parity, sizeof(s_config.uart_parity), root, "uart_parity");
-    save_cached_config();
+    mark_config_dirty();
 }
 
 static void parse_mqtt_config_json(cJSON *root)
@@ -1042,5 +1143,5 @@ static void parse_mqtt_config_json(cJSON *root)
     set_string_field(s_config.mqtt_broker, sizeof(s_config.mqtt_broker), root, "mqtt_broker");
     set_string_field(s_config.mqtt_topic_pub, sizeof(s_config.mqtt_topic_pub), root, "mqtt_topic_pub");
     set_string_field(s_config.mqtt_topic_sub, sizeof(s_config.mqtt_topic_sub), root, "mqtt_topic_sub");
-    save_cached_config();
+    mark_config_dirty();
 }

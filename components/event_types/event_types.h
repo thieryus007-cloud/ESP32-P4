@@ -339,6 +339,8 @@ typedef struct {
     uint32_t timeouts;
     uint32_t nacks;
     uint32_t retries;
+    uint32_t avg_latency_ms;
+    uint32_t queue_depth_max;
 } tinybms_stats_t;
 
 typedef struct {

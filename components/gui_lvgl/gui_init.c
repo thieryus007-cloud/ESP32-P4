@@ -538,9 +538,7 @@ static void tinybms_config_changed_handler(event_bus_t *bus,
         // Update stats
         tinybms_stats_t stats;
         if (tinybms_get_stats(&stats) == ESP_OK) {
-            screen_tinybms_status_update_stats(stats.reads_ok, stats.reads_failed,
-                                                stats.writes_ok, stats.writes_failed,
-                                                stats.crc_errors, stats.timeouts);
+            screen_tinybms_status_update_stats(&stats);
         }
     }
 }
