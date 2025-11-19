@@ -867,13 +867,14 @@ typedef enum {
 
 ---
 
-## 🔄 Intégration dans hmi_main.c
+## 🔄 Intégration dans hmi_main.cpp
 
-```c
-// main/hmi_main.c
+```cpp
+// main/hmi_main.cpp
 
 #include "can_victron.h"
 #include "can_publisher.h"
+#include "gui_init.hpp"
 
 void hmi_main_init(void) {
     // ... initialisations existantes ...
@@ -883,7 +884,8 @@ void hmi_main_init(void) {
     can_publisher_init(&s_event_bus);                  // NOUVEAU
 
     // 4) Init GUI (LVGL + écrans)
-    gui_init(&s_event_bus);
+    s_gui_root = std::make_unique<gui::GuiRoot>(&s_event_bus);
+    s_gui_root->init();
 }
 
 void hmi_main_start(void) {
@@ -893,7 +895,9 @@ void hmi_main_start(void) {
     can_victron_start();                               // NOUVEAU
     can_publisher_start();                             // NOUVEAU
 
-    gui_start();
+    if (s_gui_root) {
+        s_gui_root->start();
+    }
 }
 ```
 
@@ -953,7 +957,7 @@ void hmi_main_start(void) {
 - [ ] Créer `screen_can_status.c` (état bus CAN + stats)
 - [ ] Créer `screen_can_config.c` (configuration CAN)
 - [ ] Créer `screen_bms_control.c` (CVL state + limites)
-- [ ] Intégrer 3 nouveaux onglets dans `gui_init.c`
+- [ ] Intégrer 3 nouveaux onglets dans `gui_init.cpp`
 - [ ] Implémenter affichage temps réel CVL/CCL/DCL
 - [ ] Tests complets avec onduleur Victron
 - [ ] Documentation utilisateur

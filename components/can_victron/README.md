@@ -203,7 +203,7 @@ Le driver publie maintenant les événements via event_bus:
 
 **Utilisation**:
 ```c
-// Dans hmi_main.c ou similaire
+// Dans hmi_main.cpp ou similaire
 can_victron_init();
 can_victron_set_event_bus(&event_bus);
 ```

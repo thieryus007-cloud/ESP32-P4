@@ -244,14 +244,14 @@ Structures de données principales :
 ESP32-P4/
 ├── README.md
 ├── main/
-│   ├── app_main.c.c         # Point d'entrée (36 lignes)
-│   ├── hmi_main.c           # Orchestrateur système (73 lignes)
+│   ├── app_main.c           # Point d'entrée (36 lignes)
+│   ├── hmi_main.cpp         # Orchestrateur système (73 lignes)
 │   └── hmi_main.h
 ├── components/
 │   ├── event_bus/           # Système d'événements pub/sub
 │   ├── event_types/         # Définitions de types et structures
 │   ├── gui_lvgl/            # Interface graphique LVGL (1,728 lignes)
-│   │   ├── gui_init.c/h
+│   │   ├── gui_init.cpp/hpp (GuiRoot)
 │   │   ├── screen_home.c/h            (251 lignes)
 │   │   ├── screen_battery.c/h         (260 lignes)
 │   │   ├── screen_cells.c/h           (226 lignes)
@@ -438,7 +438,7 @@ npm start
 
 - **Connexion UART TinyBMS** : vérifier que `tinybms_client_get_stats()` retourne des compteurs de lectures > 0 et aucune erreur CRC.
 - **Flux WebSocket S3** : surveiller les logs `EVENT_REMOTE_TELEMETRY_UPDATE`; en l'absence d'événements, valider SSID/mot de passe et l'URL du bridge.
-- **Affichage LVGL** : si l'écran reste noir, vérifier l'appel à `gui_init()` et la présence du task LVGL dans `hmi_main`.
+- **Affichage LVGL** : si l'écran reste noir, vérifier l'instanciation de `gui::GuiRoot` et la présence du task LVGL dans `hmi_main`.
 - **CAN Victron** : confirmer que la tâche `can_victron_task` est démarrée et que les événements `EVENT_CAN_MESSAGE_RX` arrivent après le handshake 0x307.
 - **Diffusion MQTT/HTTP** : en mode autonome, activer le tampon offline (`NETWORK_TELEMETRY_OFFLINE_BUFFER`) pour éviter la perte de mesures pendant les coupures réseau.
 
@@ -468,7 +468,7 @@ npm start
 ## 📝 Roadmap
 
 1. ✅ Squelette projet & EventBus
-2. ✅ `app_main.c` + `hmi_main.c`
+2. ✅ `app_main.c` + `hmi_main.cpp`
 3. ✅ Intégration LVGL + écran
 4. ✅ Module net_client (connexion S3 + WS/HTTP)
 5. ✅ Module remote_event_adapter

@@ -10,8 +10,8 @@ Ce répertoire centralise la documentation des modules composant le firmware HMI
 
 ## Flux global (résumé)
 
-1. `app_main.c` initialise NVS puis délègue toute l'orchestration à `hmi_main.c`.
-2. `hmi_main.c` prépare l'EventBus, configure le mode de fonctionnement (connecté S3 ou autonome TinyBMS), démarre les modèles (télémétrie, événements système, historique) et les interfaces de communication (Wi-Fi/WebSocket, UART TinyBMS).
+1. `app_main.c` initialise NVS puis délègue toute l'orchestration à `hmi_main.cpp`.
+2. `hmi_main.cpp` prépare l'EventBus, configure le mode de fonctionnement (connecté S3 ou autonome TinyBMS), démarre les modèles (télémétrie, événements système, historique) et les interfaces de communication (Wi-Fi/WebSocket, UART TinyBMS).
 3. Les callbacks réseau (`net_client` + `remote_event_adapter`) transforment les JSON entrants en événements internes publiés sur l'EventBus.
 4. Les modèles (`telemetry_model`, `system_events_model`, `tinybms_model`, etc.) dérivent des structures métiers et republient des mises à jour consommées par la GUI LVGL.
 5. Les modules de diffusion (`network_publisher`, `can_publisher`) exportent la télémétrie vers l'extérieur.

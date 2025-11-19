@@ -81,7 +81,7 @@
       52
     ],
     [
-      "components/gui_lvgl/gui_init.c",
+      "components/gui_lvgl/gui_init.cpp",
       51
     ]
   ]
