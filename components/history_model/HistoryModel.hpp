@@ -8,8 +8,7 @@
 
 #include "event_bus.h"
 #include "event_types.h"
-// On suppose que NetClient.hpp est disponible suite à la refonte précédente
-#include "NetClient.hpp" 
+#include "net_client.h"  // API C pour les requêtes HTTP
 #include "cJSON.h"
 
 class HistoryModel {
@@ -18,8 +17,8 @@ public:
     static constexpr size_t CAPACITY = 2048; //
     static constexpr size_t EXPORT_BATCH_SIZE = 128; // Pour l'écriture fichier
 
-    // Constructeur : Injection des dépendances
-    HistoryModel(event_bus_t* bus, NetClient* netClient);
+    // Constructeur
+    explicit HistoryModel(event_bus_t* bus);
     ~HistoryModel();
 
     // Pas de copie
@@ -58,10 +57,9 @@ private:
 
     // --- Membres ---
     event_bus_t* m_bus;
-    NetClient* m_netClient;
-    
+
     mutable std::mutex m_mutex; // Protège le RingBuffer
     RingBuffer m_ring;
-    
+
     history_range_t m_lastRequestedRange = HISTORY_RANGE_LAST_HOUR;
 };

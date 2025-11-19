@@ -39,9 +39,8 @@ namespace {
 
 // --- Constructeur / Destructeur ---
 
-HistoryModel::HistoryModel(event_bus_t* bus, NetClient* netClient)
+HistoryModel::HistoryModel(event_bus_t* bus)
     : m_bus(bus)
-    , m_netClient(netClient)
     , m_ring(CAPACITY) // Allocation du vecteur ici
 {
     if (m_bus) {
@@ -105,16 +104,12 @@ void HistoryModel::onBatteryUpdate(const battery_status_t* status) {
 
 void HistoryModel::onHistoryRequest(const user_input_history_request_t* req) {
     m_lastRequestedRange = req->range;
-    
+
     std::string path = "/api/history?range=";
     path += getRangeQueryString(req->range);
 
-    // On essaie de récupérer l'historique distant d'abord
-    bool sent = false;
-    if (m_netClient) {
-        // On suppose que NetClient a été modernisé pour accepter std::string
-        sent = m_netClient->sendHttpRequest(path, "GET", "");
-    }
+    // On essaie de récupérer l'historique distant d'abord via l'API C
+    bool sent = net_client_send_http_request(path.c_str(), "GET", NULL, 0);
 
     if (!sent) {
         ESP_LOGW(TAG, "Backend unavailable, using local buffer");
