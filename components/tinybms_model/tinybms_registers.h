@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -20,6 +21,24 @@ extern "C" {
 /**
  * @brief Register groups
  */
+#ifdef __cplusplus
+enum class register_group_t : uint8_t {
+    Battery = 0,
+    Charger,
+    Safety,
+    Advanced,
+    System,
+    Max
+};
+
+#define REG_GROUP_BATTERY register_group_t::Battery
+#define REG_GROUP_CHARGER register_group_t::Charger
+#define REG_GROUP_SAFETY register_group_t::Safety
+#define REG_GROUP_ADVANCED register_group_t::Advanced
+#define REG_GROUP_SYSTEM register_group_t::System
+#define REG_GROUP_MAX static_cast<size_t>(register_group_t::Max)
+
+#else
 typedef enum {
     REG_GROUP_BATTERY = 0,
     REG_GROUP_CHARGER,
@@ -28,23 +47,48 @@ typedef enum {
     REG_GROUP_SYSTEM,
     REG_GROUP_MAX
 } register_group_t;
+#endif
 
 /**
  * @brief Register value class
  */
+#ifdef __cplusplus
+enum class value_class_t : uint8_t {
+    Numeric = 0,
+    Enum
+};
+
+#define VALUE_CLASS_NUMERIC value_class_t::Numeric
+#define VALUE_CLASS_ENUM value_class_t::Enum
+
+#else
 typedef enum {
     VALUE_CLASS_NUMERIC = 0,
     VALUE_CLASS_ENUM
 } value_class_t;
+#endif
 
 /**
  * @brief Register data type
  */
+#ifdef __cplusplus
+enum class register_type_t : uint8_t {
+    Uint16 = 0,
+    Int16,
+    Enum
+};
+
+#define TYPE_UINT16 register_type_t::Uint16
+#define TYPE_INT16 register_type_t::Int16
+#define TYPE_ENUM register_type_t::Enum
+
+#else
 typedef enum {
     TYPE_UINT16 = 0,
     TYPE_INT16,
     TYPE_ENUM
 } register_type_t;
+#endif
 
 /**
  * @brief Enum value entry
