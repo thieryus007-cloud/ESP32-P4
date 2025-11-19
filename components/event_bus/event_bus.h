@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+
 #include "event_types.h"
 
 #ifdef __cplusplus
@@ -33,9 +36,27 @@ struct event_bus;
 typedef void (*event_callback_t)(struct event_bus *bus, const event_t *event, void *user_ctx);
 
 /**
- * @brief Handle interne du bus (implémentation dans event_bus.c)
+ * @brief Nombre maximum d'abonnés simultanés.
  */
-typedef struct event_bus event_bus_t;
+#ifndef EVENT_BUS_MAX_SUBSCRIBERS
+#define EVENT_BUS_MAX_SUBSCRIBERS 32
+#endif
+
+/**
+ * @brief Handle interne du bus.
+ */
+typedef struct event_bus {
+    struct {
+        event_type_t     type;
+        event_callback_t callback;
+        void            *user_ctx;
+        bool             in_use;
+    } subscribers[EVENT_BUS_MAX_SUBSCRIBERS];
+    QueueHandle_t queue;
+    uint32_t      queue_length;
+    uint32_t      published_total;
+    uint32_t      dropped_events;
+} event_bus_t;
 
 typedef struct {
     uint32_t subscribers;     // slots occupés

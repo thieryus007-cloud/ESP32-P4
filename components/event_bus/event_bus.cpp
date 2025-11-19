@@ -12,21 +12,6 @@
 #define CONFIG_EVENT_BUS_QUEUE_LENGTH 32
 #endif
 
-#define MAX_SUBSCRIBERS 32
-
-struct event_bus {
-    struct {
-        event_type_t     type;
-        event_callback_t callback;
-        void            *user_ctx;
-        bool             in_use;
-    } subscribers[MAX_SUBSCRIBERS];
-    QueueHandle_t queue;
-    uint32_t      queue_length;
-    uint32_t published_total;
-    uint32_t dropped_events;
-};
-
 typedef struct {
     event_t event;
     void   *payload_copy;
@@ -42,7 +27,7 @@ static void dispatch_to_subscribers(event_bus_t *bus, const event_t *event)
     }
 
     bus->published_total++;
-    for (int i = 0; i < MAX_SUBSCRIBERS; ++i) {
+    for (int i = 0; i < EVENT_BUS_MAX_SUBSCRIBERS; ++i) {
         if (bus->subscribers[i].in_use && bus->subscribers[i].type == event->type) {
             if (bus->subscribers[i].callback) {
                 bus->subscribers[i].callback(bus, event, bus->subscribers[i].user_ctx);
@@ -75,7 +60,7 @@ bool event_bus_subscribe(event_bus_t *bus,
         return false;
     }
 
-    for (int i = 0; i < MAX_SUBSCRIBERS; ++i) {
+    for (int i = 0; i < EVENT_BUS_MAX_SUBSCRIBERS; ++i) {
         if (!bus->subscribers[i].in_use) {
             bus->subscribers[i].type      = type;
             bus->subscribers[i].callback  = callback;
@@ -143,7 +128,7 @@ event_bus_metrics_t event_bus_get_metrics(const event_bus_t *bus)
         return m;
     }
 
-    for (int i = 0; i < MAX_SUBSCRIBERS; ++i) {
+    for (int i = 0; i < EVENT_BUS_MAX_SUBSCRIBERS; ++i) {
         if (bus->subscribers[i].in_use) {
             m.subscribers++;
         }
