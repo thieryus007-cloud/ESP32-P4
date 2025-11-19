@@ -25,6 +25,25 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats);
 
 #ifdef __cplusplus
 }
+
+namespace gui {
+
+class ScreenBattery {
+public:
+    explicit ScreenBattery(lv_obj_t *parent) { screen_battery_create(parent); }
+
+    void update_pack_basic(const battery_status_t &status)
+    {
+        screen_battery_update_pack_basic(&status);
+    }
+
+    void update_pack_stats(const pack_stats_t &stats)
+    {
+        screen_battery_update_pack_stats(&stats);
+    }
+};
+
+}  // namespace gui
 #endif
 
 #endif // SCREEN_BATTERY_H

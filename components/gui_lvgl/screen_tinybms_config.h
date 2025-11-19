@@ -36,6 +36,21 @@ void screen_tinybms_config_apply_register(const tinybms_register_update_t *updat
 
 #ifdef __cplusplus
 }
+
+namespace gui {
+
+class ScreenTinybmsConfig {
+public:
+    explicit ScreenTinybmsConfig(lv_obj_t *parent) { screen_tinybms_config_create(parent); }
+
+    void update(const tinybms_config_t &config) { screen_tinybms_config_update(&config); }
+    void apply_register(const tinybms_register_update_t &update)
+    {
+        screen_tinybms_config_apply_register(&update);
+    }
+};
+
+}  // namespace gui
 #endif
 
 #endif // SCREEN_TINYBMS_CONFIG_H

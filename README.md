@@ -46,6 +46,11 @@ Le projet s'appuie sur un système BMS existant fonctionnant sur ESP32-S3 et off
 
 ### Interface graphique (7 écrans)
 
+> ℹ️ La couche GUI (`components/gui_lvgl/`) est désormais compilée en C++17 et
+> fournit des classes `gui::Screen*` qui encapsulent les anciens points d'entrée
+> C. Voir [`docs/gui.md`](docs/gui.md) pour le détail de l'architecture objet et
+> les exigences de compilation.
+
 #### Écrans BMS S3 (via WiFi/WebSocket)
 
 1. **🏠 Écran d'accueil (Home)**

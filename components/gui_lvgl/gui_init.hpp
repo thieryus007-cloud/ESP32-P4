@@ -13,6 +13,18 @@
 namespace gui {
 
 class ScreenHome;
+class ScreenDashboard;
+class ScreenBattery;
+class ScreenCells;
+class ScreenPower;
+class ScreenAlerts;
+class ScreenConfig;
+class ScreenTinybmsStatus;
+class ScreenTinybmsConfig;
+class ScreenCanStatus;
+class ScreenCanConfig;
+class ScreenBmsControl;
+class ScreenHistory;
 
 struct BatteryContext {
     battery_status_t status{};
@@ -151,7 +163,19 @@ private:
     lv_obj_t    *tab_bms_ctrl_   = nullptr;
     lv_obj_t    *tab_history_    = nullptr;
 
-    std::unique_ptr<ScreenHome> screen_home_;
+    std::unique_ptr<ScreenHome>          screen_home_;
+    std::unique_ptr<ScreenDashboard>     screen_dashboard_;
+    std::unique_ptr<ScreenBattery>       screen_battery_;
+    std::unique_ptr<ScreenCells>         screen_cells_;
+    std::unique_ptr<ScreenPower>         screen_power_;
+    std::unique_ptr<ScreenAlerts>        screen_alerts_;
+    std::unique_ptr<ScreenConfig>        screen_config_;
+    std::unique_ptr<ScreenTinybmsStatus> screen_tinybms_status_;
+    std::unique_ptr<ScreenTinybmsConfig> screen_tinybms_config_;
+    std::unique_ptr<ScreenCanStatus>     screen_can_status_;
+    std::unique_ptr<ScreenCanConfig>     screen_can_config_;
+    std::unique_ptr<ScreenBmsControl>    screen_bms_control_;
+    std::unique_ptr<ScreenHistory>       screen_history_;
 };
 
 }  // namespace gui

@@ -20,3 +20,5 @@ idf_component_register(
     INCLUDE_DIRS "." "include"
     REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher
 )
+
+target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

@@ -81,22 +81,19 @@ void GuiRoot::create_tabs()
     tab_bms_ctrl_   = lv_tabview_add_tab(tabview_, ui_i18n("tab.bms_control"));
     tab_history_    = lv_tabview_add_tab(tabview_, ui_i18n("tab.history"));
 
-    screen_dashboard_create(tab_dashboard_);
-    screen_home_ = create_screen_home(tab_home_);
-    screen_battery_create(tab_pack_);
-    screen_cells_create(tab_cells_);
-    screen_power_create(tab_power_);
-    screen_alerts_set_bus(bus_);
-    screen_alerts_create(tab_alerts_);
-    screen_config_set_bus(bus_);
-    screen_config_create(tab_config_);
-    screen_tinybms_status_create(tab_tbms_stat_);
-    screen_tinybms_config_create(tab_tbms_conf_);
-    screen_can_status_create(tab_can_status_);
-    screen_can_config_create(tab_can_config_);
-    screen_bms_control_create(tab_bms_ctrl_);
-    screen_history_set_bus(bus_);
-    screen_history_create(tab_history_);
+    screen_dashboard_  = std::make_unique<ScreenDashboard>(tab_dashboard_);
+    screen_home_       = create_screen_home(tab_home_);
+    screen_battery_    = std::make_unique<ScreenBattery>(tab_pack_);
+    screen_cells_      = std::make_unique<ScreenCells>(tab_cells_);
+    screen_power_      = std::make_unique<ScreenPower>(tab_power_);
+    screen_alerts_     = std::make_unique<ScreenAlerts>(bus_, tab_alerts_);
+    screen_config_     = std::make_unique<ScreenConfig>(bus_, tab_config_);
+    screen_tinybms_status_ = std::make_unique<ScreenTinybmsStatus>(tab_tbms_stat_);
+    screen_tinybms_config_ = std::make_unique<ScreenTinybmsConfig>(tab_tbms_conf_);
+    screen_can_status_     = std::make_unique<ScreenCanStatus>(tab_can_status_);
+    screen_can_config_     = std::make_unique<ScreenCanConfig>(tab_can_config_);
+    screen_bms_control_    = std::make_unique<ScreenBmsControl>(tab_bms_ctrl_);
+    screen_history_        = std::make_unique<ScreenHistory>(bus_, tab_history_);
 }
 
 void GuiRoot::refresh_language()
@@ -122,9 +119,15 @@ void GuiRoot::refresh_language()
     if (screen_home_) {
         screen_home_->refresh_texts();
     }
-    screen_dashboard_refresh_texts();
-    screen_power_refresh_texts();
-    screen_config_refresh_texts();
+    if (screen_dashboard_) {
+        screen_dashboard_->refresh_texts();
+    }
+    if (screen_power_) {
+        screen_power_->refresh_texts();
+    }
+    if (screen_config_) {
+        screen_config_->refresh_texts();
+    }
 }
 
 void GuiRoot::language_listener(void *user_ctx)
@@ -283,7 +286,9 @@ void GuiRoot::tinybms_connected_handler(event_bus_t *, const event_t *, void *us
         return;
     }
 
-    screen_tinybms_status_update_connection(true);
+    if (self->screen_tinybms_status_) {
+        self->screen_tinybms_status_->update_connection(true);
+    }
 }
 
 void GuiRoot::tinybms_disconnected_handler(event_bus_t *, const event_t *, void *user_ctx)
@@ -293,7 +298,9 @@ void GuiRoot::tinybms_disconnected_handler(event_bus_t *, const event_t *, void 
         return;
     }
 
-    screen_tinybms_status_update_connection(false);
+    if (self->screen_tinybms_status_) {
+        self->screen_tinybms_status_->update_connection(false);
+    }
 }
 
 void GuiRoot::tinybms_config_changed_handler(event_bus_t *, const event_t *, void *user_ctx)
@@ -334,10 +341,18 @@ void GuiRoot::handle_battery_status(const battery_status_t &status)
             if (screen_home_) {
                 screen_home_->update_battery(context.status);
             }
-            screen_dashboard_update_battery(&context.status);
-            screen_battery_update_pack_basic(&context.status);
-            screen_power_update(&context.status);
-            screen_cells_update_pack(&context.status);
+            if (screen_dashboard_) {
+                screen_dashboard_->update_battery(context.status);
+            }
+            if (screen_battery_) {
+                screen_battery_->update_pack_basic(context.status);
+            }
+            if (screen_power_) {
+                screen_power_->update(context.status);
+            }
+            if (screen_cells_) {
+                screen_cells_->update_pack(context.status);
+            }
         },
         ctx);
 }
@@ -350,8 +365,12 @@ void GuiRoot::handle_system_status(const system_status_t &status)
             if (screen_home_) {
                 screen_home_->update_system(context.status);
             }
-            screen_dashboard_update_system(&context.status);
-            screen_power_update_system(&context.status);
+            if (screen_dashboard_) {
+                screen_dashboard_->update_system(context.status);
+            }
+            if (screen_power_) {
+                screen_power_->update_system(context.status);
+            }
         },
         ctx);
 }
@@ -361,9 +380,15 @@ void GuiRoot::handle_pack_stats(const pack_stats_t &stats)
     PackContext ctx{stats};
     dispatch_to_lvgl(
         [this](PackContext &context) {
-            screen_battery_update_pack_stats(&context.stats);
-            screen_cells_update_cells(&context.stats);
-            screen_dashboard_update_cells(&context.stats);
+            if (screen_battery_) {
+                screen_battery_->update_pack_stats(context.stats);
+            }
+            if (screen_cells_) {
+                screen_cells_->update_cells(context.stats);
+            }
+            if (screen_dashboard_) {
+                screen_dashboard_->update_cells(context.stats);
+            }
             if (screen_home_) {
                 screen_home_->update_balancing(&context.stats);
             }
@@ -374,24 +399,39 @@ void GuiRoot::handle_pack_stats(const pack_stats_t &stats)
 void GuiRoot::handle_config(const hmi_config_t &config)
 {
     ConfigContext ctx{config};
-    dispatch_to_lvgl([](ConfigContext &context) { screen_config_apply(&context.config); }, ctx);
+    dispatch_to_lvgl(
+        [this](ConfigContext &context) {
+            if (screen_config_) {
+                screen_config_->apply(context.config);
+            }
+        },
+        ctx);
 }
 
 void GuiRoot::handle_cmd_result(const cmd_result_t &result)
 {
     CommandResultContext ctx{result};
-    dispatch_to_lvgl([](CommandResultContext &context) { screen_config_show_result(&context.result); }, ctx);
+    dispatch_to_lvgl(
+        [this](CommandResultContext &context) {
+            if (screen_config_) {
+                screen_config_->show_result(context.result);
+            }
+        },
+        ctx);
 }
 
 void GuiRoot::handle_alert_list(const alert_list_t &alerts, bool is_history)
 {
     AlertListContext ctx{alerts, is_history};
     dispatch_to_lvgl(
-        [](AlertListContext &context) {
+        [this](AlertListContext &context) {
+            if (!screen_alerts_) {
+                return;
+            }
             if (context.is_history) {
-                screen_alerts_update_history(&context.alerts);
+                screen_alerts_->update_history(context.alerts);
             } else {
-                screen_alerts_update_active(&context.alerts);
+                screen_alerts_->update_active(context.alerts);
             }
         },
         ctx);
@@ -400,36 +440,60 @@ void GuiRoot::handle_alert_list(const alert_list_t &alerts, bool is_history)
 void GuiRoot::handle_alert_filters(const alert_filters_t &filters)
 {
     AlertFiltersContext ctx{filters};
-    dispatch_to_lvgl([](AlertFiltersContext &context) { screen_alerts_apply_filters(&context.filters); }, ctx);
+    dispatch_to_lvgl(
+        [this](AlertFiltersContext &context) {
+            if (screen_alerts_) {
+                screen_alerts_->apply_filters(context.filters);
+            }
+        },
+        ctx);
 }
 
 void GuiRoot::handle_history(const history_snapshot_t &snapshot)
 {
     HistoryContext ctx{snapshot};
-    dispatch_to_lvgl([](HistoryContext &context) { screen_history_update(&context.snapshot); }, ctx);
+    dispatch_to_lvgl(
+        [this](HistoryContext &context) {
+            if (screen_history_) {
+                screen_history_->update(context.snapshot);
+            }
+        },
+        ctx);
 }
 
 void GuiRoot::handle_history_export(const history_export_result_t &result)
 {
     HistoryExportContext ctx{result};
-    dispatch_to_lvgl([](HistoryExportContext &context) { screen_history_show_export(&context.result); }, ctx);
+    dispatch_to_lvgl(
+        [this](HistoryExportContext &context) {
+            if (screen_history_) {
+                screen_history_->show_export(context.result);
+            }
+        },
+        ctx);
 }
 
 void GuiRoot::handle_cvl_limits(const cvl_limits_event_t &limits)
 {
     cvl_limits_event_t copy = limits;
-    screen_bms_control_update_cvl(&copy);
+    if (screen_bms_control_) {
+        screen_bms_control_->update_cvl(copy);
+    }
 }
 
 void GuiRoot::handle_tinybms_config_changed()
 {
     tinybms_config_t config;
     if (tinybms_model_get_config(&config) == ESP_OK) {
-        screen_tinybms_config_update(&config);
+        if (screen_tinybms_config_) {
+            screen_tinybms_config_->update(config);
+        }
 
         tinybms_stats_t stats;
         if (tinybms_get_stats(&stats) == ESP_OK) {
-            screen_tinybms_status_update_stats(&stats);
+            if (screen_tinybms_status_) {
+                screen_tinybms_status_->update_stats(stats);
+            }
         }
     }
 }
@@ -437,13 +501,17 @@ void GuiRoot::handle_tinybms_config_changed()
 void GuiRoot::handle_tinybms_register_update(const tinybms_register_update_t &update)
 {
     tinybms_register_update_t copy = update;
-    screen_tinybms_config_apply_register(&copy);
+    if (screen_tinybms_config_) {
+        screen_tinybms_config_->apply_register(copy);
+    }
 }
 
 void GuiRoot::handle_tinybms_uart_log(const tinybms_uart_log_entry_t &entry)
 {
     tinybms_uart_log_entry_t copy = entry;
-    screen_tinybms_status_append_log(&copy);
+    if (screen_tinybms_status_) {
+        screen_tinybms_status_->append_log(copy);
+    }
 }
 
 }  // namespace gui
