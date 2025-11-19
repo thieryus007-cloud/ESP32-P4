@@ -1,6 +1,5 @@
 idf_component_register(
-    SRCS "net_client.cpp"
-         "NetClient.cpp"
+    SRCS "NetClient.cpp"
          "net_client_c_api.cpp"
     INCLUDE_DIRS "."
     REQUIRES event_bus event_types remote_event_adapter
