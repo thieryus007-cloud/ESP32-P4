@@ -14,6 +14,7 @@
 
 #include "gui_format.hpp"
 #include "ui_i18n.h"
+#include "pack_stats_utils.hpp"
 
 namespace gui {
 namespace {
@@ -218,21 +219,12 @@ public:
             last_pack_stats_.reset();
         }
 
-        if (!stats || stats->cell_count == 0) {
+        if (!stats || gui::cell_values(*stats).empty()) {
             status_bal_label_.set(ui_i18n("home.status.bal"), StatusState::Neutral);
             return;
         }
 
-        uint8_t count = std::min(stats->cell_count, static_cast<uint8_t>(PACK_MAX_CELLS));
-        bool    any_balancing = false;
-        for (uint8_t i = 0; i < count; ++i) {
-            if (stats->balancing[i]) {
-                any_balancing = true;
-                break;
-            }
-        }
-
-        if (any_balancing) {
+        if (gui::has_balancing(*stats)) {
             status_bal_label_.set_with_palette(ui_i18n("home.status.bal"), LV_PALETTE_ORANGE);
         } else {
             status_bal_label_.set(ui_i18n("home.status.bal"), StatusState::Neutral);
