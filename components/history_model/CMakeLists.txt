@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "history_model.c"
+    SRCS "history_model.cpp"
     INCLUDE_DIRS "."
     REQUIRES event_bus event_types net_client cjson
 )

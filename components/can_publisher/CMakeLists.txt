@@ -1,10 +1,10 @@
 idf_component_register(
     SRCS
-        "tinybms_adapter.c"
-        "conversion_table.c"
-        "cvl_logic.c"
-        "cvl_controller.c"
-        "can_publisher.c"
+        "tinybms_adapter.cpp"
+        "conversion_table.cpp"
+        "cvl_logic.cpp"
+        "cvl_controller.cpp"
+        "can_publisher.cpp"
         "can_publisher_orchestrator.cpp"
     INCLUDE_DIRS "."
     REQUIRES

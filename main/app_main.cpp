@@ -1,4 +1,4 @@
-// main/app_main.c
+// main/app_main.cpp
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -8,7 +8,7 @@
 
 static const char *TAG = "APP_MAIN";
 
-void app_main(void)
+extern "C" void app_main(void)
 {
     esp_err_t ret;
 
