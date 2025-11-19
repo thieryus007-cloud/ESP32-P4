@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "gui_init.c"
+    SRCS "gui_init.cpp"
          "ui_i18n.c"
          "screen_home.c"
          "screen_dashboard.c"
