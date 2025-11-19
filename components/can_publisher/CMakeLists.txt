@@ -5,6 +5,7 @@ idf_component_register(
         "cvl_logic.c"
         "cvl_controller.c"
         "can_publisher.c"
+        "can_publisher_orchestrator.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         tinybms_model

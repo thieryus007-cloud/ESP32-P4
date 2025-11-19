@@ -1,5 +1,7 @@
 idf_component_register(
-    SRCS "can_victron.c"
+    SRCS
+        "can_victron.c"
+        "can_victron_driver.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         driver
