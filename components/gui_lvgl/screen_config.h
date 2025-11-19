@@ -7,6 +7,18 @@
 #include "event_bus.h"
 
 #ifdef __cplusplus
+#include <functional>
+
+namespace screen_config {
+using SaveCallback = std::function<void(const hmi_config_t &, bool mqtt_only)>;
+using ReloadCallback = std::function<void(bool include_mqtt)>;
+
+void set_save_callback(SaveCallback cb);
+void set_reload_callback(ReloadCallback cb);
+}  // namespace screen_config
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 

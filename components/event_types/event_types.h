@@ -222,7 +222,7 @@ typedef struct {
 typedef struct {
     char wifi_ssid[32];
     char wifi_password[64];
-    char static_ip[16];
+    char static_ip[64];
     char mqtt_broker[64];
     char mqtt_topic_pub[64];
     char mqtt_topic_sub[64];
