@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <vector> // C++ RAII pour allocation dynamique
 
 #include "event_bus.h"
 #include "event_types.h"
@@ -276,25 +277,21 @@ static void websocket_event_handler(void *handler_args,
             break;
         case WEBSOCKET_EVENT_DATA:
             if (data->op_code == WS_TEXT_FRAME && data->data_len > 0) {
-                // [MOD] Allocation dynamique sécurisée (malloc check)
+                // [MOD] Allocation RAII avec std::vector
                 // Note: data->data_ptr pointe dans le buffer RX interne du client
-                char *payload = (char *) malloc(data->data_len + 1);
-                if (payload) {
-                    memcpy(payload, data->data_ptr, data->data_len);
-                    payload[data->data_len] = '\0';
+                std::vector<char> payload(data->data_len + 1);
+                memcpy(payload.data(), data->data_ptr, data->data_len);
+                payload[data->data_len] = '\0';
 
-                    // Dispatch vers l'adapter
-                    if (channel == WS_CHANNEL_TELEMETRY) {
-                        remote_event_adapter_on_telemetry_json(payload, data->data_len);
-                    } else if (channel == WS_CHANNEL_EVENTS) {
-                        remote_event_adapter_on_event_json(payload, data->data_len);
-                    } else if (channel == WS_CHANNEL_ALERTS) {
-                        remote_event_adapter_on_alerts_json(payload, data->data_len);
-                    }
-                    free(payload);
-                } else {
-                    ESP_LOGE(TAG, "OOM handling WS data channel %d", channel);
+                // Dispatch vers l'adapter
+                if (channel == WS_CHANNEL_TELEMETRY) {
+                    remote_event_adapter_on_telemetry_json(payload.data(), data->data_len);
+                } else if (channel == WS_CHANNEL_EVENTS) {
+                    remote_event_adapter_on_event_json(payload.data(), data->data_len);
+                } else if (channel == WS_CHANNEL_ALERTS) {
+                    remote_event_adapter_on_alerts_json(payload.data(), data->data_len);
                 }
+                // Destruction automatique de payload à la fin du scope
             }
             break;
         default:
@@ -588,16 +585,15 @@ bool net_client_send_http_request(const char *path,
         }
         
         int buffer_size = (content_length > 0) ? (content_length + 1) : 1024;
-        char *resp_buf = malloc(buffer_size);
-        
-        if (resp_buf) {
-            int read_len = esp_http_client_read_response(client, resp_buf, buffer_size - 1);
-            if (read_len >= 0) {
-                resp_buf[read_len] = '\0';
-                remote_event_adapter_on_http_response(path, method, status, resp_buf);
-            }
-            free(resp_buf);
+        // [MOD] Allocation RAII avec std::vector
+        std::vector<char> resp_buf(buffer_size);
+
+        int read_len = esp_http_client_read_response(client, resp_buf.data(), buffer_size - 1);
+        if (read_len >= 0) {
+            resp_buf[read_len] = '\0';
+            remote_event_adapter_on_http_response(path, method, status, resp_buf.data());
         }
+        // Destruction automatique de resp_buf à la fin du scope
         success = (status >= 200 && status < 300);
     } else {
         ESP_LOGE(TAG, "HTTP request failed: %s", esp_err_to_name(err));

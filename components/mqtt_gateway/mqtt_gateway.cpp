@@ -12,6 +12,7 @@
 #include "event_types.h"
 #include <stdio.h>
 #include <string.h>
+#include <vector> // C++ RAII pour allocation dynamique
 
 static const char *TAG = "mqtt_gateway";
 
@@ -193,18 +194,15 @@ static void on_mqtt_event(void *handler_args, esp_event_base_t base, int32_t eve
         if (event->topic_len == strlen(s_state.topic_sub) && 
             strncmp(event->topic, s_state.topic_sub, event->topic_len) == 0) {
                 
-            // Utilisation d'un buffer static si possible ou limité à la stack
+            // Utilisation d'un buffer avec RAII
             // Attention : MQTT task a souvent une stack limitée (4096 bytes par défaut)
-            if (event->data_len < 512) { 
-                char *buf = malloc(event->data_len + 1); // Heap allocation safer for large JSON
-                if (buf) {
-                    memcpy(buf, event->data, event->data_len);
-                    buf[event->data_len] = '\0';
-                    handle_command_json(buf, event->data_len);
-                    free(buf);
-                } else {
-                    ESP_LOGE(TAG, "OOM processing MQTT JSON");
-                }
+            if (event->data_len < 512) {
+                // [MOD] Allocation RAII avec std::vector
+                std::vector<char> buf(event->data_len + 1);
+                memcpy(buf.data(), event->data, event->data_len);
+                buf[event->data_len] = '\0';
+                handle_command_json(buf.data(), event->data_len);
+                // Destruction automatique de buf à la fin du scope
             } else {
                 ESP_LOGW(TAG, "MQTT JSON payload too large, ignored");
             }

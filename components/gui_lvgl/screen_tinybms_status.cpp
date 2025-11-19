@@ -185,7 +185,8 @@ void screen_tinybms_status_update_connection(bool connected)
         bool connected;
     } update_ctx_t;
 
-    update_ctx_t *ctx = malloc(sizeof(update_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc
+    update_ctx_t *ctx = new (std::nothrow) update_ctx_t;
     if (ctx == NULL) {
         return;
     }
@@ -205,7 +206,7 @@ void screen_tinybms_status_update_connection(bool connected)
         }
 
         lv_obj_invalidate(c->label);
-        free(c);
+        delete c; // [MOD] delete au lieu de free
     }, ctx);
 }
 
@@ -223,7 +224,8 @@ void screen_tinybms_status_update_stats(const tinybms_stats_t *stats)
         tinybms_stats_t stats;
     } stats_ctx_t;
 
-    stats_ctx_t *ctx = malloc(sizeof(stats_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc
+    stats_ctx_t *ctx = new (std::nothrow) stats_ctx_t;
     if (ctx == NULL) {
         return;
     }
@@ -261,7 +263,7 @@ void screen_tinybms_status_update_stats(const tinybms_stats_t *stats)
         lv_obj_invalidate(c->label_writes);
         lv_obj_invalidate(c->label_errors);
 
-        free(c);
+        delete c; // [MOD] delete au lieu de free
     }, ctx);
 }
 
