@@ -1,27 +1,35 @@
 // components/gui_lvgl/screen_home.h
-#ifndef SCREEN_HOME_H
-#define SCREEN_HOME_H
+#pragma once
 
-#include "lvgl.h"
+#include <memory>
+
 #include "event_types.h"
+#include "lvgl.h"
 
 #ifdef __cplusplus
-extern "C" {
-#endif
 
-void screen_home_create(lv_obj_t *parent);
+namespace gui {
 
-void screen_home_update_battery(const battery_status_t *status);
-void screen_home_update_system(const system_status_t *status);
-/**
- * @brief Mise à jour du badge global de balancing (ON/OFF)
- *        basé sur pack_stats_t (cell_balancing[]).
- */
-void screen_home_update_balancing(const pack_stats_t *stats);
-void screen_home_refresh_texts(void);
+class ScreenHome {
+public:
+    ~ScreenHome();
 
-#ifdef __cplusplus
-}
-#endif
+    void update_battery(const battery_status_t &status);
+    void update_system(const system_status_t &status);
+    void update_balancing(const pack_stats_t *stats);
+    void refresh_texts();
 
-#endif // SCREEN_HOME_H
+private:
+    explicit ScreenHome(lv_obj_t *parent);
+
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+
+    friend std::unique_ptr<ScreenHome> create_screen_home(lv_obj_t *parent);
+};
+
+std::unique_ptr<ScreenHome> create_screen_home(lv_obj_t *parent);
+
+}  // namespace gui
+
+#endif  // __cplusplus

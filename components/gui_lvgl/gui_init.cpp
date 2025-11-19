@@ -82,7 +82,7 @@ void GuiRoot::create_tabs()
     tab_history_    = lv_tabview_add_tab(tabview_, ui_i18n("tab.history"));
 
     screen_dashboard_create(tab_dashboard_);
-    screen_home_create(tab_home_);
+    screen_home_ = create_screen_home(tab_home_);
     screen_battery_create(tab_pack_);
     screen_cells_create(tab_cells_);
     screen_power_create(tab_power_);
@@ -119,7 +119,9 @@ void GuiRoot::refresh_language()
     lv_tabview_set_tab_name(tabview_, tab_bms_ctrl_, ui_i18n("tab.bms_control"));
     lv_tabview_set_tab_name(tabview_, tab_history_, ui_i18n("tab.history"));
 
-    screen_home_refresh_texts();
+    if (screen_home_) {
+        screen_home_->refresh_texts();
+    }
     screen_dashboard_refresh_texts();
     screen_power_refresh_texts();
     screen_config_refresh_texts();
@@ -329,7 +331,9 @@ void GuiRoot::handle_battery_status(const battery_status_t &status)
     BatteryContext ctx{status};
     dispatch_to_lvgl(
         [this](BatteryContext &context) {
-            screen_home_update_battery(&context.status);
+            if (screen_home_) {
+                screen_home_->update_battery(context.status);
+            }
             screen_dashboard_update_battery(&context.status);
             screen_battery_update_pack_basic(&context.status);
             screen_power_update(&context.status);
@@ -343,7 +347,9 @@ void GuiRoot::handle_system_status(const system_status_t &status)
     SystemContext ctx{status};
     dispatch_to_lvgl(
         [this](SystemContext &context) {
-            screen_home_update_system(&context.status);
+            if (screen_home_) {
+                screen_home_->update_system(context.status);
+            }
             screen_dashboard_update_system(&context.status);
             screen_power_update_system(&context.status);
         },
@@ -358,7 +364,9 @@ void GuiRoot::handle_pack_stats(const pack_stats_t &stats)
             screen_battery_update_pack_stats(&context.stats);
             screen_cells_update_cells(&context.stats);
             screen_dashboard_update_cells(&context.stats);
-            screen_home_update_balancing(&context.stats);
+            if (screen_home_) {
+                screen_home_->update_balancing(&context.stats);
+            }
         },
         ctx);
 }
