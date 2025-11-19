@@ -1,10 +1,11 @@
-// components/gui_lvgl/screen_power.c
+// components/gui_lvgl/screen_power.cpp
 
 #include "screen_power.h"
 
-#include <stdio.h>
-#include <stdarg.h>
+#include "gui_format.hpp"
 #include "ui_i18n.h"
+
+using gui::set_label_textf;
 
 static lv_obj_t *s_label_pv       = NULL;
 static lv_obj_t *s_label_batt     = NULL;
@@ -17,16 +18,7 @@ static system_status_t s_last_sys;
 static bool s_has_batt = false;
 static bool s_has_sys = false;
 
-static void set_label_fmt(lv_obj_t *label, const char *fmt, ...)
-{
-    if (!label || !fmt) return;
-    char buf[64];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    lv_label_set_text(label, buf);
-}
+extern "C" {
 
 void screen_power_create(lv_obj_t *parent)
 {
@@ -82,11 +74,11 @@ void screen_power_update(const battery_status_t *status)
 
     // Batterie : V, I, P
     if (s_label_batt) {
-        set_label_fmt(s_label_batt,
-                      "%s  %.1f V / %.1f A",
-                      ui_i18n("power.battery"),
-                      status->voltage,
-                      status->current);
+        set_label_textf(s_label_batt,
+                        "{:s}  {:.1f} V / {:.1f} A",
+                        ui_i18n("power.battery"),
+                        status->voltage,
+                        status->current);
     }
 
     // Flèche / Flow : signe de la puissance
@@ -100,7 +92,7 @@ void screen_power_update(const battery_status_t *status)
             dir   = ui_i18n("power.flow.dir_charge");
         }
 
-        set_label_fmt(s_label_flow, "%s  %.0f W  %s", arrow, status->power, dir);
+        set_label_textf(s_label_flow, "{:s}  {:.0f} W  {:s}", arrow, status->power, dir);
 
         // Couleur de la flèche : vert en décharge (= alimente), bleu en charge
         lv_color_t c = (status->power >= 0.0f)
@@ -153,3 +145,5 @@ void screen_power_refresh_texts(void)
         lv_label_set_text(s_label_status, ui_i18n("power.status.ok"));
     }
 }
+
+}  // extern "C"

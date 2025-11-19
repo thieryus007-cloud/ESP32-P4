@@ -1,11 +1,11 @@
-// components/gui_lvgl/screen_battery.c
+// components/gui_lvgl/screen_battery.cpp
 
 #include "screen_battery.h"
 
-#include <stdio.h>
-#include <stdarg.h>
+#include <cstdio>
 
 #include "event_types.h"   // pour PACK_MAX_CELLS
+#include "gui_format.hpp"
 
 // Widgets globaux de l'écran Pack
 static lv_obj_t *s_label_pack_soc      = NULL;
@@ -22,16 +22,9 @@ static lv_obj_t *s_label_balancing     = NULL;   // 🔹 nouveau badge Balancing
 
 static lv_obj_t *s_table_cells         = NULL;
 
-static void set_label_fmt(lv_obj_t *label, const char *fmt, ...)
-{
-    if (!label || !fmt) return;
-    char buf[64];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    lv_label_set_text(label, buf);
-}
+using gui::set_label_textf;
+
+extern "C" {
 
 void screen_battery_create(lv_obj_t *parent)
 {
@@ -166,16 +159,16 @@ void screen_battery_update_pack_basic(const battery_status_t *status)
     if (!status) return;
 
     if (s_label_pack_soc) {
-        set_label_fmt(s_label_pack_soc, "%.1f %%", status->soc);
+        set_label_textf(s_label_pack_soc, "{:.1f} %", status->soc);
     }
     if (s_label_pack_voltage) {
-        set_label_fmt(s_label_pack_voltage, "%.2f V", status->voltage);
+        set_label_textf(s_label_pack_voltage, "{:.2f} V", status->voltage);
     }
     if (s_label_pack_current) {
-        set_label_fmt(s_label_pack_current, "%.2f A", status->current);
+        set_label_textf(s_label_pack_current, "{:.2f} A", status->current);
     }
     if (s_label_pack_power) {
-        set_label_fmt(s_label_pack_power, "%.0f W", status->power);
+        set_label_textf(s_label_pack_power, "{:.0f} W", status->power);
     }
 }
 
@@ -186,28 +179,28 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
     // Stats min/max/delta/avg
     if (s_label_cell_min) {
         if (stats->cell_count > 0) {
-            set_label_fmt(s_label_cell_min, "%.1f mV", stats->cell_min);
+            set_label_textf(s_label_cell_min, "{:.1f} mV", stats->cell_min);
         } else {
             lv_label_set_text(s_label_cell_min, "-- mV");
         }
     }
     if (s_label_cell_max) {
         if (stats->cell_count > 0) {
-            set_label_fmt(s_label_cell_max, "%.1f mV", stats->cell_max);
+            set_label_textf(s_label_cell_max, "{:.1f} mV", stats->cell_max);
         } else {
             lv_label_set_text(s_label_cell_max, "-- mV");
         }
     }
     if (s_label_cell_delta) {
         if (stats->cell_count > 0) {
-            set_label_fmt(s_label_cell_delta, "%.1f mV", stats->cell_delta);
+            set_label_textf(s_label_cell_delta, "{:.1f} mV", stats->cell_delta);
         } else {
             lv_label_set_text(s_label_cell_delta, "-- mV");
         }
     }
     if (s_label_cell_avg) {
         if (stats->cell_count > 0) {
-            set_label_fmt(s_label_cell_avg, "%.1f mV", stats->cell_avg);
+            set_label_textf(s_label_cell_avg, "{:.1f} mV", stats->cell_avg);
         } else {
             lv_label_set_text(s_label_cell_avg, "-- mV");
         }
@@ -251,10 +244,12 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
         char buf_cell[16];
         char buf_volt[32];
 
-        snprintf(buf_cell, sizeof(buf_cell), "%u", (unsigned)(i + 1));
-        snprintf(buf_volt, sizeof(buf_volt), "%.1f mV", stats->cells[i]);
+        std::snprintf(buf_cell, sizeof(buf_cell), "%u", static_cast<unsigned>(i + 1));
+        std::snprintf(buf_volt, sizeof(buf_volt), "%.1f mV", stats->cells[i]);
 
         lv_table_set_cell_value(s_table_cells, i + 1, 0, buf_cell);
         lv_table_set_cell_value(s_table_cells, i + 1, 1, buf_volt);
     }
 }
+
+}  // extern "C"
