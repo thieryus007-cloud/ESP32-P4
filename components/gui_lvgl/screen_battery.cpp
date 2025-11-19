@@ -6,6 +6,7 @@
 
 #include "event_types.h"   // pour PACK_MAX_CELLS
 #include "gui_format.hpp"
+#include "pack_stats_utils.hpp"
 
 // Widgets globaux de l'écran Pack
 static lv_obj_t *s_label_pack_soc      = NULL;
@@ -176,31 +177,33 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
 {
     if (!stats) return;
 
-    // Stats min/max/delta/avg
+    const auto cell_values = gui::cell_values(*stats);
+    const auto extrema     = gui::compute_extrema(cell_values);
+
     if (s_label_cell_min) {
-        if (stats->cell_count > 0) {
-            set_label_textf(s_label_cell_min, "{:.1f} mV", stats->cell_min);
+        if (extrema.has_cells) {
+            set_label_textf(s_label_cell_min, "{:.1f} mV", extrema.min);
         } else {
             lv_label_set_text(s_label_cell_min, "-- mV");
         }
     }
     if (s_label_cell_max) {
-        if (stats->cell_count > 0) {
-            set_label_textf(s_label_cell_max, "{:.1f} mV", stats->cell_max);
+        if (extrema.has_cells) {
+            set_label_textf(s_label_cell_max, "{:.1f} mV", extrema.max);
         } else {
             lv_label_set_text(s_label_cell_max, "-- mV");
         }
     }
     if (s_label_cell_delta) {
-        if (stats->cell_count > 0) {
-            set_label_textf(s_label_cell_delta, "{:.1f} mV", stats->cell_delta);
+        if (extrema.has_cells) {
+            set_label_textf(s_label_cell_delta, "{:.1f} mV", extrema.delta);
         } else {
             lv_label_set_text(s_label_cell_delta, "-- mV");
         }
     }
     if (s_label_cell_avg) {
-        if (stats->cell_count > 0) {
-            set_label_textf(s_label_cell_avg, "{:.1f} mV", stats->cell_avg);
+        if (extrema.has_cells) {
+            set_label_textf(s_label_cell_avg, "{:.1f} mV", extrema.avg);
         } else {
             lv_label_set_text(s_label_cell_avg, "-- mV");
         }
@@ -208,18 +211,7 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
 
     // 🔹 Badge Balancing : ON si au moins une cellule est en balancing
     if (s_label_balancing) {
-        bool any_balancing = false;
-        uint8_t count = stats->cell_count;
-        if (count > PACK_MAX_CELLS) count = PACK_MAX_CELLS;
-
-        for (uint8_t i = 0; i < count; ++i) {
-            if (stats->balancing[i]) {
-                any_balancing = true;
-                break;
-            }
-        }
-
-        if (any_balancing) {
+        if (gui::has_balancing(*stats)) {
             lv_label_set_text(s_label_balancing, "Balancing: ON");
             lv_obj_set_style_text_color(s_label_balancing,
                                         lv_palette_main(LV_PALETTE_ORANGE), 0);
@@ -235,8 +227,7 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
         return;
     }
 
-    uint8_t rows = stats->cell_count;
-    if (rows > PACK_MAX_CELLS) rows = PACK_MAX_CELLS;
+    uint8_t rows = static_cast<uint8_t>(cell_values.size());
 
     lv_table_set_row_cnt(s_table_cells, rows + 1); // +1 pour l'entête
 
@@ -245,7 +236,7 @@ void screen_battery_update_pack_stats(const pack_stats_t *stats)
         char buf_volt[32];
 
         std::snprintf(buf_cell, sizeof(buf_cell), "%u", static_cast<unsigned>(i + 1));
-        std::snprintf(buf_volt, sizeof(buf_volt), "%.1f mV", stats->cells[i]);
+        std::snprintf(buf_volt, sizeof(buf_volt), "%.1f mV", cell_values[i]);
 
         lv_table_set_cell_value(s_table_cells, i + 1, 0, buf_cell);
         lv_table_set_cell_value(s_table_cells, i + 1, 1, buf_volt);

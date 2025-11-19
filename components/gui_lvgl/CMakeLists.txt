@@ -2,6 +2,7 @@ idf_component_register(
     SRCS "gui_init.cpp"
          "ui_i18n.c"
          "screen_home.cpp"
+         "pack_stats_utils.cpp"
          "screen_dashboard.c"
          "screen_battery.cpp"
          "screen_cells.cpp"

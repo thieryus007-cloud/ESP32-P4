@@ -1,8 +1,10 @@
 #include "screen_cells.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "gui_format.hpp"
+#include "pack_stats_utils.hpp"
 
 static lv_obj_t *s_label_min       = NULL;
 static lv_obj_t *s_label_max       = NULL;
@@ -116,12 +118,16 @@ void screen_cells_update_cells(const pack_stats_t *stats)
 {
     if (!stats) return;
 
+    const auto cell_values   = gui::cell_values(*stats);
+    const auto balancing     = gui::balancing_states(*stats);
+    const auto extrema       = gui::compute_extrema(cell_values);
+
     // Stats globales
-    if (stats->cell_count > 0) {
-        set_label_textf(s_label_min,   "Min: {:.1f} mV", stats->cell_min);
-        set_label_textf(s_label_max,   "Max: {:.1f} mV", stats->cell_max);
-        set_label_textf(s_label_delta, "Δ: {:.1f} mV",   stats->cell_delta);
-        set_label_textf(s_label_avg,   "Avg: {:.1f} mV", stats->cell_avg);
+    if (extrema.has_cells) {
+        set_label_textf(s_label_min,   "Min: {:.1f} mV", extrema.min);
+        set_label_textf(s_label_max,   "Max: {:.1f} mV", extrema.max);
+        set_label_textf(s_label_delta, "Δ: {:.1f} mV",   extrema.delta);
+        set_label_textf(s_label_avg,   "Avg: {:.1f} mV", extrema.avg);
     } else {
         set_label_textf(s_label_min,   "Min: -- mV");
         set_label_textf(s_label_max,   "Max: -- mV");
@@ -142,12 +148,12 @@ void screen_cells_update_cells(const pack_stats_t *stats)
         set_label_textf(s_label_bal_stop, "Bal stop: -- mV");
     }
 
-    s_last_min_mv = stats->cell_min;
-    s_last_max_mv = stats->cell_max;
+    s_last_min_mv = extrema.has_cells ? extrema.min : 0.0f;
+    s_last_max_mv = extrema.has_cells ? extrema.max : 0.0f;
 
     // Plage pour normaliser les barres
-    float min_mv = stats->cell_min;
-    float max_mv = stats->cell_max;
+    float min_mv = extrema.has_cells ? extrema.min : 2800.0f;
+    float max_mv = extrema.has_cells ? extrema.max : 3600.0f;
     if (max_mv <= min_mv || max_mv <= 0.0f) {
         // Plage par défaut 2800–3600 mV
         min_mv = 2800.0f;
@@ -159,8 +165,7 @@ void screen_cells_update_cells(const pack_stats_t *stats)
     }
 
     // Mettre à jour chaque barre
-    uint8_t count = stats->cell_count;
-    if (count > MAX_CELLS) count = MAX_CELLS;
+    const uint8_t count = static_cast<uint8_t>(cell_values.size());
 
     for (uint8_t i = 0; i < MAX_CELLS; ++i) {
         lv_obj_t *bar = s_cell_bars[i];
@@ -168,12 +173,12 @@ void screen_cells_update_cells(const pack_stats_t *stats)
         if (!bar || !lbl) continue;
 
         if (i < count) {
-            float mv = stats->cells[i];
+            float mv = cell_values[i];
+            bool  balancing_active = (i < balancing.size()) ? balancing[i] : false;
 
             // Normalise entre 0–1000
             float norm = (mv - min_mv) / range;
-            if (norm < 0.0f) norm = 0.0f;
-            if (norm > 1.0f) norm = 1.0f;
+            norm       = std::clamp(norm, 0.0f, 1.0f);
             int val = (int)(norm * 1000.0f);
             lv_bar_set_value(bar, val, LV_ANIM_OFF);
 
@@ -184,13 +189,13 @@ void screen_cells_update_cells(const pack_stats_t *stats)
             // - bleu : normal
             lv_color_t col = lv_palette_main(LV_PALETTE_BLUE);
 
-            if (mv == stats->cell_min) {
+            if (extrema.has_cells && mv == extrema.min) {
                 col = lv_palette_main(LV_PALETTE_RED);
             }
-            if (mv == stats->cell_max) {
+            if (extrema.has_cells && mv == extrema.max) {
                 col = lv_palette_main(LV_PALETTE_GREEN);
             }
-            if (stats->balancing[i]) {
+            if (balancing_active) {
                 col = lv_palette_main(LV_PALETTE_ORANGE);
             }
 
@@ -198,7 +203,7 @@ void screen_cells_update_cells(const pack_stats_t *stats)
 
             // Label : on ajoute une étoile si balancing actif
             char tmp[16];
-            if (stats->balancing[i]) {
+            if (balancing_active) {
                 std::snprintf(tmp, sizeof(tmp), "C%02u*", static_cast<unsigned>(i + 1));
             } else {
                 std::snprintf(tmp, sizeof(tmp), "C%02u", static_cast<unsigned>(i + 1));
