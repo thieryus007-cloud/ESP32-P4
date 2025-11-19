@@ -7,7 +7,7 @@ idf_component_register(
          "screen_battery.cpp"
          "screen_cells.cpp"
          "screen_power.cpp"
-         "screen_config.c"
+         "screen_config.cpp"
          "screen_alerts.c"
          "screen_tinybms_status.c"
          "screen_tinybms_config.c"
