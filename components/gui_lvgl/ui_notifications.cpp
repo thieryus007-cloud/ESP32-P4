@@ -209,7 +209,7 @@ static void lvgl_show_cmd_result(void *user_data)
                            ? lv_palette_main(LV_PALETTE_GREEN)
                            : lv_palette_main(LV_PALETTE_RED);
     show_toast(ctx->result.message, color);
-    free(ctx);
+    delete ctx; // [MOD] delete au lieu de free
 }
 
 static void lvgl_on_system_status(void *user_data)
@@ -221,7 +221,7 @@ static void lvgl_on_system_status(void *user_data)
 
     s_last_status = ctx->status;
     update_network_banner(&ctx->status);
-    free(ctx);
+    delete ctx; // [MOD] delete au lieu de free
 }
 
 static void lvgl_on_failover(void *user_data)
@@ -239,7 +239,8 @@ static void on_cmd_result(event_bus_t *bus, const event_t *event, void *user_ctx
         return;
     }
 
-    cmd_result_ctx_t *ctx = (cmd_result_ctx_t *) malloc(sizeof(cmd_result_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc
+    cmd_result_ctx_t *ctx = new (std::nothrow) cmd_result_ctx_t;
     if (!ctx) {
         return;
     }
@@ -270,7 +271,7 @@ static void lvgl_on_request_started(void *user_data)
     snprintf(s_last_request_label, sizeof(s_last_request_label), "%s %s",
              ctx->request.method, ctx->request.path);
     update_loading();
-    free(ctx);
+    delete ctx; // [MOD] delete au lieu de free
 }
 
 static void lvgl_on_request_finished(void *user_data)
@@ -296,7 +297,7 @@ static void lvgl_on_request_finished(void *user_data)
         show_toast(msg, lv_palette_main(LV_PALETTE_RED));
     }
 
-    free(ctx);
+    delete ctx; // [MOD] delete au lieu de free
 }
 
 static void on_request_started(event_bus_t *bus, const event_t *event, void *user_ctx)
@@ -308,11 +309,11 @@ static void on_request_started(event_bus_t *bus, const event_t *event, void *use
         return;
     }
 
-    network_ctx_t *ctx = (network_ctx_t *) malloc(sizeof(network_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc (initialisation à zéro avec {})
+    network_ctx_t *ctx = new (std::nothrow) network_ctx_t{};
     if (!ctx) {
         return;
     }
-    memset(ctx, 0, sizeof(*ctx));
     ctx->request = *(const network_request_t *) event->data;
     lv_async_call(lvgl_on_request_started, ctx);
 }
@@ -326,11 +327,11 @@ static void on_request_finished(event_bus_t *bus, const event_t *event, void *us
         return;
     }
 
-    network_ctx_t *ctx = (network_ctx_t *) malloc(sizeof(network_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc (initialisation à zéro avec {})
+    network_ctx_t *ctx = new (std::nothrow) network_ctx_t{};
     if (!ctx) {
         return;
     }
-    memset(ctx, 0, sizeof(*ctx));
     const network_request_status_t *src = (const network_request_status_t *) event->data;
     ctx->request = src->request;
     ctx->success = src->success;
@@ -347,7 +348,8 @@ static void on_system_status(event_bus_t *bus, const event_t *event, void *user_
         return;
     }
 
-    net_status_ctx_t *ctx = (net_status_ctx_t *) malloc(sizeof(net_status_ctx_t));
+    // [MOD] Allocation C++ avec new au lieu de malloc
+    net_status_ctx_t *ctx = new (std::nothrow) net_status_ctx_t;
     if (!ctx) {
         return;
     }
