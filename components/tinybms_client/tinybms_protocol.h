@@ -41,12 +41,27 @@ extern "C" {
 
 // Command codes (conformes à la spécification TinyBMS Rev D)
 #define TINYBMS_CMD_RESET               0x02  // Reset BMS command
+#define TINYBMS_CMD_MODBUS_READ         0x03  // Read registers block (MODBUS)
 #define TINYBMS_CMD_READ_BLOCK          0x07  // Read registers block (proprietary)
 #define TINYBMS_CMD_READ_INDIVIDUAL     0x09  // Read individual registers
 #define TINYBMS_CMD_WRITE_BLOCK         0x0B  // Write registers block (proprietary)
 #define TINYBMS_CMD_WRITE_INDIVIDUAL    0x0D  // Write individual registers
-#define TINYBMS_CMD_MODBUS_READ         0x03  // Read registers block (MODBUS)
 #define TINYBMS_CMD_MODBUS_WRITE        0x10  // Write registers block (MODBUS)
+#define TINYBMS_CMD_READ_NEWEST_EVENTS  0x11  // Read newest events
+#define TINYBMS_CMD_READ_ALL_EVENTS     0x12  // Read all events
+#define TINYBMS_CMD_READ_PACK_VOLTAGE   0x14  // Read battery pack voltage
+#define TINYBMS_CMD_READ_PACK_CURRENT   0x15  // Read battery pack current
+#define TINYBMS_CMD_READ_MAX_CELL_V     0x16  // Read max cell voltage
+#define TINYBMS_CMD_READ_MIN_CELL_V     0x17  // Read min cell voltage
+#define TINYBMS_CMD_READ_ONLINE_STATUS  0x18  // Read online status
+#define TINYBMS_CMD_READ_LIFETIME       0x19  // Read lifetime counter
+#define TINYBMS_CMD_READ_SOC            0x1A  // Read estimated SOC
+#define TINYBMS_CMD_READ_TEMPERATURES   0x1B  // Read temperatures
+#define TINYBMS_CMD_READ_CELL_VOLTAGES  0x1C  // Read cell voltages
+#define TINYBMS_CMD_READ_SETTINGS       0x1D  // Read settings values
+#define TINYBMS_CMD_READ_VERSION        0x1E  // Read version
+#define TINYBMS_CMD_READ_EXT_VERSION    0x1F  // Read extended version
+#define TINYBMS_CMD_READ_SPEED_DISTANCE 0x20  // Read speed/distance
 
 // Reset command options (Command 0x02)
 #define TINYBMS_RESET_OPTION_BMS        0x05  // Reset BMS option
@@ -223,6 +238,73 @@ esp_err_t tinybms_parse_modbus_read_response(const uint8_t *frame, size_t frame_
  */
 esp_err_t tinybms_parse_ack(const uint8_t *frame, size_t frame_len,
                              bool *is_ack, uint8_t *error_code);
+
+/**
+ * @brief Build a simple command frame (no payload)
+ * Used for commands 0x11, 0x12, 0x14-0x20
+ *
+ * @param frame Output buffer (must be >= 5 bytes)
+ * @param command Command code
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_simple_command_frame(uint8_t *frame, uint8_t command);
+
+/**
+ * @brief Parse a simple response with uint16 value
+ * Used for single value responses (voltage, current, SOC, etc.)
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param expected_cmd Expected command code
+ * @param value Output: parsed value
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_parse_simple_uint16_response(const uint8_t *frame, size_t frame_len,
+                                                uint8_t expected_cmd, uint16_t *value);
+
+/**
+ * @brief Parse a simple response with int16 value
+ * Used for signed values (current, temperatures)
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param expected_cmd Expected command code
+ * @param value Output: parsed value
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_parse_simple_int16_response(const uint8_t *frame, size_t frame_len,
+                                               uint8_t expected_cmd, int16_t *value);
+
+/**
+ * @brief Parse a multi-value response (temperatures, cell voltages, etc.)
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param expected_cmd Expected command code
+ * @param values Output: array of values
+ * @param max_count Maximum number of values
+ * @param actual_count Output: actual number of values parsed
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_parse_multi_value_response(const uint8_t *frame, size_t frame_len,
+                                             uint8_t expected_cmd, uint16_t *values,
+                                             uint8_t max_count, uint8_t *actual_count);
+
+/**
+ * @brief Parse version response (Command 0x1E or 0x1F)
+ * Format: [major][minor][patch] or extended format
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param expected_cmd Expected command code (0x1E or 0x1F)
+ * @param major Output: major version
+ * @param minor Output: minor version
+ * @param patch Output: patch version
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_parse_version_response(const uint8_t *frame, size_t frame_len,
+                                         uint8_t expected_cmd, uint8_t *major,
+                                         uint8_t *minor, uint8_t *patch);
 
 #ifdef __cplusplus
 }

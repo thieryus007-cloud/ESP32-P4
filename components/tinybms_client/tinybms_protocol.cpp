@@ -502,3 +502,162 @@ esp_err_t tinybms_parse_ack(const uint8_t *frame, size_t frame_len,
 
     return ESP_OK;
 }
+
+/**
+ * @brief Build a simple command frame (no payload)
+ * Format: [0xAA] [CMD] [0x00] [CRC:LSB] [CRC:MSB] (5 bytes)
+ */
+esp_err_t tinybms_build_simple_command_frame(uint8_t *frame, uint8_t command)
+{
+    if (frame == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    frame[0] = TINYBMS_PREAMBLE;        // Byte1: Preamble 0xAA
+    frame[1] = command;                 // Byte2: Command
+    frame[2] = 0x00;                    // Byte3: PL = 0 (no payload)
+
+    // Calculate CRC on first 3 bytes
+    uint16_t crc = tinybms_crc16(frame, 3);
+    frame[3] = crc & 0xFF;              // Byte4: CRC LSB
+    frame[4] = (crc >> 8) & 0xFF;       // Byte5: CRC MSB
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse a simple response with uint16 value
+ * Format: [0xAA] [CMD] [PL] [Data:LSB] [Data:MSB] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_simple_uint16_response(const uint8_t *frame, size_t frame_len,
+                                                uint8_t expected_cmd, uint16_t *value)
+{
+    if (frame == NULL || value == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame_len < 7) {
+        ESP_LOGE(TAG, "Simple response too short: %zu (expected >= 7)", frame_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[0] != TINYBMS_PREAMBLE) {
+        ESP_LOGE(TAG, "Invalid preamble: 0x%02X", frame[0]);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[1] != expected_cmd) {
+        ESP_LOGE(TAG, "Invalid command: 0x%02X (expected 0x%02X)", frame[1], expected_cmd);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t payload_len = frame[2];
+    if (payload_len < 2) {
+        ESP_LOGE(TAG, "Invalid payload length: %d", payload_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Extract value (little-endian)
+    *value = frame[3] | (frame[4] << 8);
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse a simple response with int16 value
+ * Format: [0xAA] [CMD] [PL] [Data:LSB] [Data:MSB] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_simple_int16_response(const uint8_t *frame, size_t frame_len,
+                                               uint8_t expected_cmd, int16_t *value)
+{
+    if (frame == NULL || value == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint16_t unsigned_value;
+    esp_err_t ret = tinybms_parse_simple_uint16_response(frame, frame_len, expected_cmd, &unsigned_value);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Convert uint16 to int16 (reinterpret bits)
+    *value = (int16_t)unsigned_value;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse a multi-value response (temperatures, cell voltages, etc.)
+ * Format: [0xAA] [CMD] [PL] [Data...] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_multi_value_response(const uint8_t *frame, size_t frame_len,
+                                             uint8_t expected_cmd, uint16_t *values,
+                                             uint8_t max_count, uint8_t *actual_count)
+{
+    if (frame == NULL || values == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame_len < 5) {
+        ESP_LOGE(TAG, "Multi-value response too short: %zu", frame_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[0] != TINYBMS_PREAMBLE || frame[1] != expected_cmd) {
+        ESP_LOGE(TAG, "Invalid multi-value response header");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t payload_len = frame[2];
+    uint8_t value_count = payload_len / 2;
+
+    if (value_count > max_count) {
+        ESP_LOGW(TAG, "Response contains more values (%d) than buffer can hold (%d)",
+                 value_count, max_count);
+        value_count = max_count;
+    }
+
+    // Extract values (little-endian)
+    for (uint8_t i = 0; i < value_count; i++) {
+        uint8_t offset = 3 + (i * 2);
+        values[i] = frame[offset] | (frame[offset + 1] << 8);
+    }
+
+    *actual_count = value_count;
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse version response
+ * Format: [0xAA] [CMD] [PL] [Major] [Minor] [Patch] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_version_response(const uint8_t *frame, size_t frame_len,
+                                         uint8_t expected_cmd, uint8_t *major,
+                                         uint8_t *minor, uint8_t *patch)
+{
+    if (frame == NULL || major == NULL || minor == NULL || patch == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame_len < 8) {
+        ESP_LOGE(TAG, "Version response too short: %zu (expected >= 8)", frame_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[0] != TINYBMS_PREAMBLE || frame[1] != expected_cmd) {
+        ESP_LOGE(TAG, "Invalid version response header");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t payload_len = frame[2];
+    if (payload_len < 3) {
+        ESP_LOGE(TAG, "Invalid version payload length: %d", payload_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *major = frame[3];
+    *minor = frame[4];
+    *patch = frame[5];
+
+    return ESP_OK;
+}

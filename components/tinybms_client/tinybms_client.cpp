@@ -1368,6 +1368,424 @@ esp_err_t tinybms_modbus_write(uint16_t start_address, uint16_t quantity, const 
     return ret;
 }
 
+/**
+ * @brief Generic internal function for simple command/response pattern
+ */
+static esp_err_t simple_command_internal(uint8_t command, uint8_t *response_frame,
+                                         size_t *response_len, TickType_t timeout_ticks)
+{
+    uint8_t tx_frame[5];
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5;
+
+    esp_err_t ret = tinybms_build_simple_command_frame(tx_frame, command);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, 5);
+    if (written != 5) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t deadline = start_time + timeout_ticks;
+
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            if (frame_start[1] == command) {
+                memcpy(response_frame, frame_start, frame_len);
+                *response_len = frame_len;
+                return ESP_OK;
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            uart_flush_input(TINYBMS_UART_NUM);
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    return ESP_ERR_TIMEOUT;
+}
+
+esp_err_t tinybms_read_newest_events(uint16_t *events, uint8_t max_count, uint8_t *actual_count)
+{
+    if (!g_ctx.initialized || events == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading newest events (Command 0x11)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_NEWEST_EVENTS, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_NEWEST_EVENTS,
+                                                 events, max_count, actual_count);
+    }
+
+    publish_uart_log("read_newest_events", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_all_events(uint16_t *events, uint8_t max_count, uint8_t *actual_count)
+{
+    if (!g_ctx.initialized || events == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading all events (Command 0x12)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_ALL_EVENTS, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_ALL_EVENTS,
+                                                 events, max_count, actual_count);
+    }
+
+    publish_uart_log("read_all_events", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_pack_voltage(uint16_t *voltage)
+{
+    if (!g_ctx.initialized || voltage == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading pack voltage (Command 0x14)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_PACK_VOLTAGE, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_PACK_VOLTAGE, voltage);
+    }
+
+    publish_uart_log("read_pack_voltage", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_pack_current(int16_t *current)
+{
+    if (!g_ctx.initialized || current == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading pack current (Command 0x15)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_PACK_CURRENT, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_int16_response(response, response_len,
+                                                  TINYBMS_CMD_READ_PACK_CURRENT, current);
+    }
+
+    publish_uart_log("read_pack_current", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_max_cell_voltage(uint16_t *max_voltage)
+{
+    if (!g_ctx.initialized || max_voltage == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading max cell voltage (Command 0x16)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_MAX_CELL_V, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_MAX_CELL_V, max_voltage);
+    }
+
+    publish_uart_log("read_max_cell_voltage", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_min_cell_voltage(uint16_t *min_voltage)
+{
+    if (!g_ctx.initialized || min_voltage == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading min cell voltage (Command 0x17)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_MIN_CELL_V, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_MIN_CELL_V, min_voltage);
+    }
+
+    publish_uart_log("read_min_cell_voltage", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_online_status(uint16_t *status)
+{
+    if (!g_ctx.initialized || status == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading online status (Command 0x18)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_ONLINE_STATUS, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_ONLINE_STATUS, status);
+    }
+
+    publish_uart_log("read_online_status", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_lifetime_counter(uint16_t *lifetime)
+{
+    if (!g_ctx.initialized || lifetime == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading lifetime counter (Command 0x19)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_LIFETIME, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_LIFETIME, lifetime);
+    }
+
+    publish_uart_log("read_lifetime_counter", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_estimated_soc(uint16_t *soc)
+{
+    if (!g_ctx.initialized || soc == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading estimated SOC (Command 0x1A)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_SOC, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_simple_uint16_response(response, response_len,
+                                                   TINYBMS_CMD_READ_SOC, soc);
+    }
+
+    publish_uart_log("read_estimated_soc", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_temperatures(uint16_t *temperatures, uint8_t max_count, uint8_t *actual_count)
+{
+    if (!g_ctx.initialized || temperatures == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading temperatures (Command 0x1B)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_TEMPERATURES, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_TEMPERATURES,
+                                                 temperatures, max_count, actual_count);
+    }
+
+    publish_uart_log("read_temperatures", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_cell_voltages(uint16_t *voltages, uint8_t max_count, uint8_t *actual_count)
+{
+    if (!g_ctx.initialized || voltages == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading cell voltages (Command 0x1C)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_CELL_VOLTAGES, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_CELL_VOLTAGES,
+                                                 voltages, max_count, actual_count);
+    }
+
+    publish_uart_log("read_cell_voltages", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_settings_values(uint16_t *settings, uint8_t max_count, uint8_t *actual_count)
+{
+    if (!g_ctx.initialized || settings == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading settings values (Command 0x1D)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_SETTINGS, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_SETTINGS,
+                                                 settings, max_count, actual_count);
+    }
+
+    publish_uart_log("read_settings_values", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
+{
+    if (!g_ctx.initialized || major == NULL || minor == NULL || patch == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading version (Command 0x1E)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_VERSION, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_version_response(response, response_len,
+                                            TINYBMS_CMD_READ_VERSION,
+                                            major, minor, patch);
+    }
+
+    publish_uart_log("read_version", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_extended_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
+{
+    if (!g_ctx.initialized || major == NULL || minor == NULL || patch == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading extended version (Command 0x1F)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_EXT_VERSION, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        ret = tinybms_parse_version_response(response, response_len,
+                                            TINYBMS_CMD_READ_EXT_VERSION,
+                                            major, minor, patch);
+    }
+
+    publish_uart_log("read_extended_version", 0, ret, NULL);
+    return ret;
+}
+
+esp_err_t tinybms_read_speed_distance(uint16_t *speed, uint16_t *distance)
+{
+    if (!g_ctx.initialized || speed == NULL || distance == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGD(TAG, "Reading speed/distance (Command 0x20)");
+
+    uint8_t response[TINYBMS_MAX_FRAME_LEN];
+    size_t response_len = 0;
+    esp_err_t ret = simple_command_internal(TINYBMS_CMD_READ_SPEED_DISTANCE, response,
+                                            &response_len, pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS));
+    if (ret == ESP_OK) {
+        // Response contains 2 values: speed and distance
+        uint16_t values[2];
+        uint8_t count;
+        ret = tinybms_parse_multi_value_response(response, response_len,
+                                                 TINYBMS_CMD_READ_SPEED_DISTANCE,
+                                                 values, 2, &count);
+        if (ret == ESP_OK && count >= 2) {
+            *speed = values[0];
+            *distance = values[1];
+        } else {
+            ret = ESP_ERR_INVALID_RESPONSE;
+        }
+    }
+
+    publish_uart_log("read_speed_distance", 0, ret, NULL);
+    return ret;
+}
+
 tinybms_state_t tinybms_get_state(void)
 {
     return g_ctx.state;
