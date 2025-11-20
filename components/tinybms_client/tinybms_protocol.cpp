@@ -122,6 +122,144 @@ esp_err_t tinybms_build_reset_frame(uint8_t *frame)
 }
 
 /**
+ * @brief Build a read block frame (Command 0x07 - Proprietary)
+ *
+ * Frame format (8 bytes):
+ * [0xAA] [0x07] [PL] [Start:LSB] [Start:MSB] [Count] [CRC:LSB] [CRC:MSB]
+ * PL = 3 (2 bytes addr + 1 byte count)
+ */
+esp_err_t tinybms_build_read_block_frame(uint8_t *frame, uint16_t start_address, uint8_t count)
+{
+    if (frame == NULL || count == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_READ_BLOCK;              // Byte2: Command 0x07
+    frame[2] = 0x03;                                // Byte3: PL = 3
+    frame[3] = start_address & 0xFF;                // Byte4: Start address LSB
+    frame[4] = (start_address >> 8) & 0xFF;         // Byte5: Start address MSB
+    frame[5] = count;                               // Byte6: Register count
+
+    // Calculate CRC on first 6 bytes
+    uint16_t crc = tinybms_crc16(frame, 6);
+    frame[6] = crc & 0xFF;                          // Byte7: CRC LSB
+    frame[7] = (crc >> 8) & 0xFF;                   // Byte8: CRC MSB
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Build a write block frame (Command 0x0B - Proprietary)
+ *
+ * Frame format (variable):
+ * [0xAA] [0x0B] [PL] [Start:LSB] [Start:MSB] [Count] [Data...] [CRC:LSB] [CRC:MSB]
+ * PL = 3 + count*2
+ */
+esp_err_t tinybms_build_write_block_frame(uint8_t *frame, uint16_t start_address,
+                                          const uint16_t *values, uint8_t count)
+{
+    if (frame == NULL || values == NULL || count == 0 || count > 125) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t payload_len = 3 + (count * 2);
+
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_WRITE_BLOCK;             // Byte2: Command 0x0B
+    frame[2] = payload_len;                         // Byte3: PL
+    frame[3] = start_address & 0xFF;                // Byte4: Start address LSB
+    frame[4] = (start_address >> 8) & 0xFF;         // Byte5: Start address MSB
+    frame[5] = count;                               // Byte6: Register count
+
+    // Add register values (little-endian)
+    for (uint8_t i = 0; i < count; i++) {
+        uint8_t offset = 6 + (i * 2);
+        frame[offset] = values[i] & 0xFF;           // Data LSB
+        frame[offset + 1] = (values[i] >> 8) & 0xFF; // Data MSB
+    }
+
+    // Calculate CRC
+    size_t crc_offset = 6 + (count * 2);
+    uint16_t crc = tinybms_crc16(frame, crc_offset);
+    frame[crc_offset] = crc & 0xFF;                 // CRC LSB
+    frame[crc_offset + 1] = (crc >> 8) & 0xFF;      // CRC MSB
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Build a MODBUS read frame (Command 0x03)
+ *
+ * Frame format (9 bytes):
+ * [0xAA] [0x03] [PL] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [CRC:LSB] [CRC:MSB]
+ * PL = 4 (2 bytes addr + 2 bytes quantity)
+ */
+esp_err_t tinybms_build_modbus_read_frame(uint8_t *frame, uint16_t start_address, uint16_t quantity)
+{
+    if (frame == NULL || quantity == 0 || quantity > 125) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_MODBUS_READ;             // Byte2: Command 0x03
+    frame[2] = 0x04;                                // Byte3: PL = 4
+    frame[3] = start_address & 0xFF;                // Byte4: Start address LSB
+    frame[4] = (start_address >> 8) & 0xFF;         // Byte5: Start address MSB
+    frame[5] = quantity & 0xFF;                     // Byte6: Quantity LSB
+    frame[6] = (quantity >> 8) & 0xFF;              // Byte7: Quantity MSB
+
+    // Calculate CRC on first 7 bytes
+    uint16_t crc = tinybms_crc16(frame, 7);
+    frame[7] = crc & 0xFF;                          // Byte8: CRC LSB
+    frame[8] = (crc >> 8) & 0xFF;                   // Byte9: CRC MSB
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Build a MODBUS write frame (Command 0x10)
+ *
+ * Frame format (variable):
+ * [0xAA] [0x10] [PL] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [ByteCount] [Data...] [CRC:LSB] [CRC:MSB]
+ * PL = 5 + byte_count
+ */
+esp_err_t tinybms_build_modbus_write_frame(uint8_t *frame, uint16_t start_address,
+                                           const uint16_t *values, uint16_t quantity)
+{
+    if (frame == NULL || values == NULL || quantity == 0 || quantity > 123) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t byte_count = quantity * 2;
+    uint8_t payload_len = 5 + byte_count;
+
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_MODBUS_WRITE;            // Byte2: Command 0x10
+    frame[2] = payload_len;                         // Byte3: PL
+    frame[3] = start_address & 0xFF;                // Byte4: Start address LSB
+    frame[4] = (start_address >> 8) & 0xFF;         // Byte5: Start address MSB
+    frame[5] = quantity & 0xFF;                     // Byte6: Quantity LSB
+    frame[6] = (quantity >> 8) & 0xFF;              // Byte7: Quantity MSB
+    frame[7] = byte_count;                          // Byte8: Byte count
+
+    // Add register values (big-endian for MODBUS)
+    for (uint16_t i = 0; i < quantity; i++) {
+        uint16_t offset = 8 + (i * 2);
+        frame[offset] = (values[i] >> 8) & 0xFF;    // Data MSB (MODBUS uses big-endian)
+        frame[offset + 1] = values[i] & 0xFF;       // Data LSB
+    }
+
+    // Calculate CRC
+    size_t crc_offset = 8 + byte_count;
+    uint16_t crc = tinybms_crc16(frame, crc_offset);
+    frame[crc_offset] = crc & 0xFF;                 // CRC LSB
+    frame[crc_offset + 1] = (crc >> 8) & 0xFF;      // CRC MSB
+
+    return ESP_OK;
+}
+
+/**
  * @brief Extract a complete frame from receive buffer
  *
  * Reference: Exemple/mac-local/src/serial.js lines 70-103
@@ -225,6 +363,93 @@ esp_err_t tinybms_parse_read_response(const uint8_t *frame, size_t frame_len,
     // Extract value (little-endian) from Byte6-7
     *value = frame[5] | (frame[6] << 8);
 
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse a read block response frame (Command 0x07 response)
+ *
+ * Response format (variable):
+ * [0xAA] [0x07] [PL] [Start:LSB] [Start:MSB] [Data...] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_read_block_response(const uint8_t *frame, size_t frame_len,
+                                            uint16_t *values, uint8_t max_count,
+                                            uint8_t *actual_count)
+{
+    if (frame == NULL || values == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame_len < 8) {
+        ESP_LOGE(TAG, "Invalid read block response length: %zu", frame_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[0] != TINYBMS_PREAMBLE || frame[1] != TINYBMS_CMD_READ_BLOCK) {
+        ESP_LOGE(TAG, "Invalid read block response header");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t payload_len = frame[2];
+    uint8_t data_bytes = payload_len - 2; // Minus 2 bytes for start address
+    uint8_t register_count = data_bytes / 2;
+
+    if (register_count > max_count) {
+        ESP_LOGW(TAG, "Response contains more registers (%d) than buffer can hold (%d)",
+                 register_count, max_count);
+        register_count = max_count;
+    }
+
+    // Extract values (little-endian)
+    for (uint8_t i = 0; i < register_count; i++) {
+        uint8_t offset = 5 + (i * 2); // Skip header (3) + start addr (2)
+        values[i] = frame[offset] | (frame[offset + 1] << 8);
+    }
+
+    *actual_count = register_count;
+    return ESP_OK;
+}
+
+/**
+ * @brief Parse a MODBUS read response frame (Command 0x03 response)
+ *
+ * Response format (variable):
+ * [0xAA] [0x03] [PL] [ByteCount] [Data...] [CRC:LSB] [CRC:MSB]
+ */
+esp_err_t tinybms_parse_modbus_read_response(const uint8_t *frame, size_t frame_len,
+                                             uint16_t *values, uint16_t max_count,
+                                             uint16_t *actual_count)
+{
+    if (frame == NULL || values == NULL || actual_count == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame_len < 6) {
+        ESP_LOGE(TAG, "Invalid MODBUS read response length: %zu", frame_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (frame[0] != TINYBMS_PREAMBLE || frame[1] != TINYBMS_CMD_MODBUS_READ) {
+        ESP_LOGE(TAG, "Invalid MODBUS read response header");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t byte_count = frame[3];
+    uint16_t register_count = byte_count / 2;
+
+    if (register_count > max_count) {
+        ESP_LOGW(TAG, "Response contains more registers (%d) than buffer can hold (%d)",
+                 register_count, max_count);
+        register_count = max_count;
+    }
+
+    // Extract values (big-endian for MODBUS)
+    for (uint16_t i = 0; i < register_count; i++) {
+        uint8_t offset = 4 + (i * 2); // Skip header (3) + byte count (1)
+        values[i] = (frame[offset] << 8) | frame[offset + 1]; // Big-endian
+    }
+
+    *actual_count = register_count;
     return ESP_OK;
 }
 
