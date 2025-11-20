@@ -34,10 +34,13 @@ uint16_t tinybms_crc16(const uint8_t *buffer, size_t length)
 }
 
 /**
- * @brief Build a read register frame
+ * @brief Build a read register frame (Command 0x09 - Read Individual Registers)
  *
- * Frame format (7 bytes):
- * [0xAA] [0x07] [0x01] [Addr_LO] [Addr_HI] [CRC_LO] [CRC_HI]
+ * Frame format (7 bytes) selon Section 1.1.3 du protocole TinyBMS:
+ * Byte1  Byte2  Byte3  Byte4      Byte5      Byte6    Byte7
+ * [0xAA] [0x09] [PL]   [Addr:LSB] [Addr:MSB] [CRC:LSB] [CRC:MSB]
+ *
+ * Pour lire 1 registre: PL = 0x02 (2 bytes d'adresse)
  */
 esp_err_t tinybms_build_read_frame(uint8_t *frame, uint16_t address)
 {
@@ -45,25 +48,28 @@ esp_err_t tinybms_build_read_frame(uint8_t *frame, uint16_t address)
         return ESP_ERR_INVALID_ARG;
     }
 
-    frame[0] = TINYBMS_PREAMBLE;              // Preamble
-    frame[1] = 0x07;                          // Length field
-    frame[2] = TINYBMS_CMD_READ;              // Command: Read
-    frame[3] = address & 0xFF;                // Address low byte
-    frame[4] = (address >> 8) & 0xFF;         // Address high byte
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_READ_INDIVIDUAL;         // Byte2: Command 0x09
+    frame[2] = 0x02;                                // Byte3: PL = 2 (longueur payload = 2 octets d'adresse)
+    frame[3] = address & 0xFF;                      // Byte4: Address low byte
+    frame[4] = (address >> 8) & 0xFF;               // Byte5: Address high byte
 
-    // Calculate CRC on first 5 bytes
+    // Calculate CRC on first 5 bytes (preamble + cmd + PL + addr)
     uint16_t crc = tinybms_crc16(frame, 5);
-    frame[5] = crc & 0xFF;                    // CRC low byte
-    frame[6] = (crc >> 8) & 0xFF;             // CRC high byte
+    frame[5] = crc & 0xFF;                          // Byte6: CRC low byte
+    frame[6] = (crc >> 8) & 0xFF;                   // Byte7: CRC high byte
 
     return ESP_OK;
 }
 
 /**
- * @brief Build a write register frame
+ * @brief Build a write register frame (Command 0x0D - Write Individual Registers)
  *
- * Frame format (9 bytes):
- * [0xAA] [0x0D] [0x04] [Addr_LO] [Addr_HI] [Val_LO] [Val_HI] [CRC_LO] [CRC_HI]
+ * Frame format (9 bytes) selon Section 1.1.5 du protocole TinyBMS:
+ * Byte1  Byte2  Byte3  Byte4      Byte5      Byte6      Byte7      Byte8    Byte9
+ * [0xAA] [0x0D] [PL]   [Addr:LSB] [Addr:MSB] [Data:LSB] [Data:MSB] [CRC:LSB][CRC:MSB]
+ *
+ * Pour écrire 1 registre: PL = 0x04 (2 bytes addr + 2 bytes data)
  */
 esp_err_t tinybms_build_write_frame(uint8_t *frame, uint16_t address, uint16_t value)
 {
@@ -71,18 +77,18 @@ esp_err_t tinybms_build_write_frame(uint8_t *frame, uint16_t address, uint16_t v
         return ESP_ERR_INVALID_ARG;
     }
 
-    frame[0] = TINYBMS_PREAMBLE;              // Preamble
-    frame[1] = 0x0D;                          // Length field
-    frame[2] = TINYBMS_CMD_WRITE;             // Command: Write
-    frame[3] = address & 0xFF;                // Address low byte
-    frame[4] = (address >> 8) & 0xFF;         // Address high byte
-    frame[5] = value & 0xFF;                  // Value low byte
-    frame[6] = (value >> 8) & 0xFF;           // Value high byte
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_WRITE_INDIVIDUAL;        // Byte2: Command 0x0D
+    frame[2] = 0x04;                                // Byte3: PL = 4 (2 bytes addr + 2 bytes data)
+    frame[3] = address & 0xFF;                      // Byte4: Address low byte
+    frame[4] = (address >> 8) & 0xFF;               // Byte5: Address high byte
+    frame[5] = value & 0xFF;                        // Byte6: Value low byte
+    frame[6] = (value >> 8) & 0xFF;                 // Byte7: Value high byte
 
-    // Calculate CRC on first 7 bytes
+    // Calculate CRC on first 7 bytes (preamble + cmd + PL + addr + value)
     uint16_t crc = tinybms_crc16(frame, 7);
-    frame[7] = crc & 0xFF;                    // CRC low byte
-    frame[8] = (crc >> 8) & 0xFF;             // CRC high byte
+    frame[7] = crc & 0xFF;                          // Byte8: CRC low byte
+    frame[8] = (crc >> 8) & 0xFF;                   // Byte9: CRC high byte
 
     return ESP_OK;
 }
@@ -147,10 +153,11 @@ esp_err_t tinybms_extract_frame(const uint8_t *buffer, size_t buffer_len,
 }
 
 /**
- * @brief Parse a read response frame
+ * @brief Parse a read response frame (Command 0x09 response)
  *
- * Response format (7 bytes):
- * [0xAA] [0x07] [0x02] [Val_LO] [Val_HI] [CRC_LO] [CRC_HI]
+ * Response format (9 bytes pour 1 registre) selon Section 1.1.3:
+ * Byte1  Byte2  Byte3  Byte4      Byte5      Byte6     Byte7     Byte8    Byte9
+ * [0xAA] [0x09] [PL]   [Addr:LSB] [Addr:MSB] [Data:LSB][Data:MSB][CRC:LSB][CRC:MSB]
  */
 esp_err_t tinybms_parse_read_response(const uint8_t *frame, size_t frame_len,
                                        uint16_t *value)
@@ -159,26 +166,50 @@ esp_err_t tinybms_parse_read_response(const uint8_t *frame, size_t frame_len,
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (frame_len != 7) {
-        ESP_LOGE(TAG, "Invalid read response length: %d", frame_len);
+    // Minimum length: 9 bytes (0xAA + 0x09 + PL + Addr(2) + Data(2) + CRC(2))
+    if (frame_len < 9) {
+        ESP_LOGE(TAG, "Invalid read response length: %zu (expected >=9)", frame_len);
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (frame[0] != TINYBMS_PREAMBLE ||
-        frame[1] != 0x07 ||
-        frame[2] != TINYBMS_CMD_READ_RESPONSE) {
-        ESP_LOGE(TAG, "Invalid read response header");
+    if (frame[0] != TINYBMS_PREAMBLE) {
+        ESP_LOGE(TAG, "Invalid preamble: 0x%02X", frame[0]);
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Extract value (little-endian)
-    *value = frame[3] | (frame[4] << 8);
+    if (frame[1] != TINYBMS_CMD_READ_INDIVIDUAL) {
+        ESP_LOGE(TAG, "Invalid command: 0x%02X (expected 0x09)", frame[1]);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Byte3 = PL (payload length)
+    uint8_t payload_len = frame[2];
+
+    // Pour 1 registre: PL devrait être >= 4 (2 bytes addr + 2 bytes data)
+    if (payload_len < 4) {
+        ESP_LOGE(TAG, "Invalid payload length: %d", payload_len);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Extract address echo (Byte4-5)
+    // uint16_t addr_echo = frame[3] | (frame[4] << 8);
+
+    // Extract value (little-endian) from Byte6-7
+    *value = frame[5] | (frame[6] << 8);
 
     return ESP_OK;
 }
 
 /**
  * @brief Parse an ACK/NACK response
+ *
+ * ACK format (5 bytes) selon Section 1.1.1:
+ * Byte1  Byte2  Byte3  Byte4    Byte5
+ * [0xAA] [0x01] [CMD]  [CRC:LSB][CRC:MSB]
+ *
+ * NACK format (6 bytes):
+ * Byte1  Byte2  Byte3  Byte4  Byte5    Byte6
+ * [0xAA] [0x00] [CMD]  [ERROR][CRC:LSB][CRC:MSB]
  */
 esp_err_t tinybms_parse_ack(const uint8_t *frame, size_t frame_len,
                              bool *is_ack, uint8_t *error_code)
@@ -187,24 +218,32 @@ esp_err_t tinybms_parse_ack(const uint8_t *frame, size_t frame_len,
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (frame_len < 3) {
+    if (frame_len < 5) {
+        ESP_LOGE(TAG, "ACK/NACK frame too short: %zu", frame_len);
         return ESP_ERR_INVALID_ARG;
     }
 
     if (frame[0] != TINYBMS_PREAMBLE) {
+        ESP_LOGE(TAG, "Invalid preamble in ACK/NACK: 0x%02X", frame[0]);
         return ESP_ERR_INVALID_ARG;
     }
 
-    uint8_t cmd = frame[2];
+    uint8_t response_type = frame[1];
 
-    if (cmd == TINYBMS_CMD_ACK) {
+    if (response_type == TINYBMS_RESP_ACK) {
+        // ACK: Byte2 = 0x01
         *is_ack = true;
         *error_code = 0;
-    } else if (cmd == TINYBMS_CMD_NACK) {
+        ESP_LOGD(TAG, "Received ACK for command 0x%02X", frame[2]);
+    } else if (response_type == TINYBMS_RESP_NACK) {
+        // NACK: Byte2 = 0x00
         *is_ack = false;
-        // Error code is in payload[0] if available
-        *error_code = (frame_len > 3) ? frame[3] : 0xFF;
+        // Error code is in Byte4
+        *error_code = (frame_len >= 6) ? frame[3] : 0xFF;
+        ESP_LOGW(TAG, "Received NACK for command 0x%02X, error: 0x%02X",
+                 frame[2], *error_code);
     } else {
+        ESP_LOGE(TAG, "Unknown response type: 0x%02X", response_type);
         return ESP_ERR_INVALID_ARG;
     }
 
