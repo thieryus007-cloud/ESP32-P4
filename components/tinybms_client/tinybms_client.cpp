@@ -55,6 +55,13 @@ static portMUX_TYPE s_stats_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static void publish_stats_event(void);
 static void tinybms_client_worker_task(void *arg);
+static esp_err_t read_register_internal(uint16_t address, uint16_t *value);
+static esp_err_t write_register_internal(uint16_t address, uint16_t value);
+static esp_err_t send_reset_command_internal(void);
+static esp_err_t read_block_internal(uint16_t start_address, uint8_t count, uint16_t *values);
+static esp_err_t write_block_internal(uint16_t start_address, uint8_t count, const uint16_t *values);
+static esp_err_t modbus_read_internal(uint16_t start_address, uint16_t quantity, uint16_t *values);
+static esp_err_t modbus_write_internal(uint16_t start_address, uint16_t quantity, const uint16_t *values);
 
 static inline void stats_increment(uint32_t *field)
 {
@@ -817,6 +824,546 @@ esp_err_t tinybms_restart(void)
     } else {
         ESP_LOGW(TAG, "Reset command failed: %s", esp_err_to_name(ret));
     }
+
+    return ret;
+}
+
+/**
+ * @brief Low-level read block operation (Command 0x07)
+ */
+static esp_err_t read_block_internal(uint16_t start_address, uint8_t count, uint16_t *values)
+{
+    if (count == 0 || count > 255 || values == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t tx_frame[8]; // Fixed size for read block request
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5;
+
+    // Build read block frame
+    esp_err_t ret = tinybms_build_read_block_frame(tx_frame, start_address, count);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Send request
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, 8);
+    if (written != 8) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    // Wait for response
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t deadline = start_time + timeout_ticks;
+
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        // Try to extract frame
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            uint8_t actual_count = 0;
+            ret = tinybms_parse_read_block_response(frame_start, frame_len, values, count, &actual_count);
+            if (ret == ESP_OK) {
+                ESP_LOGD(TAG, "Read block: %d registers from 0x%04X", actual_count, start_address);
+                return ESP_OK;
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            ESP_LOGW(TAG, "CRC error on read block response");
+            uart_flush_input(TINYBMS_UART_NUM);
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    ESP_LOGW(TAG, "Timeout reading block from 0x%04X", start_address);
+    return ESP_ERR_TIMEOUT;
+}
+
+/**
+ * @brief Low-level write block operation (Command 0x0B)
+ */
+static esp_err_t write_block_internal(uint16_t start_address, uint8_t count, const uint16_t *values)
+{
+    if (count == 0 || count > 125 || values == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t tx_frame[TINYBMS_MAX_FRAME_LEN];
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5;
+
+    // Build write block frame
+    esp_err_t ret = tinybms_build_write_block_frame(tx_frame, start_address, values, count);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Calculate frame size: 3 (header) + 3 (start_addr + count) + count*2 (data) + 2 (CRC)
+    size_t frame_size = 8 + (count * 2);
+
+    // Send write command
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, frame_size);
+    if (written != (int)frame_size) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    // Wait for ACK/NACK
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t deadline = start_time + timeout_ticks;
+
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected during write block, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            bool is_ack;
+            uint8_t error_code;
+            ret = tinybms_parse_ack(frame_start, frame_len, &is_ack, &error_code);
+
+            if (ret == ESP_OK) {
+                if (is_ack) {
+                    ESP_LOGD(TAG, "Write block ACK for %d registers at 0x%04X", count, start_address);
+                    return ESP_OK;
+                } else {
+                    ESP_LOGW(TAG, "Write block NACK (error: 0x%02X)", error_code);
+                    return ESP_ERR_INVALID_RESPONSE;
+                }
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            uart_flush_input(TINYBMS_UART_NUM);
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    ESP_LOGW(TAG, "Timeout waiting for write block ACK");
+    return ESP_ERR_TIMEOUT;
+}
+
+/**
+ * @brief Low-level MODBUS read operation (Command 0x03)
+ */
+static esp_err_t modbus_read_internal(uint16_t start_address, uint16_t quantity, uint16_t *values)
+{
+    if (quantity == 0 || quantity > 125 || values == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t tx_frame[9]; // Fixed size for MODBUS read request
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5;
+
+    // Build MODBUS read frame
+    esp_err_t ret = tinybms_build_modbus_read_frame(tx_frame, start_address, quantity);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Send request
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, 9);
+    if (written != 9) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    // Wait for response
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t deadline = start_time + timeout_ticks;
+
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        // Try to extract frame
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            uint16_t actual_count = 0;
+            ret = tinybms_parse_modbus_read_response(frame_start, frame_len, values, quantity, &actual_count);
+            if (ret == ESP_OK) {
+                ESP_LOGD(TAG, "MODBUS read: %d registers from 0x%04X", actual_count, start_address);
+                return ESP_OK;
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            ESP_LOGW(TAG, "CRC error on MODBUS read response");
+            uart_flush_input(TINYBMS_UART_NUM);
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    ESP_LOGW(TAG, "Timeout on MODBUS read from 0x%04X", start_address);
+    return ESP_ERR_TIMEOUT;
+}
+
+/**
+ * @brief Low-level MODBUS write operation (Command 0x10)
+ */
+static esp_err_t modbus_write_internal(uint16_t start_address, uint16_t quantity, const uint16_t *values)
+{
+    if (quantity == 0 || quantity > 123 || values == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t tx_frame[TINYBMS_MAX_FRAME_LEN];
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5;
+
+    // Build MODBUS write frame
+    esp_err_t ret = tinybms_build_modbus_write_frame(tx_frame, start_address, values, quantity);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Calculate frame size: 3 (header) + 5 (addr + qty + byte_count) + quantity*2 (data) + 2 (CRC)
+    size_t frame_size = 10 + (quantity * 2);
+
+    // Send write command
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, frame_size);
+    if (written != (int)frame_size) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    // Wait for ACK/NACK
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t deadline = start_time + timeout_ticks;
+
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected during MODBUS write, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            bool is_ack;
+            uint8_t error_code;
+            ret = tinybms_parse_ack(frame_start, frame_len, &is_ack, &error_code);
+
+            if (ret == ESP_OK) {
+                if (is_ack) {
+                    ESP_LOGD(TAG, "MODBUS write ACK for %d registers at 0x%04X", quantity, start_address);
+                    return ESP_OK;
+                } else {
+                    ESP_LOGW(TAG, "MODBUS write NACK (error: 0x%02X)", error_code);
+                    return ESP_ERR_INVALID_RESPONSE;
+                }
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            uart_flush_input(TINYBMS_UART_NUM);
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    ESP_LOGW(TAG, "Timeout waiting for MODBUS write ACK");
+    return ESP_ERR_TIMEOUT;
+}
+
+esp_err_t tinybms_read_block(uint16_t start_address, uint8_t count, uint16_t *values)
+{
+    if (!g_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (values == NULL || count == 0 || count > 255) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGD(TAG, "Reading %d registers from 0x%04X (Command 0x07)", count, start_address);
+
+    esp_err_t ret = ESP_FAIL;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = read_block_internal(start_address, count, values);
+        if (ret == ESP_OK) {
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+
+    char detail[64] = {0};
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "count=%d", count);
+    }
+    publish_uart_log("read_block", start_address, ret, detail);
+    publish_stats_event();
+
+    return ret;
+}
+
+esp_err_t tinybms_write_block(uint16_t start_address, uint8_t count, const uint16_t *values)
+{
+    if (!g_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (values == NULL || count == 0 || count > 125) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGD(TAG, "Writing %d registers to 0x%04X (Command 0x0B)", count, start_address);
+
+    esp_err_t ret = ESP_FAIL;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = write_block_internal(start_address, count, values);
+        if (ret == ESP_OK) {
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+
+    char detail[64] = {0};
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "count=%d", count);
+    }
+    publish_uart_log("write_block", start_address, ret, detail);
+    publish_stats_event();
+
+    return ret;
+}
+
+esp_err_t tinybms_modbus_read(uint16_t start_address, uint16_t quantity, uint16_t *values)
+{
+    if (!g_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (values == NULL || quantity == 0 || quantity > 125) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGD(TAG, "MODBUS read: %d registers from 0x%04X (Command 0x03)", quantity, start_address);
+
+    esp_err_t ret = ESP_FAIL;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = modbus_read_internal(start_address, quantity, values);
+        if (ret == ESP_OK) {
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+
+    char detail[64] = {0};
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "quantity=%d", quantity);
+    }
+    publish_uart_log("modbus_read", start_address, ret, detail);
+    publish_stats_event();
+
+    return ret;
+}
+
+esp_err_t tinybms_modbus_write(uint16_t start_address, uint16_t quantity, const uint16_t *values)
+{
+    if (!g_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (values == NULL || quantity == 0 || quantity > 123) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_LOGD(TAG, "MODBUS write: %d registers to 0x%04X (Command 0x10)", quantity, start_address);
+
+    esp_err_t ret = ESP_FAIL;
+    for (int retry = 0; retry < TINYBMS_RETRY_COUNT; ++retry) {
+        ret = modbus_write_internal(start_address, quantity, values);
+        if (ret == ESP_OK) {
+            break;
+        }
+        if (retry < TINYBMS_RETRY_COUNT - 1) {
+            stats_increment(&g_ctx.stats.retries);
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+
+    char detail[64] = {0};
+    if (ret == ESP_OK) {
+        snprintf(detail, sizeof(detail), "quantity=%d", quantity);
+    }
+    publish_uart_log("modbus_write", start_address, ret, detail);
+    publish_stats_event();
 
     return ret;
 }
