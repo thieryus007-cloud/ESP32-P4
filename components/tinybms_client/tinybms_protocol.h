@@ -103,6 +103,62 @@ esp_err_t tinybms_build_write_frame(uint8_t *frame, uint16_t address, uint16_t v
 esp_err_t tinybms_build_reset_frame(uint8_t *frame);
 
 /**
+ * @brief Build a read block frame (Command 0x07 - Proprietary)
+ *
+ * Reads multiple consecutive registers
+ * Frame format: [0xAA] [0x07] [PL] [Start:LSB] [Start:MSB] [Count] [CRC_LSB] [CRC_MSB]
+ *
+ * @param frame Output buffer (must be >= 8 bytes)
+ * @param start_address Starting register address
+ * @param count Number of registers to read (1-255)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_read_block_frame(uint8_t *frame, uint16_t start_address, uint8_t count);
+
+/**
+ * @brief Build a write block frame (Command 0x0B - Proprietary)
+ *
+ * Writes multiple consecutive registers
+ * Frame format: [0xAA] [0x0B] [PL] [Start:LSB] [Start:MSB] [Count] [Data...] [CRC_LSB] [CRC_MSB]
+ *
+ * @param frame Output buffer (must be >= 6 + count*2 bytes)
+ * @param start_address Starting register address
+ * @param values Array of values to write
+ * @param count Number of registers to write (1-125)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_write_block_frame(uint8_t *frame, uint16_t start_address,
+                                          const uint16_t *values, uint8_t count);
+
+/**
+ * @brief Build a MODBUS read frame (Command 0x03)
+ *
+ * MODBUS-compatible read of multiple registers
+ * Frame format: [0xAA] [0x03] [PL] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [CRC_LSB] [CRC_MSB]
+ *
+ * @param frame Output buffer (must be >= 9 bytes)
+ * @param start_address Starting register address
+ * @param quantity Number of registers to read (1-125)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_modbus_read_frame(uint8_t *frame, uint16_t start_address, uint16_t quantity);
+
+/**
+ * @brief Build a MODBUS write frame (Command 0x10)
+ *
+ * MODBUS-compatible write of multiple registers
+ * Frame format: [0xAA] [0x10] [PL] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [ByteCount] [Data...] [CRC_LSB] [CRC_MSB]
+ *
+ * @param frame Output buffer (must be >= 9 + count*2 bytes)
+ * @param start_address Starting register address
+ * @param values Array of values to write
+ * @param quantity Number of registers to write (1-123)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_modbus_write_frame(uint8_t *frame, uint16_t start_address,
+                                           const uint16_t *values, uint16_t quantity);
+
+/**
  * @brief Extract a complete frame from receive buffer
  *
  * Searches for preamble, validates length and CRC
@@ -118,7 +174,7 @@ esp_err_t tinybms_extract_frame(const uint8_t *buffer, size_t buffer_len,
                                  const uint8_t **frame_start, size_t *frame_len);
 
 /**
- * @brief Parse a read response frame
+ * @brief Parse a read response frame (Command 0x09)
  *
  * @param frame Frame buffer
  * @param frame_len Frame length
@@ -127,6 +183,34 @@ esp_err_t tinybms_extract_frame(const uint8_t *buffer, size_t buffer_len,
  */
 esp_err_t tinybms_parse_read_response(const uint8_t *frame, size_t frame_len,
                                        uint16_t *value);
+
+/**
+ * @brief Parse a read block response frame (Command 0x07)
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param values Output: array of register values (must be pre-allocated)
+ * @param max_count Maximum number of values that can be stored
+ * @param actual_count Output: actual number of values read
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG on invalid frame
+ */
+esp_err_t tinybms_parse_read_block_response(const uint8_t *frame, size_t frame_len,
+                                            uint16_t *values, uint8_t max_count,
+                                            uint8_t *actual_count);
+
+/**
+ * @brief Parse a MODBUS read response frame (Command 0x03)
+ *
+ * @param frame Frame buffer
+ * @param frame_len Frame length
+ * @param values Output: array of register values (must be pre-allocated)
+ * @param max_count Maximum number of values that can be stored
+ * @param actual_count Output: actual number of values read
+ * @return ESP_OK on success, ESP_ERR_INVALID_ARG on invalid frame
+ */
+esp_err_t tinybms_parse_modbus_read_response(const uint8_t *frame, size_t frame_len,
+                                             uint16_t *values, uint16_t max_count,
+                                             uint16_t *actual_count);
 
 /**
  * @brief Parse an ACK/NACK response

@@ -102,6 +102,46 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
 esp_err_t tinybms_restart(void);
 
 /**
+ * @brief Read multiple consecutive registers (Command 0x07 - Block Read)
+ *
+ * @param start_address Starting register address
+ * @param count Number of registers to read (1-255)
+ * @param values Output: array of values (must be pre-allocated)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_read_block(uint16_t start_address, uint8_t count, uint16_t *values);
+
+/**
+ * @brief Write multiple consecutive registers (Command 0x0B - Block Write)
+ *
+ * @param start_address Starting register address
+ * @param count Number of registers to write (1-125)
+ * @param values Array of values to write
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_write_block(uint16_t start_address, uint8_t count, const uint16_t *values);
+
+/**
+ * @brief Read multiple registers using MODBUS protocol (Command 0x03)
+ *
+ * @param start_address Starting register address
+ * @param quantity Number of registers to read (1-125)
+ * @param values Output: array of values (must be pre-allocated)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_modbus_read(uint16_t start_address, uint16_t quantity, uint16_t *values);
+
+/**
+ * @brief Write multiple registers using MODBUS protocol (Command 0x10)
+ *
+ * @param start_address Starting register address
+ * @param quantity Number of registers to write (1-123)
+ * @param values Array of values to write
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_modbus_write(uint16_t start_address, uint16_t quantity, const uint16_t *values);
+
+/**
  * @brief Get current connection state
  *
  * @return Current state
