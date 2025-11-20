@@ -157,8 +157,90 @@ app.post('/api/system/restart', async (req, res, next) => {
   }
 });
 
+app.get('/api/monitoring/live', async (req, res, next) => {
+  try {
+    ensureConnected();
+    const [
+      packVoltage,
+      packCurrent,
+      estimatedSoc,
+      temperatures,
+      cellVoltages,
+      maxCellVoltage,
+      minCellVoltage,
+      onlineStatus,
+    ] = await Promise.all([
+      serial.readPackVoltage().catch(() => null),
+      serial.readPackCurrent().catch(() => null),
+      serial.readEstimatedSoc().catch(() => null),
+      serial.readTemperatures().catch(() => []),
+      serial.readCellVoltages().catch(() => []),
+      serial.readMaxCellVoltage().catch(() => null),
+      serial.readMinCellVoltage().catch(() => null),
+      serial.readOnlineStatus().catch(() => null),
+    ]);
+
+    res.json({
+      packVoltage,
+      packCurrent,
+      estimatedSoc,
+      temperatures,
+      cellVoltages,
+      maxCellVoltage,
+      minCellVoltage,
+      onlineStatus,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/monitoring/events', async (req, res, next) => {
+  try {
+    ensureConnected();
+    const { type = 'newest' } = req.query;
+    let events;
+    if (type === 'all') {
+      events = await serial.readAllEvents();
+    } else {
+      events = await serial.readNewestEvents();
+    }
+    res.json({ events, type });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/system/version', async (req, res, next) => {
+  try {
+    ensureConnected();
+    const version = await serial.readVersion();
+    res.json(version);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/monitoring/cells', async (req, res, next) => {
+  try {
+    ensureConnected();
+    const cellVoltages = await serial.readCellVoltages();
+    const maxCellVoltage = await serial.readMaxCellVoltage();
+    const minCellVoltage = await serial.readMinCellVoltage();
+    res.json({
+      voltages: cellVoltages,
+      max: maxCellVoltage,
+      min: minCellVoltage,
+      count: cellVoltages.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/ota', (req, res) => {
-  res.status(501).json({ error: 'Mise à jour OTA non supportée via l’interface Mac locale.' });
+  res.status(501).json({ error: 'Mise à jour OTA non supportée via l'interface Mac locale.' });
 });
 
 app.use('/api', (err, req, res, next) => {

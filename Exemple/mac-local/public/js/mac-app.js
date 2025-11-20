@@ -8,17 +8,27 @@ const elements = {
   details: document.getElementById('connection-details'),
   error: document.getElementById('connection-error'),
   configLoading: document.getElementById('config-loading-message'),
+  dashboardCard: document.getElementById('dashboard-card'),
   registersCard: document.getElementById('registers-card'),
   registersTableBody: document.querySelector('#registers-table tbody'),
   refreshRegisters: document.getElementById('refresh-registers'),
+  refreshDashboard: document.getElementById('refresh-dashboard'),
+  resetBms: document.getElementById('reset-bms'),
   groupFilter: document.getElementById('group-filter'),
   feedback: document.getElementById('registers-feedback'),
+  packVoltage: document.getElementById('pack-voltage'),
+  packCurrent: document.getElementById('pack-current'),
+  soc: document.getElementById('soc'),
+  temperature: document.getElementById('temperature'),
+  cellsChart: document.getElementById('cells-chart'),
 };
 
 const state = {
   registers: [],
   connected: false,
   currentGroup: '__all__',
+  cellsChart: null,
+  dashboardInterval: null,
 };
 
 function isWritable(access) {
@@ -58,6 +68,7 @@ function setStatus({ connected, port }) {
     elements.badge.className = 'badge bg-success';
     elements.badge.textContent = 'Connecté';
     elements.details.textContent = `${port.path} • ${port.baudRate} bauds`;
+    startDashboardRefresh();
   } else {
     elements.badge.className = 'badge bg-secondary';
     elements.badge.textContent = 'Déconnecté';
@@ -66,8 +77,10 @@ function setStatus({ connected, port }) {
     state.currentGroup = '__all__';
     elements.groupFilter.value = '__all__';
     elements.configLoading.hidden = true;
+    stopDashboardRefresh();
   }
   setButtonsState({ connected });
+  elements.dashboardCard.hidden = !connected;
   elements.registersCard.hidden = !connected;
 }
 
@@ -379,6 +392,145 @@ async function applyRegister(key, value) {
   }
 }
 
+function initCellsChart() {
+  if (state.cellsChart) {
+    state.cellsChart.destroy();
+  }
+
+  const ctx = elements.cellsChart.getContext('2d');
+  state.cellsChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Tension (mV)',
+        data: [],
+        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+        borderColor: 'rgba(59, 130, 246, 1)',
+        borderWidth: 1,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.parsed.y} mV`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: false,
+          ticks: {
+            color: '#94a3b8',
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.1)',
+          },
+        },
+        x: {
+          ticks: {
+            color: '#94a3b8',
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.1)',
+          },
+        },
+      },
+    },
+  });
+}
+
+function updateCellsChart(cellVoltages) {
+  if (!state.cellsChart) {
+    initCellsChart();
+  }
+
+  const labels = cellVoltages.map((_, index) => `C${index + 1}`);
+  state.cellsChart.data.labels = labels;
+  state.cellsChart.data.datasets[0].data = cellVoltages;
+  state.cellsChart.update();
+}
+
+async function refreshDashboard() {
+  if (!state.connected) {
+    return;
+  }
+
+  try {
+    const data = await fetchJSON('/api/monitoring/live');
+
+    if (data.packVoltage !== null) {
+      elements.packVoltage.textContent = `${(data.packVoltage / 1000).toFixed(2)} V`;
+    } else {
+      elements.packVoltage.textContent = '-- V';
+    }
+
+    if (data.packCurrent !== null) {
+      const current = data.packCurrent / 10;
+      elements.packCurrent.textContent = `${current.toFixed(1)} A`;
+    } else {
+      elements.packCurrent.textContent = '-- A';
+    }
+
+    if (data.estimatedSoc !== null) {
+      elements.soc.textContent = `${(data.estimatedSoc / 10).toFixed(1)} %`;
+    } else {
+      elements.soc.textContent = '-- %';
+    }
+
+    if (data.temperatures && data.temperatures.length > 0) {
+      const avgTemp = data.temperatures.reduce((sum, t) => sum + t, 0) / data.temperatures.length;
+      elements.temperature.textContent = `${(avgTemp / 10).toFixed(1)} °C`;
+    } else {
+      elements.temperature.textContent = '-- °C';
+    }
+
+    if (data.cellVoltages && data.cellVoltages.length > 0) {
+      updateCellsChart(data.cellVoltages);
+    }
+  } catch (error) {
+    console.error('Erreur lors du rafraîchissement du dashboard:', error);
+  }
+}
+
+function startDashboardRefresh() {
+  stopDashboardRefresh();
+  refreshDashboard();
+  state.dashboardInterval = setInterval(refreshDashboard, 2000);
+}
+
+function stopDashboardRefresh() {
+  if (state.dashboardInterval) {
+    clearInterval(state.dashboardInterval);
+    state.dashboardInterval = null;
+  }
+}
+
+async function resetBms() {
+  if (!confirm('Êtes-vous sûr de vouloir redémarrer le TinyBMS ?')) {
+    return;
+  }
+
+  try {
+    elements.resetBms.disabled = true;
+    await fetchJSON('/api/system/restart', { method: 'POST' });
+    setFeedback('Le TinyBMS redémarre...', 'success');
+    setTimeout(() => {
+      refreshDashboard();
+    }, 3000);
+  } catch (error) {
+    setFeedback(`Erreur lors du redémarrage : ${error.message}`, 'danger');
+  } finally {
+    elements.resetBms.disabled = false;
+  }
+}
+
 elements.refreshPorts.addEventListener('click', (event) => {
   event.preventDefault();
   loadPorts();
@@ -404,6 +556,16 @@ elements.groupFilter.addEventListener('change', (event) => {
   renderRegistersTable();
 });
 
+elements.refreshDashboard.addEventListener('click', (event) => {
+  event.preventDefault();
+  refreshDashboard();
+});
+
+elements.resetBms.addEventListener('click', (event) => {
+  event.preventDefault();
+  resetBms();
+});
+
 elements.registersTableBody.addEventListener('click', (event) => {
   const target = event.target;
   if (target.classList.contains('apply-register')) {
@@ -420,6 +582,11 @@ elements.registersTableBody.addEventListener('click', (event) => {
 });
 
 window.addEventListener('DOMContentLoaded', async () => {
+  initCellsChart();
   await loadPorts();
   await refreshStatus();
+});
+
+window.addEventListener('beforeunload', () => {
+  stopDashboardRefresh();
 });
