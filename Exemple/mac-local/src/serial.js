@@ -457,6 +457,349 @@ export class TinyBmsSerial {
     });
   }
 
+  /**
+   * Build a simple command frame (no payload)
+   * Format: [0xAA] [CMD] [0x00] [CRC:LSB] [CRC:MSB]
+   */
+  _buildSimpleCommandFrame(command) {
+    const frame = Buffer.alloc(5);
+    frame[0] = 0xaa;
+    frame[1] = command;
+    frame[2] = 0x00; // PL = 0
+    const crc = crc16(frame.subarray(0, 3));
+    frame[3] = crc & 0xff;
+    frame[4] = (crc >> 8) & 0xff;
+    return frame;
+  }
+
+  /**
+   * Parse a simple uint16 response
+   * Format: [0xAA] [CMD] [PL] [Data:LSB] [Data:MSB] [CRC:LSB] [CRC:MSB]
+   */
+  _parseSimpleUint16Response(frame) {
+    if (frame.length < 7) {
+      throw new Error('Simple response too short');
+    }
+    return frame[3] | (frame[4] << 8);
+  }
+
+  /**
+   * Parse a simple int16 response (signed)
+   */
+  _parseSimpleInt16Response(frame) {
+    const unsigned = this._parseSimpleUint16Response(frame);
+    return unsigned > 0x7fff ? unsigned - 0x10000 : unsigned;
+  }
+
+  /**
+   * Parse a multi-value response
+   * Format: [0xAA] [CMD] [PL] [Data...] [CRC:LSB] [CRC:MSB]
+   */
+  _parseMultiValueResponse(frame) {
+    if (frame.length < 5) {
+      throw new Error('Multi-value response too short');
+    }
+    const payloadLength = frame[2];
+    const valueCount = payloadLength / 2;
+    const values = [];
+    for (let i = 0; i < valueCount; i += 1) {
+      const offset = 3 + (i * 2);
+      values.push(frame[offset] | (frame[offset + 1] << 8));
+    }
+    return values;
+  }
+
+  async readNewestEvents(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x11);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x11, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseMultiValueResponse(frame);
+    });
+  }
+
+  async readAllEvents(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x12);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x12, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseMultiValueResponse(frame);
+    });
+  }
+
+  async readPackVoltage(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x14);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x14, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readPackCurrent(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x15);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x15, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleInt16Response(frame);
+    });
+  }
+
+  async readMaxCellVoltage(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x16);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x16, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readMinCellVoltage(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x17);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x17, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readOnlineStatus(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x18);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x18, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readLifetimeCounter(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x19);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x19, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readEstimatedSoc(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1a);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1a, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseSimpleUint16Response(frame);
+    });
+  }
+
+  async readTemperatures(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1b);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1b, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseMultiValueResponse(frame);
+    });
+  }
+
+  async readCellVoltages(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1c);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1c, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseMultiValueResponse(frame);
+    });
+  }
+
+  async readSettingsValues(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1d);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1d, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      return this._parseMultiValueResponse(frame);
+    });
+  }
+
+  async readVersion(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1e);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1e, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      if (frame.length < 8) {
+        throw new Error('Version response too short');
+      }
+      return {
+        major: frame[3],
+        minor: frame[4],
+        patch: frame[5],
+      };
+    });
+  }
+
+  async readExtendedVersion(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x1f);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x1f, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      if (frame.length < 8) {
+        throw new Error('Extended version response too short');
+      }
+      return {
+        major: frame[3],
+        minor: frame[4],
+        patch: frame[5],
+      };
+    });
+  }
+
+  async readSpeedDistance(timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = this._buildSimpleCommandFrame(0x20);
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x20, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      const values = this._parseMultiValueResponse(frame);
+      if (values.length < 2) {
+        throw new Error('Speed/distance response too short');
+      }
+      return {
+        speed: values[0],
+        distance: values[1],
+      };
+    });
+  }
+
   async readCatalogue(descriptors, timeoutMs = DEFAULT_TIMEOUT_MS) {
     return this._mutex.runExclusive(async () => {
       const results = [];
