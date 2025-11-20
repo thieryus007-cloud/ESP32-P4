@@ -61,10 +61,23 @@ function buildWriteFrame(address, rawValue) {
   return frame;
 }
 
+/**
+ * Build a reset command frame (Command 0x02 with option 0x05)
+ * Conforme à la section 1.1.8 du protocole TinyBMS Rev D
+ *
+ * Frame format (6 bytes):
+ * [0xAA] [0x02] [0x01] [0x05] [CRC_LSB] [CRC_MSB]
+ */
 function buildRestartFrame() {
-  const address = 0x0086;
-  const value = 0xa55a;
-  return buildWriteFrame(address, value);
+  const frame = Buffer.alloc(6);
+  frame[0] = 0xaa;  // Preamble
+  frame[1] = 0x02;  // Command: Reset
+  frame[2] = 0x01;  // Payload Length: 1 byte
+  frame[3] = 0x05;  // Option: Reset BMS
+  const crc = crc16(frame.subarray(0, 4));
+  frame[4] = crc & 0xff;        // CRC LSB
+  frame[5] = (crc >> 8) & 0xff; // CRC MSB
+  return frame;
 }
 
 function extractFrame(buffer) {

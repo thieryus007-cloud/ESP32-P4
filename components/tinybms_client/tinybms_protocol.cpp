@@ -94,6 +94,34 @@ esp_err_t tinybms_build_write_frame(uint8_t *frame, uint16_t address, uint16_t v
 }
 
 /**
+ * @brief Build a reset command frame (Command 0x02 - Reset BMS)
+ *
+ * Frame format (6 bytes) selon Section 1.1.8 du protocole TinyBMS Rev D:
+ * Byte1  Byte2  Byte3  Byte4   Byte5    Byte6
+ * [0xAA] [0x02] [PL]   [OPTION][CRC:LSB][CRC:MSB]
+ *
+ * Pour reset BMS: PL = 0x01 (1 byte option), OPTION = 0x05 (Reset BMS)
+ */
+esp_err_t tinybms_build_reset_frame(uint8_t *frame)
+{
+    if (frame == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    frame[0] = TINYBMS_PREAMBLE;                    // Byte1: Preamble 0xAA
+    frame[1] = TINYBMS_CMD_RESET;                   // Byte2: Command 0x02
+    frame[2] = 0x01;                                // Byte3: PL = 1 (1 byte option)
+    frame[3] = TINYBMS_RESET_OPTION_BMS;            // Byte4: Option 0x05 (Reset BMS)
+
+    // Calculate CRC on first 4 bytes (preamble + cmd + PL + option)
+    uint16_t crc = tinybms_crc16(frame, 4);
+    frame[4] = crc & 0xFF;                          // Byte5: CRC low byte
+    frame[5] = (crc >> 8) & 0xFF;                   // Byte6: CRC high byte
+
+    return ESP_OK;
+}
+
+/**
  * @brief Extract a complete frame from receive buffer
  *
  * Reference: Exemple/mac-local/src/serial.js lines 70-103

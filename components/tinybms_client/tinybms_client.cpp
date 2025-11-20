@@ -548,6 +548,111 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
     return ESP_ERR_TIMEOUT;
 }
 
+/**
+ * @brief Send reset command (Command 0x02 with option 0x05)
+ *
+ * Conforme à la section 1.1.8 du protocole TinyBMS Rev D
+ */
+static esp_err_t send_reset_command_internal(void)
+{
+    uint8_t tx_frame[TINYBMS_RESET_FRAME_LEN];
+    uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
+    size_t rx_len = 0;
+    const size_t min_frame_len = 5; // preamble + len + cmd + CRC
+
+    // Build reset frame
+    esp_err_t ret = tinybms_build_reset_frame(tx_frame);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // Send reset command
+    int written = uart_write_bytes(TINYBMS_UART_NUM, tx_frame, TINYBMS_RESET_FRAME_LEN);
+    if (written != TINYBMS_RESET_FRAME_LEN) {
+        ESP_LOGE(TAG, "UART write failed: %d bytes", written);
+        return ESP_FAIL;
+    }
+
+    uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
+
+    // Wait for ACK/NACK
+    TickType_t start_time = xTaskGetTickCount();
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+
+    TickType_t deadline = start_time + timeout_ticks;
+    while (xTaskGetTickCount() < deadline) {
+        uart_event_t event = {0};
+        TickType_t remaining = deadline - xTaskGetTickCount();
+        if (remaining == 0) {
+            break;
+        }
+
+        if (g_uart_evt_queue && xQueueReceive(g_uart_evt_queue, &event, remaining) == pdTRUE) {
+            if (event.type == UART_DATA || event.type == UART_PATTERN_DET) {
+                size_t available = 0;
+                uart_get_buffered_data_len(TINYBMS_UART_NUM, &available);
+                if (available > 0 && rx_len < sizeof(rx_buffer)) {
+                    size_t to_read = MIN(available, sizeof(rx_buffer) - rx_len);
+                    int len = uart_read_bytes(TINYBMS_UART_NUM,
+                                              &rx_buffer[rx_len],
+                                              to_read,
+                                              0);
+                    if (len > 0) {
+                        rx_len += (size_t)len;
+                    }
+                }
+            } else if (event.type == UART_FIFO_OVF || event.type == UART_BUFFER_FULL) {
+                ESP_LOGW(TAG, "UART overflow detected during reset, flushing input");
+                uart_flush_input(TINYBMS_UART_NUM);
+                rx_len = 0;
+                continue;
+            }
+        }
+
+        size_t buffered_len = 0;
+        uart_get_buffered_data_len(TINYBMS_UART_NUM, &buffered_len);
+        if (buffered_len > 0 && rx_len < sizeof(rx_buffer)) {
+            size_t to_read = MIN(buffered_len, sizeof(rx_buffer) - rx_len);
+            int len = uart_read_bytes(TINYBMS_UART_NUM, &rx_buffer[rx_len], to_read, 0);
+            if (len > 0) {
+                rx_len += (size_t)len;
+            }
+        }
+
+        if (rx_len < min_frame_len) {
+            continue;
+        }
+
+        const uint8_t *frame_start;
+        size_t frame_len;
+        ret = tinybms_extract_frame(rx_buffer, rx_len, &frame_start, &frame_len);
+
+        if (ret == ESP_OK) {
+            bool is_ack;
+            uint8_t error_code;
+            ret = tinybms_parse_ack(frame_start, frame_len, &is_ack, &error_code);
+
+            if (ret == ESP_OK) {
+                if (is_ack) {
+                    ESP_LOGI(TAG, "Reset command ACK received");
+                    return ESP_OK;
+                } else {
+                    ESP_LOGW(TAG, "Reset command NACK (error: 0x%02X)", error_code);
+                    return ESP_ERR_INVALID_RESPONSE;
+                }
+            }
+        } else if (ret == ESP_ERR_INVALID_CRC) {
+            uart_flush_input(TINYBMS_UART_NUM);
+            rx_len = 0;
+            return ESP_ERR_INVALID_CRC;
+        }
+    }
+
+    // Timeout
+    ESP_LOGW(TAG, "Timeout waiting for reset ACK");
+    return ESP_ERR_TIMEOUT;
+}
+
 // Public API implementations
 
 esp_err_t tinybms_client_init(event_bus_t *bus)
@@ -697,11 +802,22 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
 
 esp_err_t tinybms_restart(void)
 {
-    ESP_LOGI(TAG, "Restarting TinyBMS...");
-    esp_err_t ret = tinybms_write_register(TINYBMS_REG_SYSTEM_RESTART,
-                                           TINYBMS_RESTART_VALUE,
-                                           NULL);
-    publish_uart_log("restart", TINYBMS_REG_SYSTEM_RESTART, ret, "");
+    if (!g_ctx.initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Restarting TinyBMS using Command 0x02...");
+    esp_err_t ret = send_reset_command_internal();
+
+    // Log the reset command result
+    publish_uart_log("reset", 0x0002, ret, "Command 0x02 Option 0x05");
+
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Reset command sent successfully");
+    } else {
+        ESP_LOGW(TAG, "Reset command failed: %s", esp_err_to_name(ret));
+    }
+
     return ret;
 }
 

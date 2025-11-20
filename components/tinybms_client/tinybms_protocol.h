@@ -40,12 +40,16 @@ extern "C" {
 #define TINYBMS_PREAMBLE                0xAA
 
 // Command codes (conformes à la spécification TinyBMS Rev D)
+#define TINYBMS_CMD_RESET               0x02  // Reset BMS command
 #define TINYBMS_CMD_READ_BLOCK          0x07  // Read registers block (proprietary)
 #define TINYBMS_CMD_READ_INDIVIDUAL     0x09  // Read individual registers
 #define TINYBMS_CMD_WRITE_BLOCK         0x0B  // Write registers block (proprietary)
 #define TINYBMS_CMD_WRITE_INDIVIDUAL    0x0D  // Write individual registers
 #define TINYBMS_CMD_MODBUS_READ         0x03  // Read registers block (MODBUS)
 #define TINYBMS_CMD_MODBUS_WRITE        0x10  // Write registers block (MODBUS)
+
+// Reset command options (Command 0x02)
+#define TINYBMS_RESET_OPTION_BMS        0x05  // Reset BMS option
 
 // Response codes
 #define TINYBMS_RESP_ACK                0x01  // Byte2 in ACK response
@@ -54,11 +58,8 @@ extern "C" {
 // Frame lengths (using Read/Write Individual commands 0x09/0x0D)
 #define TINYBMS_READ_FRAME_LEN          7     // 0xAA + 0x09 + PL + Addr(2) + CRC(2)
 #define TINYBMS_WRITE_FRAME_LEN         9     // 0xAA + 0x0D + PL + Addr(2) + Data(2) + CRC(2)
+#define TINYBMS_RESET_FRAME_LEN         6     // 0xAA + 0x02 + PL + Option + CRC(2)
 #define TINYBMS_MAX_FRAME_LEN           256
-
-// Special addresses
-#define TINYBMS_REG_SYSTEM_RESTART 0x0086
-#define TINYBMS_RESTART_VALUE      0xA55A
 
 /**
  * @brief Calculate CRC16 for TinyBMS protocol
@@ -89,6 +90,17 @@ esp_err_t tinybms_build_read_frame(uint8_t *frame, uint16_t address);
  * @return ESP_OK on success
  */
 esp_err_t tinybms_build_write_frame(uint8_t *frame, uint16_t address, uint16_t value);
+
+/**
+ * @brief Build a reset command frame
+ *
+ * Builds a frame for Command 0x02 (Reset) with option 0x05 (Reset BMS)
+ * Frame format: [0xAA] [0x02] [0x01] [0x05] [CRC_LSB] [CRC_MSB]
+ *
+ * @param frame Output buffer (must be >= 6 bytes)
+ * @return ESP_OK on success
+ */
+esp_err_t tinybms_build_reset_frame(uint8_t *frame);
 
 /**
  * @brief Extract a complete frame from receive buffer

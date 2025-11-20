@@ -94,7 +94,8 @@ esp_err_t tinybms_write_register(uint16_t address, uint16_t value,
 /**
  * @brief Restart TinyBMS
  *
- * Sends restart command (write 0xA55A to register 0x0086)
+ * Sends reset command using Command 0x02 with option 0x05 (Reset BMS)
+ * Conforme à la section 1.1.8 du protocole TinyBMS Rev D
  *
  * @return ESP_OK on success
  */
