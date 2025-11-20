@@ -80,6 +80,118 @@ function buildRestartFrame() {
   return frame;
 }
 
+/**
+ * Build a read block frame (Command 0x07 - Proprietary)
+ *
+ * Frame format (8 bytes):
+ * [0xAA] [0x07] [0x03] [Start:LSB] [Start:MSB] [Count] [CRC_LSB] [CRC_MSB]
+ */
+function buildReadBlockFrame(startAddress, count) {
+  const frame = Buffer.alloc(8);
+  frame[0] = 0xaa;                      // Preamble
+  frame[1] = 0x07;                      // Command: Read Block
+  frame[2] = 0x03;                      // Payload Length: 3 bytes
+  frame[3] = startAddress & 0xff;       // Start address LSB
+  frame[4] = (startAddress >> 8) & 0xff;// Start address MSB
+  frame[5] = count & 0xff;              // Register count
+  const crc = crc16(frame.subarray(0, 6));
+  frame[6] = crc & 0xff;                // CRC LSB
+  frame[7] = (crc >> 8) & 0xff;         // CRC MSB
+  return frame;
+}
+
+/**
+ * Build a write block frame (Command 0x0B - Proprietary)
+ *
+ * Frame format (variable):
+ * [0xAA] [0x0B] [PL] [Start:LSB] [Start:MSB] [Count] [Data...] [CRC_LSB] [CRC_MSB]
+ */
+function buildWriteBlockFrame(startAddress, values) {
+  const count = values.length;
+  const payloadLength = 3 + (count * 2);
+  const frameLength = 3 + payloadLength + 2;
+  const frame = Buffer.alloc(frameLength);
+
+  frame[0] = 0xaa;                      // Preamble
+  frame[1] = 0x0b;                      // Command: Write Block
+  frame[2] = payloadLength;             // Payload Length
+  frame[3] = startAddress & 0xff;       // Start address LSB
+  frame[4] = (startAddress >> 8) & 0xff;// Start address MSB
+  frame[5] = count & 0xff;              // Register count
+
+  // Write register values (little-endian)
+  for (let i = 0; i < count; i += 1) {
+    const offset = 6 + (i * 2);
+    frame[offset] = values[i] & 0xff;         // Data LSB
+    frame[offset + 1] = (values[i] >> 8) & 0xff; // Data MSB
+  }
+
+  const crcOffset = 6 + (count * 2);
+  const crc = crc16(frame.subarray(0, crcOffset));
+  frame[crcOffset] = crc & 0xff;        // CRC LSB
+  frame[crcOffset + 1] = (crc >> 8) & 0xff; // CRC MSB
+
+  return frame;
+}
+
+/**
+ * Build a MODBUS read frame (Command 0x03)
+ *
+ * Frame format (9 bytes):
+ * [0xAA] [0x03] [0x04] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [CRC_LSB] [CRC_MSB]
+ */
+function buildModbusReadFrame(startAddress, quantity) {
+  const frame = Buffer.alloc(9);
+  frame[0] = 0xaa;                      // Preamble
+  frame[1] = 0x03;                      // Command: MODBUS Read
+  frame[2] = 0x04;                      // Payload Length: 4 bytes
+  frame[3] = startAddress & 0xff;       // Start address LSB
+  frame[4] = (startAddress >> 8) & 0xff;// Start address MSB
+  frame[5] = quantity & 0xff;           // Quantity LSB
+  frame[6] = (quantity >> 8) & 0xff;    // Quantity MSB
+  const crc = crc16(frame.subarray(0, 7));
+  frame[7] = crc & 0xff;                // CRC LSB
+  frame[8] = (crc >> 8) & 0xff;         // CRC MSB
+  return frame;
+}
+
+/**
+ * Build a MODBUS write frame (Command 0x10)
+ *
+ * Frame format (variable):
+ * [0xAA] [0x10] [PL] [Start:LSB] [Start:MSB] [Qty:LSB] [Qty:MSB] [ByteCount] [Data...] [CRC_LSB] [CRC_MSB]
+ */
+function buildModbusWriteFrame(startAddress, values) {
+  const quantity = values.length;
+  const byteCount = quantity * 2;
+  const payloadLength = 5 + byteCount;
+  const frameLength = 3 + payloadLength + 2;
+  const frame = Buffer.alloc(frameLength);
+
+  frame[0] = 0xaa;                      // Preamble
+  frame[1] = 0x10;                      // Command: MODBUS Write
+  frame[2] = payloadLength;             // Payload Length
+  frame[3] = startAddress & 0xff;       // Start address LSB
+  frame[4] = (startAddress >> 8) & 0xff;// Start address MSB
+  frame[5] = quantity & 0xff;           // Quantity LSB
+  frame[6] = (quantity >> 8) & 0xff;    // Quantity MSB
+  frame[7] = byteCount;                 // Byte count
+
+  // Write register values (big-endian for MODBUS)
+  for (let i = 0; i < quantity; i += 1) {
+    const offset = 8 + (i * 2);
+    frame[offset] = (values[i] >> 8) & 0xff;  // Data MSB (big-endian)
+    frame[offset + 1] = values[i] & 0xff;     // Data LSB
+  }
+
+  const crcOffset = 8 + byteCount;
+  const crc = crc16(frame.subarray(0, crcOffset));
+  frame[crcOffset] = crc & 0xff;        // CRC LSB
+  frame[crcOffset + 1] = (crc >> 8) & 0xff; // CRC MSB
+
+  return frame;
+}
+
 function extractFrame(buffer) {
   if (!buffer || buffer.length === 0) {
     return { frame: null, buffer: Buffer.alloc(0) };
@@ -227,6 +339,119 @@ export class TinyBmsSerial {
       if (ack[1] === 0x00) {
         const errorCode = ack.length > 3 ? ack[3] : 0;
         throw new Error(`TinyBMS a renvoyé un NACK pour la commande de redémarrage (code: 0x${errorCode.toString(16).padStart(2, '0')})`);
+      }
+      return true;
+    });
+  }
+
+  async readBlock(startAddress, count, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = buildReadBlockFrame(startAddress, count);
+      // Response format: [0xAA][0x07][PL][Start:LSB][Start:MSB][Data...][CRC:LSB][CRC:MSB]
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x07, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      if (frame.length < 8) {
+        throw new Error('Réponse TinyBMS invalide pour read block');
+      }
+
+      const payloadLength = frame[2];
+      const dataBytes = payloadLength - 2; // Minus start address (2 bytes)
+      const registerCount = dataBytes / 2;
+      const values = [];
+
+      for (let i = 0; i < registerCount; i += 1) {
+        const offset = 5 + (i * 2); // Skip header (3) + start addr (2)
+        const value = frame[offset] | (frame[offset + 1] << 8);
+        values.push(value);
+      }
+
+      return values;
+    });
+  }
+
+  async writeBlock(startAddress, values, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const frame = buildWriteBlockFrame(startAddress, values);
+      // ACK/NACK format: Byte2 = 0x01 (ACK) or 0x00 (NACK)
+      const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x00, timeoutMs);
+      try {
+        await this._writeFrame(frame);
+      } catch (error) {
+        if (typeof ackPromise.cancel === 'function') {
+          ackPromise.cancel();
+        }
+        throw error;
+      }
+      const ack = await ackPromise;
+      if (ack[1] === 0x00) {
+        const errorCode = ack.length > 3 ? ack[3] : 0;
+        throw new Error(`TinyBMS NACK on write block (code 0x${errorCode.toString(16).padStart(2, '0')})`);
+      }
+      return true;
+    });
+  }
+
+  async modbusRead(startAddress, quantity, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const request = buildModbusReadFrame(startAddress, quantity);
+      // Response format: [0xAA][0x03][PL][ByteCount][Data...][CRC:LSB][CRC:MSB]
+      const responsePromise = this._waitForFrame((frame) => frame[1] === 0x03, timeoutMs);
+      try {
+        await this._writeFrame(request);
+      } catch (error) {
+        if (typeof responsePromise.cancel === 'function') {
+          responsePromise.cancel();
+        }
+        throw error;
+      }
+      const frame = await responsePromise;
+      if (frame.length < 6) {
+        throw new Error('Réponse TinyBMS invalide pour MODBUS read');
+      }
+
+      const byteCount = frame[3];
+      const registerCount = byteCount / 2;
+      const values = [];
+
+      for (let i = 0; i < registerCount; i += 1) {
+        const offset = 4 + (i * 2); // Skip header (3) + byte count (1)
+        const value = (frame[offset] << 8) | frame[offset + 1]; // Big-endian
+        values.push(value);
+      }
+
+      return values;
+    });
+  }
+
+  async modbusWrite(startAddress, values, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    return this._mutex.runExclusive(async () => {
+      await this._prepareTransaction();
+      const frame = buildModbusWriteFrame(startAddress, values);
+      // ACK/NACK format: Byte2 = 0x01 (ACK) or 0x00 (NACK)
+      const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x00, timeoutMs);
+      try {
+        await this._writeFrame(frame);
+      } catch (error) {
+        if (typeof ackPromise.cancel === 'function') {
+          ackPromise.cancel();
+        }
+        throw error;
+      }
+      const ack = await ackPromise;
+      if (ack[1] === 0x00) {
+        const errorCode = ack.length > 3 ? ack[3] : 0;
+        throw new Error(`TinyBMS NACK on MODBUS write (code 0x${errorCode.toString(16).padStart(2, '0')})`);
       }
       return true;
     });
