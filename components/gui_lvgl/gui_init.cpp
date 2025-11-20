@@ -38,6 +38,39 @@ constexpr const char *TAG = "GUI_INIT";
 
 GuiRoot::GuiRoot(event_bus_t *bus) : bus_(bus) {}
 
+GuiRoot::~GuiRoot()
+{
+    if (!bus_) {
+        return;
+    }
+
+    // Unsubscribe from all event bus handlers
+    constexpr std::array<EventSubscription, 16> subscriptions = {{
+        {EVENT_BATTERY_STATUS_UPDATED, telemetry_event_handler},
+        {EVENT_SYSTEM_STATUS_UPDATED, system_event_handler},
+        {EVENT_PACK_STATS_UPDATED, pack_stats_event_handler},
+        {EVENT_TINYBMS_CONNECTED, tinybms_connected_handler},
+        {EVENT_TINYBMS_DISCONNECTED, tinybms_disconnected_handler},
+        {EVENT_TINYBMS_CONFIG_CHANGED, tinybms_config_changed_handler},
+        {EVENT_TINYBMS_REGISTER_UPDATED, tinybms_register_updated_handler},
+        {EVENT_TINYBMS_UART_LOG, tinybms_uart_log_handler},
+        {EVENT_CVL_LIMITS_UPDATED, cvl_limits_event_handler},
+        {EVENT_CONFIG_UPDATED, config_event_handler},
+        {EVENT_REMOTE_CMD_RESULT, cmd_result_event_handler},
+        {EVENT_ALERTS_ACTIVE_UPDATED, alerts_active_event_handler},
+        {EVENT_ALERTS_HISTORY_UPDATED, alerts_history_event_handler},
+        {EVENT_ALERT_FILTERS_UPDATED, alert_filters_event_handler},
+        {EVENT_HISTORY_UPDATED, history_event_handler},
+        {EVENT_HISTORY_EXPORTED, history_export_event_handler},
+    }};
+
+    for (const auto &sub : subscriptions) {
+        event_bus_unsubscribe(bus_, sub.type, sub.callback, this);
+    }
+
+    ESP_LOGI(TAG, "GuiRoot destroyed and unsubscribed from event bus");
+}
+
 void GuiRoot::init()
 {
     ui_i18n_init();

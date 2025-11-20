@@ -58,6 +58,9 @@ static void publish_export(history_range_t range)
 
 static void on_range_click(lv_event_t *e)
 {
+    if (!e) {
+        return;
+    }
     lv_obj_t *btn = lv_event_get_target(e);
     history_range_t range = (history_range_t) (uintptr_t) lv_event_get_user_data(e);
     lv_obj_add_state(btn, LV_STATE_CHECKED);

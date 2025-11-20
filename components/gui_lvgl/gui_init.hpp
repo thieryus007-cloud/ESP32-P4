@@ -99,6 +99,7 @@ void dispatch_to_lvgl(Fn &&fn, T &&data)
 class GuiRoot {
 public:
     explicit GuiRoot(event_bus_t *bus);
+    ~GuiRoot();
 
     void init();
     void start();

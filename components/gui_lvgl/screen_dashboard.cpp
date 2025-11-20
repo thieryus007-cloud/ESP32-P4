@@ -1,4 +1,4 @@
-// components/gui_lvgl/screen_dashboard.c
+// components/gui_lvgl/screen_dashboard.cpp
 
 #include "screen_dashboard.h"
 

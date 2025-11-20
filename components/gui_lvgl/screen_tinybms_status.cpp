@@ -1,5 +1,5 @@
 /**
- * @file screen_tinybms_status.c
+ * @file screen_tinybms_status.cpp
  * @brief TinyBMS Status Screen Implementation
  */
 

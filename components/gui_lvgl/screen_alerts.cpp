@@ -1,4 +1,4 @@
-// components/gui_lvgl/screen_alerts.c
+// components/gui_lvgl/screen_alerts.cpp
 
 #include "screen_alerts.h"
 
@@ -107,7 +107,7 @@ static void on_filter_switch(lv_event_t *e)
 
 static void on_filter_source(lv_event_t *e)
 {
-    if (e->code == LV_EVENT_DEFOCUSED || e->code == LV_EVENT_READY) {
+    if (e && (e->code == LV_EVENT_DEFOCUSED || e->code == LV_EVENT_READY)) {
         publish_filters();
     }
 }
