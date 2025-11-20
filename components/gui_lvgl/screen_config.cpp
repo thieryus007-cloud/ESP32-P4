@@ -533,28 +533,28 @@ private:
 
     static void on_reload_event(lv_event_t *e)
     {
-        if (e->code == LV_EVENT_CLICKED) {
+        if (e && e->code == LV_EVENT_CLICKED) {
             instance().handle_reload();
         }
     }
 
     static void on_reconnect_event(lv_event_t *e)
     {
-        if (e->code == LV_EVENT_CLICKED) {
+        if (e && e->code == LV_EVENT_CLICKED) {
             instance().handle_reconnect();
         }
     }
 
     static void on_save_event(lv_event_t *e)
     {
-        if (e->code == LV_EVENT_CLICKED) {
+        if (e && e->code == LV_EVENT_CLICKED) {
             instance().handle_save();
         }
     }
 
     static void on_language_event(lv_event_t *e)
     {
-        if (e->code == LV_EVENT_VALUE_CHANGED) {
+        if (e && e->code == LV_EVENT_VALUE_CHANGED) {
             instance().handle_language_changed();
         }
     }
