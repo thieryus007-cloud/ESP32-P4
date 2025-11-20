@@ -2,14 +2,21 @@
 
 Cette application Node.js fournit une interface web locale exécutée sur le Mac mini. Elle communique directement avec le TinyBMS via un câble USB ↔ UART pour lire et écrire la configuration des registres.
 
+**✅ Conforme au protocole TinyBMS Communication Protocols Revision D (2025-07-04)**
+
 ## ✨ Fonctionnalités
 
-- Découverte et sélection du port série TinyBMS
-- Lecture complète des registres de configuration TinyBMS (via `/api/registers`)
-- Écriture des registres individuels (`POST /api/registers`)
-- Redémarrage du TinyBMS (`POST /api/system/restart`)
-- Interface web autonome (HTML/CSS/JS) fournie intégralement dans `mac-local/public`
-- Tableau interactif des registres avec filtrage par groupe et édition inline
+- **Découverte et sélection du port série TinyBMS**
+- **Lecture complète des registres de configuration TinyBMS** (via `/api/registers`)
+- **Écriture des registres individuels** (`POST /api/registers`) avec vérification
+- **Redémarrage du TinyBMS** (`POST /api/system/restart`)
+- **Interface web autonome** (HTML/CSS/JS) fournie intégralement dans `mac-local/public`
+- **Tableau interactif des registres** avec filtrage par groupe et édition inline
+- **Protocole UART conforme Rev D:**
+  - Commande Read Individual (0x09)
+  - Commande Write Individual (0x0D)
+  - ACK/NACK avec codes d'erreur
+  - CRC-16 MODBUS validé
 
 ## 🔌 Pré-requis
 
@@ -50,9 +57,17 @@ npm run list-registers
 
 La commande affiche un tableau Markdown comprenant l’adresse, la clé, le libellé, les droits d’accès et le type de chaque registre.
 
-## ⚙️ Configuration
+## ⚙️ Configuration UART
 
-Les paramètres par défaut (baudrate 115200 bauds) conviennent au TinyBMS. Ils peuvent être ajustés dans `src/server.js` si nécessaire.
+**Paramètres par défaut (conformes au protocole TinyBMS Rev D):**
+- **Baud rate:** 115200
+- **Data bits:** 8
+- **Parity:** None
+- **Stop bits:** 1
+- **Flow control:** None
+- **Timeout:** 750ms
+
+Ces paramètres sont optimaux pour le TinyBMS et ne devraient pas nécessiter de modification.
 
 ## 📁 Structure du module (10 fichiers, 98K)
 
@@ -98,3 +113,49 @@ npm run refresh-registers
 ```
 
 La commande lit `main/config_manager/generated_tiny_rw_registers.inc` et écrase le JSON embarqué. Copiez ensuite `mac-local/` sur le Mac mini pour profiter du nouveau catalogue hors-ligne.
+
+## 📚 Documentation
+
+- **Référence complète des commandes:** Voir `/docs/tinybms_commands_reference.md`
+- **Corrections du protocole:** Voir `/UART_PROTOCOL_FIXES.md`
+- **Protocole officiel:** TinyBMS Communication Protocols Revision D (2025-07-04)
+
+## 🔧 API REST
+
+### Endpoints disponibles
+
+```
+GET  /api/ports                 - Lister les ports série disponibles
+POST /api/connection/open       - Ouvrir connexion (body: {path, baudRate})
+POST /api/connection/close      - Fermer connexion
+GET  /api/connection/status     - État de la connexion
+
+GET  /api/registers             - Lire tous les registres
+GET  /api/registers?group=xxx   - Lire registres d'un groupe
+POST /api/registers             - Écrire un registre (body: {key, value})
+
+POST /api/system/restart        - Redémarrer le TinyBMS
+```
+
+### Exemple d'utilisation
+
+```bash
+# Lister les ports
+curl http://localhost:5173/api/ports
+
+# Ouvrir connexion
+curl -X POST http://localhost:5173/api/connection/open \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/dev/tty.usbserial-1234", "baudRate": 115200}'
+
+# Lire tous les registres
+curl http://localhost:5173/api/registers
+
+# Écrire un registre
+curl -X POST http://localhost:5173/api/registers \
+  -H "Content-Type: application/json" \
+  -d '{"key": "fully_charged_voltage_mv", "value": 4200}'
+
+# Redémarrer TinyBMS
+curl -X POST http://localhost:5173/api/system/restart
+```

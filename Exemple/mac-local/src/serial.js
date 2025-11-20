@@ -35,29 +35,29 @@ function crc16(buffer) {
 
 function buildReadFrame(address) {
   const frame = Buffer.alloc(7);
-  frame[0] = 0xaa;
-  frame[1] = 0x07;
-  frame[2] = 0x01;
-  frame[3] = address & 0xff;
-  frame[4] = (address >> 8) & 0xff;
+  frame[0] = 0xaa;              // Preamble
+  frame[1] = 0x09;              // Command: Read Individual (Rev D)
+  frame[2] = 0x02;              // Payload Length: 2 bytes (address)
+  frame[3] = address & 0xff;    // Address LSB
+  frame[4] = (address >> 8) & 0xff; // Address MSB
   const crc = crc16(frame.subarray(0, 5));
-  frame[5] = crc & 0xff;
-  frame[6] = (crc >> 8) & 0xff;
+  frame[5] = crc & 0xff;        // CRC LSB
+  frame[6] = (crc >> 8) & 0xff; // CRC MSB
   return frame;
 }
 
 function buildWriteFrame(address, rawValue) {
   const frame = Buffer.alloc(9);
-  frame[0] = 0xaa;
-  frame[1] = 0x0d;
-  frame[2] = 0x04;
-  frame[3] = address & 0xff;
-  frame[4] = (address >> 8) & 0xff;
-  frame[5] = rawValue & 0xff;
-  frame[6] = (rawValue >> 8) & 0xff;
+  frame[0] = 0xaa;                  // Preamble
+  frame[1] = 0x0d;                  // Command: Write Individual (Rev D)
+  frame[2] = 0x04;                  // Payload Length: 4 bytes (addr + data)
+  frame[3] = address & 0xff;        // Address LSB
+  frame[4] = (address >> 8) & 0xff; // Address MSB
+  frame[5] = rawValue & 0xff;       // Data LSB
+  frame[6] = (rawValue >> 8) & 0xff;// Data MSB
   const crc = crc16(frame.subarray(0, 7));
-  frame[7] = crc & 0xff;
-  frame[8] = (crc >> 8) & 0xff;
+  frame[7] = crc & 0xff;            // CRC LSB
+  frame[8] = (crc >> 8) & 0xff;     // CRC MSB
   return frame;
 }
 
@@ -199,7 +199,8 @@ export class TinyBmsSerial {
     return this._mutex.runExclusive(async () => {
       await this._prepareTransaction();
       const frame = buildRestartFrame();
-      const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x81, timeoutMs);
+      // ACK/NACK format (Rev D): Byte2 = 0x01 (ACK) or 0x00 (NACK)
+      const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x00, timeoutMs);
       try {
         await this._writeFrame(frame);
       } catch (error) {
@@ -209,8 +210,10 @@ export class TinyBmsSerial {
         throw error;
       }
       const ack = await ackPromise;
-      if (ack[1] === 0x81) {
-        throw new Error('TinyBMS a renvoyé un NACK pour la commande de redémarrage');
+      // NACK is Byte2 = 0x00 (not 0x81)
+      if (ack[1] === 0x00) {
+        const errorCode = ack.length > 3 ? ack[3] : 0;
+        throw new Error(`TinyBMS a renvoyé un NACK pour la commande de redémarrage (code: 0x${errorCode.toString(16).padStart(2, '0')})`);
       }
       return true;
     });
@@ -230,7 +233,8 @@ export class TinyBmsSerial {
   async _readRegisterLocked(address, timeoutMs) {
     await this._prepareTransaction();
     const request = buildReadFrame(address);
-    const responsePromise = this._waitForFrame((frame) => frame[1] === 0x07, timeoutMs);
+    // Response format (9 bytes): [0xAA][0x09][PL][Addr:LSB][Addr:MSB][Data:LSB][Data:MSB][CRC:LSB][CRC:MSB]
+    const responsePromise = this._waitForFrame((frame) => frame[1] === 0x09, timeoutMs);
     try {
       await this._writeFrame(request);
     } catch (error) {
@@ -240,17 +244,20 @@ export class TinyBmsSerial {
       throw error;
     }
     const frame = await responsePromise;
-    if (frame.length < 5 || frame[2] < 2) {
-      throw new Error('Réponse TinyBMS invalide');
+    // Validate response: minimum 9 bytes, payload length should be 4
+    if (frame.length < 9 || frame[2] !== 0x04) {
+      throw new Error('Réponse TinyBMS invalide (expected 9 bytes with PL=0x04)');
     }
-    const raw = frame[3] | (frame[4] << 8);
+    // Data is at bytes 5-6 (not 3-4)
+    const raw = frame[5] | (frame[6] << 8);
     return raw;
   }
 
   async _writeRegisterLocked(address, rawValue, timeoutMs) {
     await this._prepareTransaction();
     const frame = buildWriteFrame(address, rawValue);
-    const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x81, timeoutMs);
+    // ACK/NACK format (Rev D): Byte2 = 0x01 (ACK) or 0x00 (NACK)
+    const ackPromise = this._waitForFrame((received) => received[1] === 0x01 || received[1] === 0x00, timeoutMs);
     try {
       await this._writeFrame(frame);
     } catch (error) {
@@ -260,10 +267,12 @@ export class TinyBmsSerial {
       throw error;
     }
     const ack = await ackPromise;
-    if (ack[1] === 0x81) {
+    // NACK is Byte2 = 0x00 (not 0x81)
+    if (ack[1] === 0x00) {
       const errorCode = ack.length > 3 ? ack[3] : 0;
       throw new Error(`TinyBMS NACK (code 0x${errorCode.toString(16).padStart(2, '0')})`);
     }
+    // Verify write by reading back the register
     const readback = await this._readRegisterLocked(address, timeoutMs);
     return readback;
   }
