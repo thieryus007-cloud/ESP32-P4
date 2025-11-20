@@ -1,44 +1,41 @@
-#pragma once
+// components/gui_lvgl/screen_cells.h
+#ifndef SCREEN_CELLS_H
+#define SCREEN_CELLS_H
+
+#include "lvgl.h"
+#include "event_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "lvgl.h"
-#include "event_types.h"
-
-// API C pour l'intégration existante
 void screen_cells_create(lv_obj_t *parent);
-void screen_cells_update(const pack_stats_t *stats);
+
+/**
+ * @brief Mise à jour des infos pack globales (tension, delta, etc.)
+ *        utilisée pour fixer les bornes d'affichage.
+ */
+void screen_cells_update_pack(const battery_status_t *status);
+
+/**
+ * @brief Mise à jour des tensions de cellules + stats
+ */
+void screen_cells_update_cells(const pack_stats_t *stats);
 
 #ifdef __cplusplus
 }
 
 namespace gui {
-    class ScreenCells {
-    public:
-        explicit ScreenCells(lv_obj_t* parent);
-        void update(const pack_stats_t& stats);
 
-    private:
-        lv_obj_t* root;
-        
-        // Indicateurs numériques (Header)
-        lv_obj_t* label_delta;
-        lv_obj_t* label_min;
-        lv_obj_t* label_max;
+class ScreenCells {
+public:
+    explicit ScreenCells(lv_obj_t *parent) { screen_cells_create(parent); }
 
-        // Graphique principal
-        lv_obj_t* chart_container;
-        lv_obj_t* chart_cells;
-        lv_chart_series_t* ser_volts;
-        lv_chart_series_t* ser_balance; // Série secondaire pour visualiser l'équilibrage
+    void update_pack(const battery_status_t &status) { screen_cells_update_pack(&status); }
+    void update_cells(const pack_stats_t &stats) { screen_cells_update_cells(&stats); }
+};
 
-        // Widget liste détaillée (Optionnel, pour debug précis)
-        lv_obj_t* list_container;
-
-        void build_ui();
-        void update_header_colors(float delta_mv);
-    };
-}
+}  // namespace gui
 #endif
+
+#endif // SCREEN_CELLS_H
