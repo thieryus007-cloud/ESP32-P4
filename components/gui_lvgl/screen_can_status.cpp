@@ -1,115 +1,270 @@
+// components/gui_lvgl/screen_can_status.c
+
 #include "screen_can_status.h"
-#include "include/ui_theme.hpp"
-#include <cstdio>
+#include "lvgl.h"
+#include <stdio.h>
 
-static gui::ScreenCanStatus* s_can = nullptr;
+// Pointeurs vers les widgets
+static lv_obj_t *s_label_driver_status = NULL;
+static lv_obj_t *s_label_keepalive_status = NULL;
+static lv_obj_t *s_label_bus_state = NULL;
+static lv_obj_t *s_label_tx_count = NULL;
+static lv_obj_t *s_label_rx_count = NULL;
+static lv_obj_t *s_label_tx_errors = NULL;
+static lv_obj_t *s_label_rx_errors = NULL;
+static lv_obj_t *s_label_last_keepalive_tx = NULL;
+static lv_obj_t *s_label_last_keepalive_rx = NULL;
 
-extern "C" void screen_can_status_create(lv_obj_t *parent) {
-    if (!s_can) s_can = new gui::ScreenCanStatus(parent);
+// Helpers couleur
+static lv_color_t color_ok(void)      { return lv_palette_main(LV_PALETTE_GREEN); }
+static lv_color_t color_warn(void)    { return lv_palette_main(LV_PALETTE_YELLOW); }
+static lv_color_t color_error(void)   { return lv_palette_main(LV_PALETTE_RED); }
+static lv_color_t color_neutral(void) { return lv_palette_main(LV_PALETTE_GREY); }
+
+static void set_status_label(lv_obj_t *label, const char *text, lv_color_t color)
+{
+    if (!label) return;
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_color(label, color, 0);
 }
 
-extern "C" void screen_can_status_update(const cvl_limits_event_t *limits) {
-    if (s_can && limits) s_can->update(*limits);
-}
+void screen_can_status_create(lv_obj_t *parent)
+{
+    lv_obj_set_style_pad_all(parent, 8, 0);
 
-namespace gui {
-
-ScreenCanStatus::ScreenCanStatus(lv_obj_t* parent) {
-    root = lv_obj_create(parent);
-    lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
-    theme::apply_screen_style(root);
-    lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_pad_all(root, 15);
-    
-    build_ui();
-}
-
-void ScreenCanStatus::build_ui() {
-    static lv_style_t style_card;
-    theme::init_card_style(&style_card);
+    lv_obj_t *cont = lv_obj_create(parent);
+    lv_obj_set_size(cont, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(cont,
+                          LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_CENTER);
 
     // Titre
-    lv_obj_t* title = lv_label_create(root);
-    lv_label_set_text(title, "VICTRON BMS-CAN LIMITS");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(title, theme::color_text_sec(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_t *label_title = lv_label_create(cont);
+    lv_label_set_text(label_title, "CAN Bus Status");
+    lv_obj_set_style_text_font(label_title, &lv_font_montserrat_20, 0);
 
-    // --- Ligne des Limites (CVL / CCL / DCL) ---
-    lv_obj_t* grid = lv_obj_create(root);
-    lv_obj_add_style(grid, &style_card, 0);
-    lv_obj_set_size(grid, LV_PCT(100), 140);
-    lv_obj_set_flex_flow(grid, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(grid, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // Section: État driver
+    lv_obj_t *row1 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row1);
+    lv_obj_set_width(row1, LV_PCT(100));
+    lv_obj_set_flex_flow(row1, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row1,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
-    auto create_limit_box = [&](const char* name, lv_obj_t** lbl_val, lv_color_t color) {
-        lv_obj_t* box = lv_obj_create(grid);
-        lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(box, 0, 0);
-        lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        
-        lv_obj_t* t = lv_label_create(box);
-        lv_label_set_text(t, name);
-        theme::apply_title_style(t);
+    lv_obj_t *label1_title = lv_label_create(row1);
+    lv_label_set_text(label1_title, "Driver:");
 
-        *lbl_val = lv_label_create(box);
-        lv_label_set_text(*lbl_val, "--");
-        lv_obj_set_style_text_font(*lbl_val, &lv_font_montserrat_32, 0);
-        lv_obj_set_style_text_color(*lbl_val, color, 0);
-    };
+    s_label_driver_status = lv_label_create(row1);
+    lv_label_set_text(s_label_driver_status, "UNKNOWN");
+    lv_obj_set_style_text_color(s_label_driver_status, color_neutral(), 0);
 
-    create_limit_box("CVL (V)", &label_cvl, theme::color_primary());
-    create_limit_box("CCL (A)", &label_ccl, theme::color_good());
-    create_limit_box("DCL (A)", &label_dcl, theme::color_warn());
+    // Section: Keepalive
+    lv_obj_t *row2 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row2);
+    lv_obj_set_width(row2, LV_PCT(100));
+    lv_obj_set_flex_flow(row2, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row2,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
-    // --- Section Status / Flags ---
-    lv_obj_t* status_card = lv_obj_create(root);
-    lv_obj_add_style(status_card, &style_card, 0);
-    lv_obj_set_size(status_card, LV_PCT(100), 100);
-    lv_obj_set_flex_flow(status_card, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(status_card, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *label2_title = lv_label_create(row2);
+    lv_label_set_text(label2_title, "Keepalive:");
 
-    // LED helper
-    auto create_flag = [&](const char* txt, lv_obj_t** led_out) {
-        lv_obj_t* cont = lv_obj_create(status_card);
-        lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(cont, 0, 0);
-        lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    s_label_keepalive_status = lv_label_create(row2);
+    lv_label_set_text(s_label_keepalive_status, "UNKNOWN");
+    lv_obj_set_style_text_color(s_label_keepalive_status, color_neutral(), 0);
 
-        *led_out = lv_led_create(cont);
-        lv_led_set_color(*led_out, theme::color_crit());
-        lv_led_off(*led_out);
-        
-        lv_obj_t* l = lv_label_create(cont);
-        lv_label_set_text(l, txt);
-        lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
-    };
+    // Section: Bus state
+    lv_obj_t *row3 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row3);
+    lv_obj_set_width(row3, LV_PCT(100));
+    lv_obj_set_flex_flow(row3, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row3,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
 
-    create_flag("Imbalance Hold", &led_imbalance);
-    create_flag("Cell Protect", &led_cell_prot);
+    lv_obj_t *label3_title = lv_label_create(row3);
+    lv_label_set_text(label3_title, "Bus State:");
 
-    // Texte État Machine
-    label_state_txt = lv_label_create(status_card);
-    lv_label_set_text(label_state_txt, "STATE: INIT");
+    s_label_bus_state = lv_label_create(row3);
+    lv_label_set_text(s_label_bus_state, "STOPPED");
+
+    // Séparateur
+    lv_obj_t *sep1 = lv_obj_create(cont);
+    lv_obj_set_height(sep1, 1);
+    lv_obj_set_width(sep1, LV_PCT(100));
+    lv_obj_set_style_bg_color(sep1, lv_palette_main(LV_PALETTE_GREY), 0);
+
+    // Stats TX
+    lv_obj_t *row4 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row4);
+    lv_obj_set_width(row4, LV_PCT(100));
+    lv_obj_set_flex_flow(row4, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row4,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label4_title = lv_label_create(row4);
+    lv_label_set_text(label4_title, "TX Frames:");
+
+    s_label_tx_count = lv_label_create(row4);
+    lv_label_set_text(s_label_tx_count, "0");
+
+    // Stats RX
+    lv_obj_t *row5 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row5);
+    lv_obj_set_width(row5, LV_PCT(100));
+    lv_obj_set_flex_flow(row5, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row5,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label5_title = lv_label_create(row5);
+    lv_label_set_text(label5_title, "RX Frames:");
+
+    s_label_rx_count = lv_label_create(row5);
+    lv_label_set_text(s_label_rx_count, "0");
+
+    // Erreurs TX
+    lv_obj_t *row6 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row6);
+    lv_obj_set_width(row6, LV_PCT(100));
+    lv_obj_set_flex_flow(row6, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row6,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label6_title = lv_label_create(row6);
+    lv_label_set_text(label6_title, "TX Errors:");
+
+    s_label_tx_errors = lv_label_create(row6);
+    lv_label_set_text(s_label_tx_errors, "0");
+
+    // Erreurs RX
+    lv_obj_t *row7 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row7);
+    lv_obj_set_width(row7, LV_PCT(100));
+    lv_obj_set_flex_flow(row7, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row7,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label7_title = lv_label_create(row7);
+    lv_label_set_text(label7_title, "RX Errors:");
+
+    s_label_rx_errors = lv_label_create(row7);
+    lv_label_set_text(s_label_rx_errors, "0");
+
+    // Séparateur
+    lv_obj_t *sep2 = lv_obj_create(cont);
+    lv_obj_set_height(sep2, 1);
+    lv_obj_set_width(sep2, LV_PCT(100));
+    lv_obj_set_style_bg_color(sep2, lv_palette_main(LV_PALETTE_GREY), 0);
+
+    // Keepalive timestamps
+    lv_obj_t *row8 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row8);
+    lv_obj_set_width(row8, LV_PCT(100));
+    lv_obj_set_flex_flow(row8, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row8,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label8_title = lv_label_create(row8);
+    lv_label_set_text(label8_title, "Last Keepalive TX:");
+
+    s_label_last_keepalive_tx = lv_label_create(row8);
+    lv_label_set_text(s_label_last_keepalive_tx, "-- ms");
+
+    lv_obj_t *row9 = lv_obj_create(cont);
+    lv_obj_remove_style_all(row9);
+    lv_obj_set_width(row9, LV_PCT(100));
+    lv_obj_set_flex_flow(row9, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row9,
+                          LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *label9_title = lv_label_create(row9);
+    lv_label_set_text(label9_title, "Last Keepalive RX:");
+
+    s_label_last_keepalive_rx = lv_label_create(row9);
+    lv_label_set_text(s_label_last_keepalive_rx, "-- ms");
 }
 
-void ScreenCanStatus::update(const cvl_limits_event_t& limits) {
-    // Update Values
-    lv_label_set_text_fmt(label_cvl, "%.1f", limits.cvl_voltage_v);
-    lv_label_set_text_fmt(label_ccl, "%.0f", limits.ccl_current_a);
-    lv_label_set_text_fmt(label_dcl, "%.0f", limits.dcl_current_a);
+void screen_can_status_update(const can_victron_status_t *status)
+{
+    if (!status) return;
 
-    // Update Flags
-    if(limits.imbalance_hold_active) lv_led_on(led_imbalance);
-    else lv_led_off(led_imbalance);
+    char buf[64];
 
-    if(limits.cell_protection_active) lv_led_on(led_cell_prot);
-    else lv_led_off(led_cell_prot);
+    // Driver status
+    if (status->driver_started) {
+        set_status_label(s_label_driver_status, "STARTED", color_ok());
+    } else {
+        set_status_label(s_label_driver_status, "STOPPED", color_error());
+    }
 
-    // State debug text
-    lv_label_set_text_fmt(label_state_txt, "STATE: %d", limits.cvl_state);
+    // Keepalive status
+    if (status->keepalive_ok) {
+        set_status_label(s_label_keepalive_status, "OK", color_ok());
+    } else {
+        set_status_label(s_label_keepalive_status, "TIMEOUT", color_warn());
+    }
+
+    // Bus state
+    const char *bus_state_str = "UNKNOWN";
+    lv_color_t bus_color = color_neutral();
+    switch (status->bus_state) {
+        case TWAI_STATE_STOPPED:
+            bus_state_str = "STOPPED";
+            bus_color = color_neutral();
+            break;
+        case TWAI_STATE_RUNNING:
+            bus_state_str = "RUNNING";
+            bus_color = color_ok();
+            break;
+        case TWAI_STATE_BUS_OFF:
+            bus_state_str = "BUS_OFF";
+            bus_color = color_error();
+            break;
+        case TWAI_STATE_RECOVERING:
+            bus_state_str = "RECOVERING";
+            bus_color = color_warn();
+            break;
+        default:
+            break;
+    }
+    set_status_label(s_label_bus_state, bus_state_str, bus_color);
+
+    // Stats
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)status->tx_frame_count);
+    lv_label_set_text(s_label_tx_count, buf);
+
+    snprintf(buf, sizeof(buf), "%llu", (unsigned long long)status->rx_frame_count);
+    lv_label_set_text(s_label_rx_count, buf);
+
+    snprintf(buf, sizeof(buf), "%u", (unsigned)status->tx_error_counter);
+    lv_label_set_text(s_label_tx_errors, buf);
+
+    snprintf(buf, sizeof(buf), "%u", (unsigned)status->rx_error_counter);
+    lv_label_set_text(s_label_rx_errors, buf);
+
+    // Keepalive timestamps
+    snprintf(buf, sizeof(buf), "%llu ms", (unsigned long long)status->last_keepalive_tx_ms);
+    lv_label_set_text(s_label_last_keepalive_tx, buf);
+
+    snprintf(buf, sizeof(buf), "%llu ms", (unsigned long long)status->last_keepalive_rx_ms);
+    lv_label_set_text(s_label_last_keepalive_rx, buf);
 }
-
-} // namespace gui
