@@ -2,11 +2,27 @@
  * @file tinybms_protocol.h
  * @brief TinyBMS Binary Protocol Implementation
  *
- * Protocol Frame Format:
- * +----------+--------+---------+---------+----------+
- * | Preamble | Length | Command | Payload | CRC16-LE |
- * |   0xAA   |   1B   |   1B    |  var    |   2B     |
- * +----------+--------+---------+---------+----------+
+ * Conforme aux spécifications TinyBMS Communication Protocols Revision D, 2025-07-04
+ *
+ * Protocol Frame Format (Read Individual Register - Command 0x09):
+ * Request (7 bytes):
+ * +----------+---------+----+----------+----------+---------+---------+
+ * | Preamble | Command | PL | Addr:LSB | Addr:MSB | CRC:LSB | CRC:MSB |
+ * |   0xAA   |  0x09   | 02 |    1B    |    1B    |   1B    |   1B    |
+ * +----------+---------+----+----------+----------+---------+---------+
+ *
+ * Response (9 bytes):
+ * +----------+---------+----+----------+----------+----------+----------+---------+---------+
+ * | Preamble | Command | PL | Addr:LSB | Addr:MSB | Data:LSB | Data:MSB | CRC:LSB | CRC:MSB |
+ * |   0xAA   |  0x09   | 04 |    1B    |    1B    |    1B    |    1B    |   1B    |   1B    |
+ * +----------+---------+----+----------+----------+----------+----------+---------+---------+
+ *
+ * Write Individual Register - Command 0x0D:
+ * Request (9 bytes):
+ * +----------+---------+----+----------+----------+----------+----------+---------+---------+
+ * | Preamble | Command | PL | Addr:LSB | Addr:MSB | Data:LSB | Data:MSB | CRC:LSB | CRC:MSB |
+ * |   0xAA   |  0x0D   | 04 |    1B    |    1B    |    1B    |    1B    |   1B    |   1B    |
+ * +----------+---------+----+----------+----------+----------+----------+---------+---------+
  */
 
 #ifndef TINYBMS_PROTOCOL_H
@@ -21,16 +37,24 @@ extern "C" {
 #endif
 
 // Protocol constants
-#define TINYBMS_PREAMBLE           0xAA
-#define TINYBMS_CMD_READ           0x01
-#define TINYBMS_CMD_READ_RESPONSE  0x02
-#define TINYBMS_CMD_WRITE          0x04
-#define TINYBMS_CMD_ACK            0x01
-#define TINYBMS_CMD_NACK           0x81
+#define TINYBMS_PREAMBLE                0xAA
 
-#define TINYBMS_READ_FRAME_LEN     7
-#define TINYBMS_WRITE_FRAME_LEN    9
-#define TINYBMS_MAX_FRAME_LEN      256
+// Command codes (conformes à la spécification TinyBMS Rev D)
+#define TINYBMS_CMD_READ_BLOCK          0x07  // Read registers block (proprietary)
+#define TINYBMS_CMD_READ_INDIVIDUAL     0x09  // Read individual registers
+#define TINYBMS_CMD_WRITE_BLOCK         0x0B  // Write registers block (proprietary)
+#define TINYBMS_CMD_WRITE_INDIVIDUAL    0x0D  // Write individual registers
+#define TINYBMS_CMD_MODBUS_READ         0x03  // Read registers block (MODBUS)
+#define TINYBMS_CMD_MODBUS_WRITE        0x10  // Write registers block (MODBUS)
+
+// Response codes
+#define TINYBMS_RESP_ACK                0x01  // Byte2 in ACK response
+#define TINYBMS_RESP_NACK               0x00  // Byte2 in NACK response
+
+// Frame lengths (using Read/Write Individual commands 0x09/0x0D)
+#define TINYBMS_READ_FRAME_LEN          7     // 0xAA + 0x09 + PL + Addr(2) + CRC(2)
+#define TINYBMS_WRITE_FRAME_LEN         9     // 0xAA + 0x0D + PL + Addr(2) + Data(2) + CRC(2)
+#define TINYBMS_MAX_FRAME_LEN           256
 
 // Special addresses
 #define TINYBMS_REG_SYSTEM_RESTART 0x0086
