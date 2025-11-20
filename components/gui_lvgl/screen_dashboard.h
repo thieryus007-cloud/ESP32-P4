@@ -1,47 +1,51 @@
+// components/gui_lvgl/screen_dashboard.h
+
 #pragma once
+
+#include "event_types.h"
+#include "lvgl.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "lvgl.h"
-#include "event_types.h" // Votre fichier existant
-
-// API C pour compatibilité si nécessaire
+/**
+ * @brief Crée l'onglet "Dashboard" avec gauges et mini-graphiques.
+ */
 void screen_dashboard_create(lv_obj_t *parent);
+
+/**
+ * @brief Met à jour les jauges/graphes liés au statut batterie.
+ */
 void screen_dashboard_update_battery(const battery_status_t *status);
+
+/**
+ * @brief Met à jour les indicateurs système (WiFi / stockage / erreurs).
+ */
 void screen_dashboard_update_system(const system_status_t *status);
+
+/**
+ * @brief Met à jour les panneaux dépendant des statistiques pack/cellules.
+ */
+void screen_dashboard_update_cells(const pack_stats_t *stats);
+
+void screen_dashboard_refresh_texts(void);
 
 #ifdef __cplusplus
 }
 
-// API C++ interne
 namespace gui {
-    class ScreenDashboard {
-    public:
-        explicit ScreenDashboard(lv_obj_t* parent);
-        void update_battery(const battery_status_t& status);
-        void update_system(const system_status_t& status);
 
-    private:
-        lv_obj_t* root;
-        // Widgets SOC
-        lv_obj_t* arc_soc;
-        lv_obj_t* label_soc;
-        
-        // Widgets Power
-        lv_obj_t* label_power;
-        lv_obj_t* label_voltage;
-        lv_obj_t* label_current;
-        lv_obj_t* arc_power_flow; // Animation flux
+class ScreenDashboard {
+public:
+    explicit ScreenDashboard(lv_obj_t *parent) { screen_dashboard_create(parent); }
 
-        // Widgets Status
-        lv_obj_t* led_wifi;
-        lv_obj_t* led_mqtt;
-        lv_obj_t* led_can;
+    void update_battery(const battery_status_t &status) { screen_dashboard_update_battery(&status); }
+    void update_system(const system_status_t &status) { screen_dashboard_update_system(&status); }
+    void update_cells(const pack_stats_t &stats) { screen_dashboard_update_cells(&stats); }
+    void refresh_texts() { screen_dashboard_refresh_texts(); }
+};
 
-        void build_ui();
-        void update_soc_visuals(float soc);
-    };
-}
-#endif
+}  // namespace gui
+
+#endif  // __cplusplus
