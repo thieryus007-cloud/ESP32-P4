@@ -276,26 +276,49 @@ RX: AA 01 0B [CRC]  (ACK)
 
 ---
 
-### 7. System Restart (Commande spéciale) ✅ IMPLÉMENTÉ
+### 7. System Reset (Command 0x02) ✅ IMPLÉMENTÉ
 
-**Description:** Redémarre le TinyBMS.
+**Description:** Redémarre le TinyBMS en utilisant la commande UART dédiée.
 
-**Implémentation:** Écriture de la valeur spéciale `0xA55A` dans le registre `0x0086`.
+**Cas d'usage:**
+- Redémarrage du BMS suite à une configuration
+- Récupération après une erreur système
+- Réinitialisation du firmware
 
-```c
-#define TINYBMS_REG_SYSTEM_RESTART 0x0086
-#define TINYBMS_RESTART_VALUE      0xA55A
+**Request (6 bytes):**
+```
+┌──────────┬─────────┬────┬────────┬─────────┬─────────┐
+│ Preamble │ Command │ PL │ Option │ CRC:LSB │ CRC:MSB │
+│   0xAA   │  0x02   │ 01 │  0x05  │   1B    │   1B    │
+└──────────┴─────────┴────┴────────┴─────────┴─────────┘
 ```
 
-**Trame:**
+**Options disponibles:**
+- `0x05`: Reset BMS (redémarrage du système)
+
+**Response ACK (5 bytes):**
 ```
-TX: AA 0D 04 86 00 5A A5 [CRC]
-RX: AA 01 0D [CRC]  (ACK)
+┌──────────┬─────────┬──────┬─────────┬─────────┐
+│ Preamble │   ACK   │ CMD  │ CRC:LSB │ CRC:MSB │
+│   0xAA   │  0x01   │ 0x02 │   1B    │   1B    │
+└──────────┴─────────┴──────┴─────────┴─────────┘
 ```
+
+**Exemple - Redémarrage du BMS:**
+```
+TX: AA 02 01 05 [CRC]
+RX: AA 01 02 [CRC]  (ACK)
+```
+
+**Notes importantes:**
+- Conforme à la section 1.1.8 du protocole TinyBMS Rev D
+- Après le redémarrage, le BMS sera temporairement déconnecté
+- Il est recommandé d'attendre quelques secondes avant de tenter une reconnexion
 
 **Implémentation:**
 - **ESP32-P4:** `tinybms_restart()` dans `tinybms_client.cpp`
-- **mac-local:** `restartTinyBms()` dans `serial.js`
+- **Protocol:** `tinybms_build_reset_frame()` dans `tinybms_protocol.cpp`
+- **mac-local:** `buildRestartFrame()` dans `serial.js`
 - **HMI:** Boutons "Restart" dans `screen_tinybms_config.cpp` et `screen_bms_control.cpp`
 
 ---
@@ -466,13 +489,13 @@ const results = await serial.readCatalogue(descriptors);
 
 | Code | Nom | Status | ESP32-P4 | mac-local | HMI |
 |------|-----|--------|----------|-----------|-----|
+| 0x02 | System Reset | ✅ Implémenté | ✅ | ✅ | ✅ |
 | 0x09 | Read Individual | ✅ Implémenté | ✅ | ✅ | ✅ |
 | 0x0D | Write Individual | ✅ Implémenté | ✅ | ✅ | ✅ |
 | 0x07 | Read Block | ⚠️ Non implémenté | ❌ | ❌ | ❌ |
 | 0x0B | Write Block | ⚠️ Non implémenté | ❌ | ❌ | ❌ |
 | 0x03 | MODBUS Read | ⚠️ Non implémenté | ❌ | ❌ | ❌ |
 | 0x10 | MODBUS Write | ⚠️ Non implémenté | ❌ | ❌ | ❌ |
-| Special | System Restart | ✅ Implémenté | ✅ | ✅ | ✅ |
 
 ---
 
@@ -480,10 +503,10 @@ const results = await serial.readCatalogue(descriptors);
 
 Pour avoir une implémentation **complète** conforme à la documentation TinyBMS Rev D:
 
-1. ✅ **Commandes individuelles** (0x09, 0x0D) - FAIT
-2. ⚠️ **Commandes bloc** (0x07, 0x0B) - À IMPLÉMENTER
-3. ⚠️ **Commandes MODBUS** (0x03, 0x10) - À IMPLÉMENTER
-4. ✅ **Commande restart** - FAIT
+1. ✅ **Commande Reset** (0x02) - FAIT
+2. ✅ **Commandes individuelles** (0x09, 0x0D) - FAIT
+3. ⚠️ **Commandes bloc** (0x07, 0x0B) - À IMPLÉMENTER
+4. ⚠️ **Commandes MODBUS** (0x03, 0x10) - À IMPLÉMENTER
 5. ✅ **Documentation** - FAIT
 
 ---
