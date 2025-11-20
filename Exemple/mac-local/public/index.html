@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.42.0/tabler-icons.min.css" />
     <link rel="stylesheet" href="/css/mac-app.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   </head>
   <body>
     <div class="page">
@@ -53,12 +54,90 @@
           <div id="connection-error" class="text-danger mt-3" hidden></div>
         </section>
 
+        <section id="dashboard-card" class="dashboard-card mb-4" hidden>
+          <div class="row g-3 mb-4">
+            <div class="col-12">
+              <div class="card bg-dark text-white">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <div>
+                    <h2 class="card-title h3 mb-1">Tableau de bord</h2>
+                    <p class="text-secondary mb-0">Surveillance en temps réel du TinyBMS</p>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button id="refresh-dashboard" class="btn btn-outline-secondary btn-sm">
+                      <i class="ti ti-refresh me-1"></i>Actualiser
+                    </button>
+                    <button id="reset-bms" class="btn btn-outline-danger btn-sm">
+                      <i class="ti ti-power me-1"></i>Reset BMS
+                    </button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-md-3">
+                      <div class="metric-card">
+                        <div class="metric-icon">
+                          <i class="ti ti-battery-charging"></i>
+                        </div>
+                        <div class="metric-info">
+                          <div class="metric-label">Tension Pack</div>
+                          <div class="metric-value" id="pack-voltage">-- V</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="metric-card">
+                        <div class="metric-icon">
+                          <i class="ti ti-bolt"></i>
+                        </div>
+                        <div class="metric-info">
+                          <div class="metric-label">Courant Pack</div>
+                          <div class="metric-value" id="pack-current">-- A</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="metric-card">
+                        <div class="metric-icon">
+                          <i class="ti ti-battery"></i>
+                        </div>
+                        <div class="metric-info">
+                          <div class="metric-label">État de charge</div>
+                          <div class="metric-value" id="soc">-- %</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-3">
+                      <div class="metric-card">
+                        <div class="metric-icon">
+                          <i class="ti ti-temperature"></i>
+                        </div>
+                        <div class="metric-info">
+                          <div class="metric-label">Température</div>
+                          <div class="metric-value" id="temperature">-- °C</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="row g-3 mt-3">
+                    <div class="col-12">
+                      <h4 class="mb-3">Tensions des cellules</h4>
+                      <canvas id="cells-chart" height="80"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="registers-card" class="registers-card" hidden>
           <div class="card card-dark bg-dark text-white">
             <div class="card-header d-flex flex-wrap align-items-center gap-2 justify-content-between">
               <div>
-                <h2 class="card-title h3 mb-1">Registres TinyBMS</h2>
-                <p class="text-secondary mb-0">Lecture et écriture directes des paramètres.</p>
+                <h2 class="card-title h3 mb-1">Configuration TinyBMS</h2>
+                <p class="text-secondary mb-0">Lecture et modification des paramètres de configuration.</p>
               </div>
               <div class="d-flex flex-wrap gap-2 align-items-end">
                 <div>
