@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -12,12 +11,9 @@ const io = new Server(server);
 app.use(express.static('public'));
 app.use(express.json());
 
-// -- Configuration --
-// NOTE: Sur Mac, c'est souvent /dev/tty.usbserial-XXXX ou /dev/tty.usbmodemXXXX
-// L'utilisateur pourra choisir via l'interface.
-const bms = new TinyBMS(''); 
+const bms = new TinyBMS(''); // Path défini via l'interface
 
-// -- Routes API --
+// --- API ---
 app.get('/api/ports', async (req, res) => {
     const ports = await SerialPort.list();
     res.json(ports);
@@ -27,7 +23,7 @@ app.post('/api/connect', async (req, res) => {
     const { path } = req.body;
     bms.path = path;
     try {
-        if (bms.isConnected && bms.port) {
+        if (bms.isConnected && bms.port && bms.port.isOpen) {
             await new Promise(resolve => bms.port.close(resolve));
         }
         await bms.connect();
@@ -39,9 +35,30 @@ app.post('/api/connect', async (req, res) => {
     }
 });
 
-// -- Polling Logic --
+// WRITE Route (Avec mise en pause du polling)
+app.post('/api/write', async (req, res) => {
+    const { id, value } = req.body;
+    
+    if (!bms.isConnected) return res.status(400).json({ error: "Not connected" });
+
+    try {
+        clearInterval(pollTimer); // Pause polling
+        console.log(`Writing Reg ${id} -> ${value}`);
+        
+        await bms.writeRegister(parseInt(id), parseFloat(value));
+        
+        setTimeout(startPolling, 500); // Resume polling
+        res.json({ success: true });
+    } catch (e) {
+        console.error("Write Error:", e);
+        startPolling();
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- POLLING ---
 let pollTimer;
-let pollCycle = 0;
+let cycle = 0;
 
 function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
@@ -50,39 +67,29 @@ function startPolling() {
         if (!bms.isConnected) return;
 
         try {
-            // Strategy: 
-            // Every 1s: Poll LIVE data (0-56)
-            // Every 5s: Poll STATS (100-117)
-            // Every 10s: Poll SETTINGS (300-343) + Version (500-506)
-            
-            // 1. Always Poll Live Data (Reg 0 to 56)
-            // Size = 57 registers
+            // 1. Live Data (Tous les registres 0-56) - Chaque seconde
             const liveData = await bms.readRegisterBlock(0, 57);
             io.emit('bms-live', liveData);
 
-            // 2. Poll Statistics (Cycle 0, 5, 10...) -> Every 5 seconds
-            if (pollCycle % 5 === 0) {
-                const statsData = await bms.readRegisterBlock(100, 20); // Reg 100-119
-                io.emit('bms-stats', statsData);
+            // 2. Stats (Reg 100+) - Toutes les 5 sec
+            if (cycle % 5 === 0) {
+                const stats = await bms.readRegisterBlock(100, 20);
+                io.emit('bms-stats', stats);
             }
 
-            // 3. Poll Settings (Cycle 0, 10, 20...) -> Every 10 seconds
-            if (pollCycle % 10 === 0) {
-                const settingsData = await bms.readRegisterBlock(300, 45); // Reg 300-344
-                io.emit('bms-settings', settingsData);
-                
-                // Poll Version occasionally
-                const versionData = await bms.readRegisterBlock(500, 10); // Reg 500+
-                io.emit('bms-version', versionData);
+            // 3. Settings (Reg 300+) - Toutes les 5 sec pour réactivité UI
+            if (cycle % 5 === 0) {
+                const settings = await bms.readRegisterBlock(300, 45);
+                io.emit('bms-settings', settings);
             }
 
-            pollCycle++;
-            if (pollCycle > 100) pollCycle = 1; 
+            cycle++;
+            if(cycle > 100) cycle = 0;
 
         } catch (err) {
-            console.error("Polling Error:", err);
+            // Ignorer erreurs de timeout ponctuelles
         }
-    }, 1000); // 1 Second base interval
+    }, 1000);
 }
 
 server.listen(3000, () => {
