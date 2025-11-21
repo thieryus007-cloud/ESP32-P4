@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TinyBMS Monitor</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -10,61 +9,39 @@
 </head>
 <body>
     <div class="app-container">
-        
         <nav class="sidebar">
             <div class="logo">
                 <h2>⚡ TinyBMS</h2>
                 <span class="status-dot" id="connectionStatus"></span>
             </div>
-
             <ul class="nav-links">
-                <li class="active" onclick="switchTab('dashboard')">
-                    <span>📊 Dashboard</span>
-                </li>
-                <li onclick="switchTab('settings')">
-                    <span>⚙️ Configuration</span>
-                </li>
+                <li class="active" onclick="switchTab('dashboard')">📊 Dashboard</li>
+                <li onclick="switchTab('stats')">📈 Statistics</li>
+                <li onclick="switchTab('settings')">⚙️ Configuration</li>
             </ul>
-
             <div class="port-selector">
-                <label for="portSelect">USB Port</label>
-                <select id="portSelect"><option disabled selected>Loading...</option></select>
+                <select id="portSelect"><option>Loading...</option></select>
                 <button onclick="connectBMS()">Connect</button>
             </div>
-            
             <div class="system-status">
-                <small>State:</small>
                 <div id="bmsState" class="bms-state">DISCONNECTED</div>
             </div>
         </nav>
 
         <main class="content">
-            
             <div id="dashboard" class="tab-content active">
-                
                 <div class="top-row">
                     <div class="card gauge-card">
                         <h3>SOC %</h3>
                         <div id="chart-soc" style="width:100%; height:160px;"></div>
                     </div>
-
                     <div class="kpi-group">
-                        <div class="card kpi">
-                            <h3>Voltage</h3>
-                            <div class="value"><span id="val-voltage">--</span> <span class="unit">V</span></div>
-                        </div>
-                        <div class="card kpi">
-                            <h3>Current</h3>
-                            <div class="value"><span id="val-current">--</span> <span class="unit">A</span></div>
-                        </div>
-                        <div class="card kpi">
-                            <h3>Power</h3>
-                            <div class="value"><span id="val-power">--</span> <span class="unit">W</span></div>
-                        </div>
+                        <div class="card kpi"><h3>Voltage</h3><div class="value"><span id="val-voltage">--</span> <span class="unit">V</span></div></div>
+                        <div class="card kpi"><h3>Current</h3><div class="value"><span id="val-current">--</span> <span class="unit">A</span></div></div>
+                        <div class="card kpi"><h3>Power</h3><div class="value"><span id="val-power">--</span> <span class="unit">W</span></div></div>
                     </div>
-
                     <div class="card gauge-card">
-                        <h3>Health (SOH)</h3>
+                        <h3>SOH %</h3>
                         <div id="chart-soh" style="width:100%; height:160px;"></div>
                     </div>
                 </div>
@@ -72,7 +49,7 @@
                 <div class="middle-row">
                     <div class="card chart-main">
                         <div class="chart-header">
-                            <h3>Cell Voltages (1-16)</h3>
+                            <h3>Cell Voltages</h3>
                             <div class="chart-legend">
                                 <span class="legend-item"><span class="dot min"></span> Min</span>
                                 <span class="legend-item"><span class="dot max"></span> Max</span>
@@ -81,9 +58,9 @@
                         </div>
                         <div id="chart-cells" style="width: 100%; height: 300px;"></div>
                         <div class="cell-stats-bar">
-                            <span>Min: <strong id="cell-min-txt" style="color:var(--info)">-- V</strong></span>
-                            <span>Max: <strong id="cell-max-txt" style="color:var(--danger)">-- V</strong></span>
-                            <span>Delta: <strong id="cell-diff-txt" style="color:var(--warning)">-- V</strong></span>
+                            <span>Min: <strong id="cell-min-txt" style="color:var(--info)">--</strong></span>
+                            <span>Max: <strong id="cell-max-txt" style="color:var(--danger)">--</strong></span>
+                            <span>Delta: <strong id="cell-diff-txt" style="color:var(--warning)">--</strong></span>
                         </div>
                     </div>
                 </div>
@@ -92,46 +69,27 @@
                     <div class="card">
                         <h3>Temperatures</h3>
                         <div class="temp-grid">
-                            <div class="temp-item">
-                                <span class="label">Internal</span>
-                                <strong id="temp-int" class="temp-val">-- °C</strong>
-                            </div>
-                            <div class="temp-item">
-                                <span class="label">Sensor 1</span>
-                                <strong id="temp-ext1" class="temp-val">-- °C</strong>
-                            </div>
-                            <div class="temp-item">
-                                <span class="label">Sensor 2</span>
-                                <strong id="temp-ext2" class="temp-val">-- °C</strong>
-                            </div>
+                            <div class="temp-item"><span>Internal</span><strong id="temp-int">--</strong></div>
+                            <div class="temp-item"><span>Sensor 1</span><strong id="temp-ext1">--</strong></div>
+                            <div class="temp-item"><span>Sensor 2</span><strong id="temp-ext2">--</strong></div>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div id="stats" class="tab-content">
+                <header><h1>Lifetime Statistics</h1></header>
+                <div id="stats-container" class="settings-grid-dynamic">Waiting for data...</div>
             </div>
 
             <div id="settings" class="tab-content">
-                <header>
-                    <h1>BMS Configuration</h1>
-                    <button class="btn-refresh" onclick="location.reload()">Refresh Data</button>
-                </header>
-                
+                <header><h1>Configuration (Read/Write)</h1></header>
                 <div class="card">
-                    <div class="settings-header">
-                        <h3>Read / Write Registers</h3>
-                        <button class="btn-save" onclick="alert('Feature: Write to BMS implementation needed in backend')">Save Changes</button>
-                    </div>
-                    
-                    <div id="settings-form-container" class="settings-grid-dynamic">
-                        <div style="padding: 20px; text-align: center; color: #666;">
-                            Waiting for Settings data from BMS...
-                        </div>
-                    </div>
+                    <div id="settings-form-container" class="settings-grid-dynamic">Loading...</div>
                 </div>
             </div>
-
         </main>
     </div>
-    
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>
 </body>
