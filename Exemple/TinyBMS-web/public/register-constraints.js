@@ -2,11 +2,11 @@
 // Basé sur TinyBMS_service.ts et TinyBMS Communication Protocols Rev D
 const REGISTER_CONSTRAINTS = {
     // Battery Group
-    300: { min: 1.2, max: 4.5, step: 0.001 },   // Fully Charged Voltage
-    301: { min: 1.0, max: 3.5, step: 0.001 },   // Fully Discharged Voltage
-    306: { min: 0.01, max: 655.35, step: 0.01 }, // Battery Capacity (Ah) - UINT16 scale 0.01
+    300: { min: 3, max: 4.5, step: 0.001 },   // Fully Charged Voltage
+    301: { min: 2.0, max: 3.5, step: 0.001 },   // Fully Discharged Voltage
+    306: { min: 1.0, max: 500, step: 0.01 }, // Battery Capacity (Ah) - UINT16 scale 0.01
     307: { min: 4, max: 16, step: 1 },          // Series Cells Count (doc spec)
-    322: { min: 0, max: 65535, step: 1 },       // Max Cycles Count - UINT16
+    322: { min: 100, max: 10000, step: 1 },       // Max Cycles Count - UINT16
     328: { min: 0, max: 100, step: 0.002 },     // Manual SOC Set (%) - scale 0.002
 
     // Safety Group
@@ -19,7 +19,7 @@ const REGISTER_CONSTRAINTS = {
     320: { min: -32768, max: 32767, step: 1 },  // Low Temp Charge Cutoff (°C) - INT16
 
     // Balance Group
-    303: { min: 1.2, max: 4.5, step: 0.001 },   // Early Balancing Threshold
+    303: { min: 3.5, max: 4.5, step: 0.001 },   // Early Balancing Threshold
     304: { min: 0, max: 65535, step: 1 },       // Charge Finished Current (mA) - UINT16
     308: { min: 0, max: 65535, step: 1 },       // Allowed Disbalance (mV) - UINT16
     321: { min: 0, max: 100, step: 1 },         // Charge Restart Level (%)
