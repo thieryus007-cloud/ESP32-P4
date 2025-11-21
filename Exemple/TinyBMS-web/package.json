@@ -1,7 +1,7 @@
 {
   "name": "tinybms-web",
-  "version": "1.0.0",
-  "description": "Interface Web TinyBMS (Read/Write)",
+  "version": "2.0.0",
+  "description": "Interface Web TinyBMS (Simulateur + Réel)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
