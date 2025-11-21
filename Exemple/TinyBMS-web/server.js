@@ -13,12 +13,11 @@ app.use(express.json());
 
 const bms = new TinyBMS('');
 
-// --- ETAT DU SYSTEME ---
-let currentMode = 'DISCONNECTED'; // 'CONNECTED' | 'SIMULATION'
+let currentMode = 'DISCONNECTED';
 let pollTimer;
 let simTimer;
 
-// --- SIMULATEUR ---
+// --- SIMULATEUR COMPLET (Avec Settings 300-343) ---
 class BmsSimulator {
     constructor() {
         this.cells = Array.from({length: 16}, () => 3.8 + (Math.random() * 0.05));
@@ -26,33 +25,29 @@ class BmsSimulator {
         this.current = 12.5;
         this.soc = 85.0;
         this.tempInt = 35.0;
-        this.tempExt1 = 24.0;
-        this.tempExt2 = 25.0;
         this.balMask = 0;
         
-        // Map des réglages simulés
         this.settings = {};
-        // On pré-remplit quelques valeurs pour l'exemple
-        this.settings[300] = { id: 300, label: 'Fully Charged Voltage', value: 4.20, unit: 'V' };
-        this.settings[301] = { id: 301, label: 'Fully Discharged Voltage', value: 2.80, unit: 'V' };
-        this.settings[315] = { id: 315, label: 'Over-Voltage Cutoff', value: 4.25, unit: 'V' };
-        this.settings[317] = { id: 317, label: 'Discharge Over-Current', value: 60, unit: 'A' };
-        this.settings[306] = { id: 306, label: 'Battery Capacity', value: 100, unit: 'Ah' };
+        const defaults = [
+            {id:300, v:4.20}, {id:301, v:2.80}, {id:303, v:3.90}, {id:304, v:100}, {id:305, v:150},
+            {id:306, v:100}, {id:307, v:16}, {id:308, v:20}, {id:310, v:5}, {id:311, v:5},
+            {id:312, v:1000}, {id:315, v:4.25}, {id:316, v:2.70}, {id:317, v:60}, {id:318, v:30},
+            {id:319, v:65}, {id:320, v:0}, {id:321, v:90}, {id:322, v:2000}, {id:328, v:85},
+            {id:330, v:1}, {id:332, v:10}, {id:340, v:0}, {id:343, v:1}
+        ];
+        
+        defaults.forEach(d => {
+            // Mock structure returned by parser
+            this.settings[d.id] = { id: d.id, value: d.v, label: 'Simulated', unit: '', group: 'sim' };
+        });
     }
 
     tick() {
-        // Simulation physique
         this.current += (Math.random() - 0.5);
-        this.cells = this.cells.map(c => {
-            let change = (Math.random() - 0.5) * 0.002;
-            return Math.min(4.2, Math.max(2.8, c + change));
-        });
-        this.cells[3] -= 0.0005; // Une cellule faible
-        this.balMask = (Math.random() > 0.6 ? 4 : 0) | (Math.random() > 0.8 ? 32 : 0);
+        this.cells = this.cells.map(c => Math.min(4.2, Math.max(2.8, c + (Math.random()-0.5)*0.002)));
+        this.cells[3] -= 0.0005; 
         this.voltage = this.cells.reduce((a, b) => a + b, 0);
-        if(this.current > 0) this.soc -= 0.005;
-        if(this.soc < 0) this.soc = 0;
-        this.tempInt += (Math.random() - 0.4) * 0.1;
+        this.balMask = (Math.random() > 0.6 ? 4 : 0) | (Math.random() > 0.8 ? 32 : 0);
     }
 
     getLiveData() {
@@ -62,8 +57,8 @@ class BmsSimulator {
         data[38] = { value: this.current };
         data[40] = { value: Math.min(...this.cells) };
         data[41] = { value: Math.max(...this.cells) };
-        data[42] = { value: this.tempExt1 };
-        data[43] = { value: this.tempExt2 };
+        data[42] = { value: 24.0 };
+        data[43] = { value: 25.5 };
         data[45] = { value: 99.0 };
         data[46] = { value: this.soc };
         data[48] = { value: this.tempInt };
@@ -73,19 +68,17 @@ class BmsSimulator {
     }
 
     getSettings() { return this.settings; }
-    writeSetting(id, val) {
-        if(this.settings[id]) this.settings[id].value = val;
-        else this.settings[id] = { id, value: val, label: 'Simulated Reg', unit: '' };
+    writeSetting(id, val) { 
+        if(this.settings[id]) this.settings[id].value = val; 
     }
 }
 
 const simulator = new BmsSimulator();
 
-// --- ROUTES API ---
+// --- API ---
 app.get('/api/ports', async (req, res) => {
     const ports = await SerialPort.list();
-    const result = [{ path: 'SIMULATION', manufacturer: 'Virtual Device' }, ...ports];
-    res.json(result);
+    res.json([{ path: 'SIMULATION', manufacturer: 'Virtual Device' }, ...ports]);
 });
 
 app.post('/api/connect', async (req, res) => {
@@ -114,11 +107,12 @@ app.post('/api/connect', async (req, res) => {
     }
 });
 
-app.post('/api/write', async (req, res) => {
-    const { id, value } = req.body;
+// BATCH WRITE (Ecriture par lot)
+app.post('/api/write-batch', async (req, res) => {
+    const { changes } = req.body; // Array of {id, value}
 
     if (currentMode === 'SIMULATION') {
-        simulator.writeSetting(parseInt(id), parseFloat(value));
+        changes.forEach(c => simulator.writeSetting(c.id, parseFloat(c.value)));
         io.emit('bms-settings', simulator.getSettings());
         return res.json({ success: true });
     } 
@@ -126,7 +120,15 @@ app.post('/api/write', async (req, res) => {
     if (currentMode === 'CONNECTED' && bms.isConnected) {
         try {
             clearInterval(pollTimer); // Pause polling
-            await bms.writeRegister(parseInt(id), parseFloat(value));
+            
+            // Sequential Write
+            for (const change of changes) {
+                console.log(`Writing Reg ${change.id} -> ${change.value}`);
+                await bms.writeRegister(parseInt(change.id), parseFloat(change.value));
+                // Petit délai pour laisser respirer le BMS
+                await new Promise(r => setTimeout(r, 100));
+            }
+
             setTimeout(startRealPolling, 500); // Resume
             res.json({ success: true });
         } catch (e) {
@@ -138,7 +140,6 @@ app.post('/api/write', async (req, res) => {
     }
 });
 
-// --- LOOPS ---
 function stopAll() {
     if(pollTimer) clearInterval(pollTimer);
     if(simTimer) clearInterval(simTimer);
@@ -147,23 +148,19 @@ function stopAll() {
 }
 
 function startSimulation() {
-    console.log("Starting Simulation...");
     let cycle = 0;
     simTimer = setInterval(() => {
         simulator.tick();
         io.emit('bms-live', simulator.getLiveData());
-        
         if(cycle % 5 === 0) {
             io.emit('bms-settings', simulator.getSettings());
-            // On utilise les settings comme stats bidon pour la démo
-            io.emit('bms-stats', simulator.getSettings());
+            io.emit('bms-stats', simulator.getSettings()); // Mock stats
         }
         cycle++;
     }, 1000);
 }
 
 function startRealPolling() {
-    console.log("Starting Real Hardware Polling...");
     let cycle = 0;
     pollTimer = setInterval(async () => {
         if (!bms.isConnected) return stopAll();
@@ -180,12 +177,8 @@ function startRealPolling() {
                 io.emit('bms-settings', settings);
             }
             cycle++;
-        } catch (err) {
-            // Log minimal pour éviter le spam
-        }
+        } catch (err) { }
     }, 1000);
 }
 
-server.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
-});
+server.listen(3000, () => console.log('Server running on http://localhost:3000'));
