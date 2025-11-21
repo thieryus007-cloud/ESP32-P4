@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TinyBMS Interface</title>
+    <title>TinyBMS ECharts Interface</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -15,19 +16,15 @@
                 <h2>⚡ TinyBMS</h2>
                 <span class="status-dot" id="connectionStatus"></span>
             </div>
-
             <ul class="nav-links">
                 <li class="active" onclick="switchTab('dashboard')">Dashboard</li>
                 <li onclick="switchTab('cells')">Cell Details</li>
                 <li onclick="switchTab('stats')">Statistics</li>
                 <li onclick="switchTab('settings')">Configuration</li>
             </ul>
-
             <div class="port-selector">
                 <label for="portSelect" style="color: #a1a1aa; font-size: 0.8em; margin-bottom: 5px; display:block;">USB Port</label>
-                <select id="portSelect">
-                    <option disabled selected>Loading ports...</option>
-                </select>
+                <select id="portSelect"><option disabled selected>Loading...</option></select>
                 <button onclick="connectBMS()">Connect</button>
             </div>
         </nav>
@@ -49,10 +46,9 @@
                         <h3>Pack Current</h3>
                         <div class="value"><span id="val-current">0.00</span> <span class="unit">A</span></div>
                     </div>
-                    <div class="card kpi">
-                        <h3>SOC</h3>
-                        <div class="value"><span id="val-soc">0</span> <span class="unit">%</span></div>
-                        <div class="progress-bar"><div class="fill" id="bar-soc" style="width: 0%"></div></div>
+                    <div class="card kpi" style="grid-row: span 2; display:flex; flex-direction:column;">
+                        <h3>State of Charge</h3>
+                        <div id="chart-soc" style="width: 100%; height: 200px; flex:1;"></div>
                     </div>
                     <div class="card kpi">
                         <h3>Power</h3>
@@ -60,83 +56,49 @@
                     </div>
                 </div>
 
-                <div class="kpi-grid">
-                    <div class="card chart-container">
-                        <h3>Temperatures</h3>
-                        <div class="temp-grid" style="display: flex; justify-content: space-between; padding-top: 10px;">
-                            <div class="temp-item">
-                                <span style="color: #a1a1aa; display:block; font-size:0.8em;">Internal</span>
-                                <strong id="temp-int" style="font-size: 1.2em;">-- °C</strong>
-                            </div>
-                            <div class="temp-item">
-                                <span style="color: #a1a1aa; display:block; font-size:0.8em;">Sensor #1</span>
-                                <strong id="temp-ext1" style="font-size: 1.2em;">-- °C</strong>
-                            </div>
-                            <div class="temp-item">
-                                <span style="color: #a1a1aa; display:block; font-size:0.8em;">Sensor #2</span>
-                                <strong id="temp-ext2" style="font-size: 1.2em;">-- °C</strong>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="card">
-                        <h3>Extremes</h3>
-                        <div style="display: flex; justify-content: space-between; align-items: center; height: 100%;">
-                            <div>
-                                <span style="color: #a1a1aa; font-size:0.8em;">Min Cell</span>
-                                <div id="cell-min-kpi" style="font-weight: bold; font-size: 1.1em;">0.000 V</div>
-                            </div>
-                            <div>
-                                <span style="color: #a1a1aa; font-size:0.8em;">Max Cell</span>
-                                <div id="cell-max-kpi" style="font-weight: bold; font-size: 1.1em;">0.000 V</div>
-                            </div>
-                            <div>
-                                <span style="color: #a1a1aa; font-size:0.8em;">Delta</span>
-                                <div id="cell-diff" style="font-weight: bold; font-size: 1.1em; color: var(--warning);">0.000 V</div>
-                            </div>
-                        </div>
+                <div class="card chart-container">
+                    <h3>Temperatures</h3>
+                    <div class="temp-grid" style="display: flex; justify-content: space-around; padding-top: 10px;">
+                        <div class="temp-item"><span>Internal</span><strong id="temp-int">-- °C</strong></div>
+                        <div class="temp-item"><span>Sensor #1</span><strong id="temp-ext1">-- °C</strong></div>
+                        <div class="temp-item"><span>Sensor #2</span><strong id="temp-ext2">-- °C</strong></div>
                     </div>
                 </div>
             </div>
 
             <div id="cells" class="tab-content">
                 <header>
-                    <h1>Individual Cell Voltages</h1>
+                    <h1>Cell Voltages Monitor</h1>
                 </header>
-                <div class="cells-grid" id="cellsContainer"></div>
-            </div>
+                
+                <div class="card" style="height: 400px; padding: 10px;">
+                    <div id="chart-cells" style="width: 100%; height: 100%;"></div>
+                </div>
 
-            <div id="stats" class="tab-content">
-                <header>
-                    <h1>Lifetime Statistics</h1>
-                </header>
-                <div id="stats-container" class="settings-grid">
-                    <div class="card" style="width: 100%; text-align: center; color: #666;">
-                        Waiting for BMS data...
-                    </div>
+                <div class="stats-row" style="margin-top: 20px; display:flex; gap:20px;">
+                    <div class="card mini" style="flex:1;">Min: <strong id="cell-min-kpi" style="color:var(--danger)">0.000 V</strong></div>
+                    <div class="card mini" style="flex:1;">Max: <strong id="cell-max-kpi" style="color:var(--success)">0.000 V</strong></div>
+                    <div class="card mini" style="flex:1;">Delta: <strong id="cell-diff" style="color:var(--warning)">0.000 V</strong></div>
                 </div>
             </div>
 
+            <div id="stats" class="tab-content">
+                <header><h1>Lifetime Statistics</h1></header>
+                <div id="stats-container" class="settings-grid">Waiting...</div>
+            </div>
             <div id="settings" class="tab-content">
-                <header>
-                    <h1>Configuration</h1>
-                </header>
+                <header><h1>Configuration</h1></header>
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-                        <h3>BMS Parameters</h3>
-                        <button class="btn-save">Write to BMS</button>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                        <h3>Parameters</h3>
+                        <button class="btn-save">Read Only Mode</button>
                     </div>
-                    <div id="settings-form-container" class="settings-grid-dynamic">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            Loading settings from device...
-                        </div>
-                    </div>
+                    <div id="settings-form-container" class="settings-grid-dynamic">Loading...</div>
                 </div>
             </div>
 
         </main>
     </div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>
 </body>
