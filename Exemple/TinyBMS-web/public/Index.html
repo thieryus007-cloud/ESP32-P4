@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>TinyBMS Manager V3</title>
+    <title>TinyBMS Monitor</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -15,11 +15,13 @@
                 <span class="status-dot" id="connectionDot"></span>
             </div>
             <div id="modeBadge" class="mode-badge disconnected">NO CONNECTION</div>
+            
             <ul class="nav-links">
                 <li class="active" onclick="switchTab('dashboard')">📊 Dashboard</li>
                 <li onclick="switchTab('settings')">⚙️ Configuration</li>
                 <li onclick="switchTab('stats')">📈 Statistics</li>
             </ul>
+
             <div class="port-selector">
                 <select id="portSelect"><option>Loading...</option></select>
                 <button onclick="connectBMS()">Connect</button>
@@ -29,14 +31,15 @@
         <main class="content">
             <div id="dashboard" class="tab-content active">
                 <div class="top-row">
-                    <div class="card gauge-card"><h3>SOC %</h3><div id="chart-soc" style="width:100%; height:160px;"></div></div>
+                    <div class="card gauge-card"><h3>SOC %</h3><div id="chart-soc" class="chart-box"></div></div>
                     <div class="kpi-group">
                         <div class="card kpi"><h3>Voltage</h3><div class="value"><span id="val-voltage">--</span> <span class="unit">V</span></div></div>
                         <div class="card kpi"><h3>Current</h3><div class="value"><span id="val-current">--</span> <span class="unit">A</span></div></div>
                         <div class="card kpi"><h3>Power</h3><div class="value"><span id="val-power">--</span> <span class="unit">W</span></div></div>
                     </div>
-                    <div class="card gauge-card"><h3>Health</h3><div id="chart-soh" style="width:100%; height:160px;"></div></div>
+                    <div class="card gauge-card"><h3>Health</h3><div id="chart-soh" class="chart-box"></div></div>
                 </div>
+
                 <div class="middle-row">
                     <div class="card chart-main">
                         <div class="chart-header">
@@ -47,7 +50,7 @@
                                 <span class="legend-item"><span class="dot bal"></span> Balancing</span>
                             </div>
                         </div>
-                        <div id="chart-cells" style="width: 100%; height: 300px;"></div>
+                        <div id="chart-cells" class="chart-box-large"></div>
                         <div class="cell-stats-bar">
                             <span>Min: <strong id="cell-min-txt" style="color:var(--info)">--</strong></span>
                             <span>Max: <strong id="cell-max-txt" style="color:var(--danger)">--</strong></span>
@@ -55,6 +58,7 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="bottom-row">
                     <div class="card">
                         <h3>Temperatures</h3>
@@ -71,26 +75,26 @@
                 <header><h1>Configuration (Read/Write)</h1></header>
                 <div class="settings-grid-layout">
                     <div class="card settings-card">
-                        <div class="group-header"><h3>🔋 Battery Characteristics</h3><button onclick="saveSection('battery')">Save Section</button></div>
+                        <div class="group-header"><h3>🔋 Battery</h3><button onclick="saveSection('battery')">Save</button></div>
                         <div id="conf-battery" class="group-inputs">Loading...</div>
                     </div>
                     <div class="card settings-card">
-                        <div class="group-header"><h3>🛡️ Safety Limits</h3><button onclick="saveSection('safety')">Save Section</button></div>
+                        <div class="group-header"><h3>🛡️ Safety</h3><button onclick="saveSection('safety')">Save</button></div>
                         <div id="conf-safety" class="group-inputs">Loading...</div>
                     </div>
                     <div class="card settings-card">
-                        <div class="group-header"><h3>⚖️ Balancing & Charging</h3><button onclick="saveSection('balance')">Save Section</button></div>
+                        <div class="group-header"><h3>⚖️ Balance</h3><button onclick="saveSection('balance')">Save</button></div>
                         <div id="conf-balance" class="group-inputs">Loading...</div>
                     </div>
                     <div class="card settings-card">
-                        <div class="group-header"><h3>🔧 Hardware / Peripherals</h3><button onclick="saveSection('hardware')">Save Section</button></div>
+                        <div class="group-header"><h3>🔧 Hardware</h3><button onclick="saveSection('hardware')">Save</button></div>
                         <div id="conf-hardware" class="group-inputs">Loading...</div>
                     </div>
                 </div>
             </div>
 
             <div id="stats" class="tab-content">
-                <header><h1>Lifetime Statistics</h1></header>
+                <header><h1>Statistics</h1></header>
                 <div id="stats-container" class="stats-grid">Waiting...</div>
             </div>
         </main>
