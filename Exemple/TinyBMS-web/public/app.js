@@ -48,17 +48,33 @@ socket.on('bms-settings', (data) => {
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.id = `wrapper-${reg.id}`;
+
+                // Récupérer les contraintes pour ce registre
+                const constraints = REGISTER_CONSTRAINTS[reg.id];
+                let newInputHTML = '';
+
+                if (constraints && constraints.type === 'select') {
+                    // Créer un dropdown pour les valeurs énumérées
+                    const options = constraints.options.map(opt =>
+                        `<option value="${opt.value}">${opt.label}</option>`
+                    ).join('');
+                    newInputHTML = `<select id="new-${reg.id}" class="new-select"><option value="">--</option>${options}</select>`;
+                } else {
+                    // Créer un input avec contraintes min/max
+                    const min = constraints?.min !== undefined ? `min="${constraints.min}"` : '';
+                    const max = constraints?.max !== undefined ? `max="${constraints.max}"` : '';
+                    const step = constraints?.step || 0.001;
+                    newInputHTML = `<input type="number" id="new-${reg.id}" placeholder="--" step="${step}" ${min} ${max}>`;
+                }
+
                 div.innerHTML = `
                     <label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label>
                     <div class="dual-input-wrapper">
                         <div class="input-field current-value">
-                            <span class="field-label">Current</span>
-                            <input type="text" id="current-${reg.id}" value="${reg.value}" readonly>
-                            <span class="unit">${reg.unit}</span>
+                            <input type="text" id="current-${reg.id}" value="${reg.value} ${reg.unit}" readonly>
                         </div>
                         <div class="input-field new-value">
-                            <span class="field-label">New</span>
-                            <input type="number" id="new-${reg.id}" placeholder="${reg.value}" step="0.001">
+                            ${newInputHTML}
                             <span class="unit">${reg.unit}</span>
                         </div>
                     </div>`;
@@ -66,8 +82,10 @@ socket.on('bms-settings', (data) => {
             } else {
                 const currentInput = document.getElementById(`current-${reg.id}`);
                 const newInput = document.getElementById(`new-${reg.id}`);
-                if (currentInput) currentInput.value = reg.value;
-                if (newInput && document.activeElement !== newInput) newInput.placeholder = reg.value;
+                if (currentInput) currentInput.value = `${reg.value} ${reg.unit}`;
+                if (newInput && document.activeElement !== newInput && newInput.tagName === 'INPUT') {
+                    // Ne pas changer le placeholder si l'utilisateur est en train de saisir
+                }
             }
         }
     });
@@ -75,12 +93,27 @@ socket.on('bms-settings', (data) => {
 
 async function saveSection(groupId) {
     const container = document.getElementById(`conf-${groupId}`);
-    const newInputs = container.querySelectorAll('input[id^="new-"]');
+    const newInputs = container.querySelectorAll('input[id^="new-"], select[id^="new-"]');
     const changes = [];
     newInputs.forEach(input => {
         // Seulement ajouter si une nouvelle valeur a été saisie
-        if (input.value && input.value.trim() !== '') {
+        if (input.value && input.value.trim() !== '' && input.value !== '--') {
             const id = input.id.replace('new-', '');
+            const numValue = parseFloat(input.value);
+
+            // Validation des contraintes
+            const constraints = REGISTER_CONSTRAINTS[parseInt(id)];
+            if (constraints && constraints.type !== 'select') {
+                if (constraints.min !== undefined && numValue < constraints.min) {
+                    alert(`Value for register ${id} is below minimum (${constraints.min})`);
+                    return;
+                }
+                if (constraints.max !== undefined && numValue > constraints.max) {
+                    alert(`Value for register ${id} is above maximum (${constraints.max})`);
+                    return;
+                }
+            }
+
             changes.push({ id: id, value: input.value });
         }
     });
@@ -102,7 +135,13 @@ async function saveSection(groupId) {
         if(data.success) {
             btn.innerText = "Saved ✅";
             // Vider les champs "new-" après succès
-            newInputs.forEach(input => { if(input.value) input.value = ''; });
+            newInputs.forEach(input => {
+                if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0; // Remettre au premier choix (vide)
+                } else {
+                    input.value = ''; // Vider l'input
+                }
+            });
         }
         else { alert("Error"); btn.innerText = "Error ❌"; }
     } catch(e) { alert(e.message); btn.innerText = "Error ❌"; }
