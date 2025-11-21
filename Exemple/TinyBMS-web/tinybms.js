@@ -1,40 +1,42 @@
 const { SerialPort } = require('serialport');
 
-// Carte basée sur TinyBMS Communication Protocols Rev D (Chapitre 3)
+[cite_start]// CARTE DES REGISTRES (Basée sur TinyBMS Communication Protocols Rev D) [cite: 3112, 3751, 3764]
 const REGISTER_MAP = [
     // --- LIVE DATA (0-99) ---
+    [cite_start]// Cellules 1 à 16 (Reg 0-15) [cite: 3751]
     ...Array.from({ length: 16 }, (_, i) => ({ 
         id: i, label: `Cell ${i + 1}`, unit: 'V', type: 'UINT16', scale: 0.0001, category: 'Live' 
     })),
-    { id: 36, label: 'Pack Voltage', unit: 'V', type: 'FLOAT', category: 'Live' },
-    { id: 38, label: 'Pack Current', unit: 'A', type: 'FLOAT', category: 'Live' },
-    { id: 40, label: 'Min Cell Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Live' },
-    { id: 41, label: 'Max Cell Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Live' },
-    { id: 42, label: 'Temp Sensor 1', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' },
-    { id: 43, label: 'Temp Sensor 2', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' },
-    { id: 45, label: 'State Of Health', unit: '%', type: 'UINT16', scale: 0.002, category: 'Stats' },
-    { id: 46, label: 'State Of Charge', unit: '%', type: 'UINT32', scale: 0.000001, category: 'Live' },
-    { id: 48, label: 'Internal Temp', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' },
-    { id: 50, label: 'BMS Status', type: 'UINT16', category: 'Live' }, 
-    { id: 52, label: 'Real Balancing', type: 'UINT16', category: 'Live' },
+    [cite_start]{ id: 36, label: 'Pack Voltage', unit: 'V', type: 'FLOAT', category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 38, label: 'Pack Current', unit: 'A', type: 'FLOAT', category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 40, label: 'Min Cell Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 41, label: 'Max Cell Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 42, label: 'Temp Sensor 1', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 43, label: 'Temp Sensor 2', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 45, label: 'State Of Health', unit: '%', type: 'UINT16', scale: 0.002, category: 'Stats' }, // [cite: 3751]
+    [cite_start]{ id: 46, label: 'State Of Charge', unit: '%', type: 'UINT32', scale: 0.000001, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 48, label: 'Internal Temp', unit: '°C', type: 'INT16', scale: 0.1, category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 50, label: 'BMS Status', type: 'UINT16', category: 'Live' }, // [cite: 3751]
+    [cite_start]{ id: 52, label: 'Real Balancing', type: 'UINT16', category: 'Live' }, // [cite: 3751]
 
     // --- STATISTICS (100-199) ---
-    { id: 101, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' },
-    { id: 106, label: 'Over-Voltage Count', type: 'UINT16', category: 'Stats' },
-    { id: 105, label: 'Under-Voltage Count', type: 'UINT16', category: 'Stats' },
-    { id: 111, label: 'Charging Count', type: 'UINT16', category: 'Stats' },
-    { id: 112, label: 'Full Charge Count', type: 'UINT16', category: 'Stats' },
+    [cite_start]{ id: 101, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' }, // [cite: 3752]
+    [cite_start]{ id: 106, label: 'Over-Voltage Count', type: 'UINT16', category: 'Stats' }, // [cite: 3752]
+    [cite_start]{ id: 105, label: 'Under-Voltage Count', type: 'UINT16', category: 'Stats' }, // [cite: 3752]
+    [cite_start]{ id: 111, label: 'Charging Count', type: 'UINT16', category: 'Stats' }, // [cite: 3758]
+    [cite_start]{ id: 112, label: 'Full Charge Count', type: 'UINT16', category: 'Stats' }, // [cite: 3758]
 
-    // --- SETTINGS (300-343) ---
-    // Group: Battery
+    [cite_start]// --- SETTINGS (300-343) - Organisés par Groupes pour l'affichage [cite: 3764] ---
+    
+    // Groupe 1: Battery
     { id: 300, label: 'Fully Charged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'battery' },
     { id: 301, label: 'Fully Discharged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'battery' },
     { id: 306, label: 'Battery Capacity', unit: 'Ah', type: 'UINT16', scale: 0.01, category: 'Settings', group: 'battery' },
     { id: 307, label: 'Series Cells Count', unit: '', type: 'UINT16', category: 'Settings', group: 'battery' },
     { id: 322, label: 'Max Cycles Count', unit: '', type: 'UINT16', category: 'Settings', group: 'battery' },
-    { id: 328, label: 'Set SOC Manually', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings', group: 'battery' },
-    
-    // Group: Safety
+    { id: 328, label: 'Manual SOC Set', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings', group: 'battery' },
+
+    // Groupe 2: Safety
     { id: 315, label: 'Over-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'safety' },
     { id: 316, label: 'Under-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'safety' },
     { id: 317, label: 'Discharge Over-Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings', group: 'safety' },
@@ -43,23 +45,23 @@ const REGISTER_MAP = [
     { id: 319, label: 'Over-Heat Cutoff', unit: '°C', type: 'INT16', scale: 1, category: 'Settings', group: 'safety' },
     { id: 320, label: 'Low Temp Charge Cutoff', unit: '°C', type: 'INT16', scale: 1, category: 'Settings', group: 'safety' },
 
-    // Group: Balance
+    // Groupe 3: Balance
     { id: 303, label: 'Early Balancing Threshold', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'balance' },
     { id: 304, label: 'Charge Finished Current', unit: 'mA', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
     { id: 308, label: 'Allowed Disbalance', unit: 'mV', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
     { id: 321, label: 'Charge Restart Level', unit: '%', type: 'UINT16', category: 'Settings', group: 'balance' },
     { id: 332, label: 'Automatic Recovery', unit: 's', type: 'UINT16', category: 'Settings', group: 'balance' },
 
-    // Group: Hardware
+    // Groupe 4: Hardware
     { id: 310, label: 'Charger Startup Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 311, label: 'Charger Disable Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 312, label: 'Pulses Per Unit', unit: '', type: 'UINT32', category: 'Settings', group: 'hardware' },
     { id: 330, label: 'Charger Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 340, label: 'Operation Mode', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 340, label: 'Operation Mode', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' }, // 0=Dual, 1=Single
     { id: 343, label: 'Protocol', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
 
     // --- VERSION (500+) ---
-    { id: 501, label: 'Firmware Version', type: 'UINT16', category: 'Version' }
+    [cite_start]{ id: 501, label: 'Firmware Version', type: 'UINT16', category: 'Version' } // [cite: 3773]
 ];
 
 class TinyBMS {
@@ -86,6 +88,7 @@ class TinyBMS {
         });
     }
 
+    [cite_start]// Calcul CRC Modbus (Poly 0xA001) [cite: 3362]
     calculateCRC(buffer) {
         let crc = 0xFFFF;
         for (let pos = 0; pos < buffer.length; pos++) {
@@ -102,6 +105,7 @@ class TinyBMS {
         return crc;
     }
 
+    [cite_start]// Lecture par bloc (Fonction 0x03) [cite: 3200]
     readRegisterBlock(startAddr, count) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject("Not connected");
@@ -111,9 +115,10 @@ class TinyBMS {
             const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
             const onData = (data) => {
+                // Vérification Header AA 03
                 if (data[0] !== 0xAA || data[1] !== 0x03) return; 
                 const len = data[2];
-                if (data.length < 3 + len + 2) return; 
+                if (data.length < 3 + len + 2) return; // Attendre trame complète
 
                 const payload = data.slice(3, 3 + len);
                 this.port.removeListener('data', onData);
@@ -130,6 +135,8 @@ class TinyBMS {
         });
     }
 
+    [cite_start]// Ecriture (Fonction 0x10 - Write Multiple Registers) [cite: 3209]
+    // Utilisé ici pour écrire 1 seul registre à la fois par sécurité
     writeRegister(regId, value) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject("Not connected");
@@ -140,16 +147,19 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
+            // Préparation données (2 octets)
             const dataBytes = Buffer.alloc(2);
             if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
             else dataBytes.writeUInt16BE(rawValue);
 
+            // Header: AA 10 AddrH AddrL 00 01 02
             const header = [0xAA, 0x10, (regId >> 8) & 0xFF, regId & 0xFF, 0x00, 0x01, 0x02];
             const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
             const crc = this.calculateCRC(cmdNoCrc);
             const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
 
             const onData = (data) => {
+                // Réponse: AA 10 ...
                 if (data[0] === 0xAA && data[1] === 0x10) {
                     this.port.removeListener('data', onData);
                     resolve(true);
@@ -166,9 +176,10 @@ class TinyBMS {
         });
     }
 
+    // Décodage générique selon la map
     parseBlock(startAddr, buffer) {
         const result = {};
-        const count = buffer.length / 2;
+        const count = buffer.length / 2; // 2 octets par registre
 
         for (let i = 0; i < count; i++) {
             const currentRegId = startAddr + i;
@@ -191,13 +202,14 @@ class TinyBMS {
                 let finalValue = rawValue;
                 if (def.scale) finalValue = rawValue * def.scale;
 
+                // On nettoie les flottants (ex: 3.90000001 -> 3.9)
                 result[currentRegId] = {
                     id: def.id,
                     label: def.label,
                     value: parseFloat(finalValue.toFixed(4)),
                     unit: def.unit || '',
                     category: def.category,
-                    group: def.group
+                    group: def.group // Essentiel pour l'affichage par onglets
                 };
             }
         }
