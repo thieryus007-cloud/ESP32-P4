@@ -1,1 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyBMS Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>⚡ TinyBMS</h2>
+                <span class="status-dot disconnected" id="connectionStatus"></span>
+            </div>
+            <ul class="nav-links">
+                <li class="active" onclick="switchTab('dashboard')">Dashboard</li>
+                <li onclick="switchTab('cells')">Cell Details</li>
+                <li onclick="switchTab('settings')">Settings</li>
+            </ul>
+            <div class="port-selector">
+                <select id="portSelect"><option>Loading ports...</option></select>
+                <button onclick="connectBMS()">Connect</button>
+            </div>
+        </nav>
 
+        <main class="content">
+            
+            <div id="dashboard" class="tab-content active">
+                <header>
+                    <h1>Live Overview</h1>
+                    <div class="bms-state" id="bmsState">IDLE</div>
+                </header>
+
+                <div class="kpi-grid">
+                    <div class="card kpi">
+                        <h3>Pack Voltage</h3>
+                        <div class="value"><span id="val-voltage">0.00</span> <span class="unit">V</span></div>
+                    </div>
+                    <div class="card kpi">
+                        <h3>Pack Current</h3>
+                        <div class="value"><span id="val-current">0.00</span> <span class="unit">A</span></div>
+                    </div>
+                    <div class="card kpi">
+                        <h3>SOC</h3>
+                        <div class="value"><span id="val-soc">0</span> <span class="unit">%</span></div>
+                        <div class="progress-bar"><div class="fill" id="bar-soc" style="width: 0%"></div></div>
+                    </div>
+                    <div class="card kpi">
+                        <h3>Power</h3>
+                        <div class="value"><span id="val-power">0</span> <span class="unit">W</span></div>
+                    </div>
+                </div>
+
+                <div class="card chart-container">
+                    <h3>Temperatures</h3>
+                    <div class="temp-grid">
+                        <div class="temp-item">
+                            <span>Internal</span>
+                            <strong id="temp-int">-- °C</strong>
+                        </div>
+                        <div class="temp-item">
+                            <span>Sensor #1</span>
+                            <strong id="temp-ext1">-- °C</strong>
+                        </div>
+                        <div class="temp-item">
+                            <span>Sensor #2</span>
+                            <strong id="temp-ext2">-- °C</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="cells" class="tab-content">
+                <header><h1>Cell Voltages</h1></header>
+                <div class="cells-grid" id="cellsContainer">
+                    </div>
+                <div class="stats-row">
+                    <div class="card mini">Min: <strong id="cell-min">0.000V</strong></div>
+                    <div class="card mini">Max: <strong id="cell-max">0.000V</strong></div>
+                    <div class="card mini">Diff: <strong id="cell-diff">0.000V</strong></div>
+                </div>
+            </div>
+
+            <div id="settings" class="tab-content">
+                <header><h1>Configuration</h1></header>
+                <div class="settings-grid">
+                    <div class="card">
+                        <h3>Safety Cutoffs</h3>
+                        <div class="form-group">
+                            <label>Over-Voltage Cutoff (V)</label>
+                            <input type="number" step="0.01" value="4.20">
+                        </div>
+                        <div class="form-group">
+                            <label>Under-Voltage Cutoff (V)</label>
+                            <input type="number" step="0.01" value="2.80">
+                        </div>
+                        <div class="form-group">
+                            <label>Over-Current Discharge (A)</label>
+                            <input type="number" value="60">
+                        </div>
+                        <button class="btn-save">Save to BMS</button>
+                    </div>
+                    <div class="card">
+                        <h3>Capacity & Balancing</h3>
+                        <div class="form-group">
+                            <label>Battery Capacity (Ah)</label>
+                            <input type="number" value="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Balancing Start (V)</label>
+                            <input type="number" step="0.01" value="4.00">
+                        </div>
+                        <button class="btn-save">Save to BMS</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
