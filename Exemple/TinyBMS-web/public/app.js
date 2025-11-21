@@ -48,11 +48,26 @@ socket.on('bms-settings', (data) => {
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.id = `wrapper-${reg.id}`;
-                div.innerHTML = `<label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label><div class="input-wrapper"><input type="number" id="reg-${reg.id}" value="${reg.value}" step="0.001"><span>${reg.unit}</span></div>`;
+                div.innerHTML = `
+                    <label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label>
+                    <div class="dual-input-wrapper">
+                        <div class="input-field current-value">
+                            <span class="field-label">Current</span>
+                            <input type="text" id="current-${reg.id}" value="${reg.value}" readonly>
+                            <span class="unit">${reg.unit}</span>
+                        </div>
+                        <div class="input-field new-value">
+                            <span class="field-label">New</span>
+                            <input type="number" id="new-${reg.id}" placeholder="${reg.value}" step="0.001">
+                            <span class="unit">${reg.unit}</span>
+                        </div>
+                    </div>`;
                 container.appendChild(div);
             } else {
-                const input = document.getElementById(`reg-${reg.id}`);
-                if (document.activeElement !== input) input.value = reg.value;
+                const currentInput = document.getElementById(`current-${reg.id}`);
+                const newInput = document.getElementById(`new-${reg.id}`);
+                if (currentInput) currentInput.value = reg.value;
+                if (newInput && document.activeElement !== newInput) newInput.placeholder = reg.value;
             }
         }
     });
@@ -60,13 +75,19 @@ socket.on('bms-settings', (data) => {
 
 async function saveSection(groupId) {
     const container = document.getElementById(`conf-${groupId}`);
-    const inputs = container.querySelectorAll('input');
+    const newInputs = container.querySelectorAll('input[id^="new-"]');
     const changes = [];
-    inputs.forEach(input => {
-        const id = input.id.replace('reg-', '');
-        changes.push({ id: id, value: input.value });
+    newInputs.forEach(input => {
+        // Seulement ajouter si une nouvelle valeur a été saisie
+        if (input.value && input.value.trim() !== '') {
+            const id = input.id.replace('new-', '');
+            changes.push({ id: id, value: input.value });
+        }
     });
-    if (changes.length === 0) return;
+    if (changes.length === 0) {
+        alert('No changes to save. Please enter new values.');
+        return;
+    }
 
     const btn = container.parentNode.querySelector('button');
     const oldText = btn.innerText;
@@ -78,7 +99,11 @@ async function saveSection(groupId) {
             body: JSON.stringify({ changes })
         });
         const data = await res.json();
-        if(data.success) btn.innerText = "Saved ✅";
+        if(data.success) {
+            btn.innerText = "Saved ✅";
+            // Vider les champs "new-" après succès
+            newInputs.forEach(input => { if(input.value) input.value = ''; });
+        }
         else { alert("Error"); btn.innerText = "Error ❌"; }
     } catch(e) { alert(e.message); btn.innerText = "Error ❌"; }
     setTimeout(() => { btn.innerText = oldText; btn.disabled = false; }, 2000);

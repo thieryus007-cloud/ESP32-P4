@@ -61,6 +61,20 @@ h3 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; font-weig
 .group-header button { background: var(--primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: 600; }
 .group-inputs { display: grid; gap: 12px; }
 .form-group label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 4px; }
+
+/* Nouveau layout pour les champs doubles */
+.dual-input-wrapper { display: flex; gap: 10px; }
+.input-field { flex: 1; display: flex; flex-direction: column; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.input-field .field-label { font-size: 0.65em; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; font-weight: 600; }
+.input-field input { padding: 4px 0; background: transparent; border: none; color: white; font-family: monospace; font-size: 0.9em; width: 100%; }
+.input-field input:focus { outline: none; }
+.input-field input[readonly] { color: var(--info); font-weight: 600; cursor: default; }
+.input-field .unit { font-size: 0.75em; color: #666; margin-top: 2px; }
+.input-field.current-value { border-color: rgba(6, 182, 212, 0.3); background: rgba(6, 182, 212, 0.05); }
+.input-field.new-value { border-color: rgba(99, 102, 241, 0.3); }
+.input-field.new-value input:not(:placeholder-shown) { color: var(--warning); font-weight: 600; }
+
+/* Anciens styles pour compatibilité */
 .input-wrapper { display: flex; align-items: center; background: var(--bg-dark); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
 .input-wrapper input { flex: 1; padding: 6px 0; background: transparent; border: none; color: white; font-family: monospace; }
 .input-wrapper span { font-size: 0.8em; color: #666; margin-left: 5px; }
