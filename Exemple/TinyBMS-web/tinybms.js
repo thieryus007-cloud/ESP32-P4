@@ -84,7 +84,6 @@ class TinyBMS {
         return crc;
     }
 
-    // --- READ BLOCK (Cmd 0x03) ---
     readRegisterBlock(startAddr, count) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject("Not connected");
@@ -96,7 +95,7 @@ class TinyBMS {
             const onData = (data) => {
                 if (data[0] !== 0xAA || data[1] !== 0x03) return; 
                 const len = data[2];
-                if (data.length < 3 + len + 2) return; // Wait full frame
+                if (data.length < 3 + len + 2) return; 
 
                 const payload = data.slice(3, 3 + len);
                 this.port.removeListener('data', onData);
@@ -113,7 +112,6 @@ class TinyBMS {
         });
     }
 
-    // --- WRITE SINGLE REGISTER (Cmd 0x10) ---
     writeRegister(regId, value) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject("Not connected");
@@ -124,19 +122,11 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
-            // Payload (2 bytes for UINT16/INT16)
             const dataBytes = Buffer.alloc(2);
             if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
             else dataBytes.writeUInt16BE(rawValue);
 
-            // Frame: AA 10 [AddrH] [AddrL] 00 01 02 [DataH] [DataL]
-            const header = [
-                0xAA, 0x10, 
-                (regId >> 8) & 0xFF, regId & 0xFF, 
-                0x00, 0x01, // Count 1
-                0x02        // Bytes 2
-            ];
-            
+            const header = [0xAA, 0x10, (regId >> 8) & 0xFF, regId & 0xFF, 0x00, 0x01, 0x02];
             const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
             const crc = this.calculateCRC(cmdNoCrc);
             const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
@@ -153,13 +143,11 @@ class TinyBMS {
             
             setTimeout(() => {
                 this.port.removeListener('data', onData);
-                // On resolve false en cas de timeout pour ne pas crasher le serveur
                 resolve(false); 
             }, 800);
         });
     }
 
-    // Generic parser
     parseBlock(startAddr, buffer) {
         const result = {};
         const count = buffer.length / 2;
