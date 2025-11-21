@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TinyBMS ECharts Interface</title>
+    <title>TinyBMS Monitor</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -16,89 +16,122 @@
                 <h2>⚡ TinyBMS</h2>
                 <span class="status-dot" id="connectionStatus"></span>
             </div>
+
             <ul class="nav-links">
-                <li class="active" onclick="switchTab('dashboard')">Dashboard</li>
-                <li onclick="switchTab('cells')">Cell Details</li>
-                <li onclick="switchTab('stats')">Statistics</li>
-                <li onclick="switchTab('settings')">Configuration</li>
+                <li class="active" onclick="switchTab('dashboard')">
+                    <span>📊 Dashboard</span>
+                </li>
+                <li onclick="switchTab('settings')">
+                    <span>⚙️ Configuration</span>
+                </li>
             </ul>
+
             <div class="port-selector">
-                <label for="portSelect" style="color: #a1a1aa; font-size: 0.8em; margin-bottom: 5px; display:block;">USB Port</label>
+                <label for="portSelect">USB Port</label>
                 <select id="portSelect"><option disabled selected>Loading...</option></select>
                 <button onclick="connectBMS()">Connect</button>
+            </div>
+            
+            <div class="system-status">
+                <small>State:</small>
+                <div id="bmsState" class="bms-state">DISCONNECTED</div>
             </div>
         </nav>
 
         <main class="content">
             
             <div id="dashboard" class="tab-content active">
-                <header>
-                    <h1>Live Overview</h1>
-                    <div class="bms-state" id="bmsState">DISCONNECTED</div>
-                </header>
+                
+                <div class="top-row">
+                    <div class="card gauge-card">
+                        <h3>SOC %</h3>
+                        <div id="chart-soc" style="width:100%; height:160px;"></div>
+                    </div>
 
-                <div class="kpi-grid">
-                    <div class="card kpi">
-                        <h3>Pack Voltage</h3>
-                        <div class="value"><span id="val-voltage">0.00</span> <span class="unit">V</span></div>
+                    <div class="kpi-group">
+                        <div class="card kpi">
+                            <h3>Voltage</h3>
+                            <div class="value"><span id="val-voltage">--</span> <span class="unit">V</span></div>
+                        </div>
+                        <div class="card kpi">
+                            <h3>Current</h3>
+                            <div class="value"><span id="val-current">--</span> <span class="unit">A</span></div>
+                        </div>
+                        <div class="card kpi">
+                            <h3>Power</h3>
+                            <div class="value"><span id="val-power">--</span> <span class="unit">W</span></div>
+                        </div>
                     </div>
-                    <div class="card kpi">
-                        <h3>Pack Current</h3>
-                        <div class="value"><span id="val-current">0.00</span> <span class="unit">A</span></div>
-                    </div>
-                    <div class="card kpi" style="grid-row: span 2; display:flex; flex-direction:column;">
-                        <h3>State of Charge</h3>
-                        <div id="chart-soc" style="width: 100%; height: 200px; flex:1;"></div>
-                    </div>
-                    <div class="card kpi">
-                        <h3>Power</h3>
-                        <div class="value"><span id="val-power">0</span> <span class="unit">W</span></div>
+
+                    <div class="card gauge-card">
+                        <h3>Health (SOH)</h3>
+                        <div id="chart-soh" style="width:100%; height:160px;"></div>
                     </div>
                 </div>
 
-                <div class="card chart-container">
-                    <h3>Temperatures</h3>
-                    <div class="temp-grid" style="display: flex; justify-content: space-around; padding-top: 10px;">
-                        <div class="temp-item"><span>Internal</span><strong id="temp-int">-- °C</strong></div>
-                        <div class="temp-item"><span>Sensor #1</span><strong id="temp-ext1">-- °C</strong></div>
-                        <div class="temp-item"><span>Sensor #2</span><strong id="temp-ext2">-- °C</strong></div>
+                <div class="middle-row">
+                    <div class="card chart-main">
+                        <div class="chart-header">
+                            <h3>Cell Voltages (1-16)</h3>
+                            <div class="chart-legend">
+                                <span class="legend-item"><span class="dot min"></span> Min</span>
+                                <span class="legend-item"><span class="dot max"></span> Max</span>
+                                <span class="legend-item"><span class="dot bal"></span> Balancing</span>
+                            </div>
+                        </div>
+                        <div id="chart-cells" style="width: 100%; height: 300px;"></div>
+                        <div class="cell-stats-bar">
+                            <span>Min: <strong id="cell-min-txt" style="color:var(--info)">-- V</strong></span>
+                            <span>Max: <strong id="cell-max-txt" style="color:var(--danger)">-- V</strong></span>
+                            <span>Delta: <strong id="cell-diff-txt" style="color:var(--warning)">-- V</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bottom-row">
+                    <div class="card">
+                        <h3>Temperatures</h3>
+                        <div class="temp-grid">
+                            <div class="temp-item">
+                                <span class="label">Internal</span>
+                                <strong id="temp-int" class="temp-val">-- °C</strong>
+                            </div>
+                            <div class="temp-item">
+                                <span class="label">Sensor 1</span>
+                                <strong id="temp-ext1" class="temp-val">-- °C</strong>
+                            </div>
+                            <div class="temp-item">
+                                <span class="label">Sensor 2</span>
+                                <strong id="temp-ext2" class="temp-val">-- °C</strong>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div id="cells" class="tab-content">
+            <div id="settings" class="tab-content">
                 <header>
-                    <h1>Cell Voltages Monitor</h1>
+                    <h1>BMS Configuration</h1>
+                    <button class="btn-refresh" onclick="location.reload()">Refresh Data</button>
                 </header>
                 
-                <div class="card" style="height: 400px; padding: 10px;">
-                    <div id="chart-cells" style="width: 100%; height: 100%;"></div>
-                </div>
-
-                <div class="stats-row" style="margin-top: 20px; display:flex; gap:20px;">
-                    <div class="card mini" style="flex:1;">Min: <strong id="cell-min-kpi" style="color:var(--danger)">0.000 V</strong></div>
-                    <div class="card mini" style="flex:1;">Max: <strong id="cell-max-kpi" style="color:var(--success)">0.000 V</strong></div>
-                    <div class="card mini" style="flex:1;">Delta: <strong id="cell-diff" style="color:var(--warning)">0.000 V</strong></div>
-                </div>
-            </div>
-
-            <div id="stats" class="tab-content">
-                <header><h1>Lifetime Statistics</h1></header>
-                <div id="stats-container" class="settings-grid">Waiting...</div>
-            </div>
-            <div id="settings" class="tab-content">
-                <header><h1>Configuration</h1></header>
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                        <h3>Parameters</h3>
-                        <button class="btn-save">Read Only Mode</button>
+                    <div class="settings-header">
+                        <h3>Read / Write Registers</h3>
+                        <button class="btn-save" onclick="alert('Feature: Write to BMS implementation needed in backend')">Save Changes</button>
                     </div>
-                    <div id="settings-form-container" class="settings-grid-dynamic">Loading...</div>
+                    
+                    <div id="settings-form-container" class="settings-grid-dynamic">
+                        <div style="padding: 20px; text-align: center; color: #666;">
+                            Waiting for Settings data from BMS...
+                        </div>
+                    </div>
                 </div>
             </div>
 
         </main>
     </div>
+    
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>
 </body>
