@@ -1,11 +1,10 @@
 const { SerialPort } = require('serialport');
 
-// Carte des registres (Basée sur TinyBMS Communication Protocols Rev D)
+// Carte complète des registres (TinyBMS Communication Protocols Rev D)
+// Ajout de la propriété 'group' pour organiser l'UI
 const REGISTER_MAP = [
     // --- LIVE DATA (0-99) ---
-    ...Array.from({ length: 16 }, (_, i) => ({ 
-        id: i, label: `Cell ${i + 1}`, unit: 'V', type: 'UINT16', scale: 0.0001, category: 'Live' 
-    })),
+    ...Array.from({ length: 16 }, (_, i) => ({ id: i, label: `Cell ${i + 1}`, unit: 'V', type: 'UINT16', scale: 0.0001, category: 'Live' })),
     { id: 36, label: 'Pack Voltage', unit: 'V', type: 'FLOAT', category: 'Live' },
     { id: 38, label: 'Pack Current', unit: 'A', type: 'FLOAT', category: 'Live' },
     { id: 40, label: 'Min Cell Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Live' },
@@ -25,21 +24,40 @@ const REGISTER_MAP = [
     { id: 111, label: 'Charging Count', type: 'UINT16', category: 'Stats' },
     { id: 112, label: 'Full Charge Count', type: 'UINT16', category: 'Stats' },
 
-    // --- SETTINGS (300-343) ---
-    { id: 300, label: 'Fully Charged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings' },
-    { id: 301, label: 'Fully Discharged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings' },
-    { id: 303, label: 'Early Balancing Threshold', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings' },
-    { id: 304, label: 'Charge Finished Current', unit: 'mA', type: 'UINT16', scale: 1, category: 'Settings' },
-    { id: 305, label: 'Peak Discharge Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings' },
-    { id: 306, label: 'Battery Capacity', unit: 'Ah', type: 'UINT16', scale: 0.01, category: 'Settings' },
-    { id: 308, label: 'Allowed Disbalance', unit: 'mV', type: 'UINT16', scale: 1, category: 'Settings' },
-    { id: 315, label: 'Over-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings' },
-    { id: 316, label: 'Under-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings' },
-    { id: 317, label: 'Discharge Over-Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings' },
-    { id: 318, label: 'Charge Over-Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings' },
-    { id: 321, label: 'Charge Restart Level', unit: '%', type: 'UINT16', category: 'Settings' },
-    { id: 328, label: 'Set SOC Manually', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings' },
+    // --- SETTINGS (300-343) - GROUPED ---
     
+    // Groupe 1: Battery Characteristics
+    { id: 300, label: 'Fully Charged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'battery' },
+    { id: 301, label: 'Fully Discharged Voltage', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'battery' },
+    { id: 306, label: 'Battery Capacity', unit: 'Ah', type: 'UINT16', scale: 0.01, category: 'Settings', group: 'battery' },
+    { id: 307, label: 'Series Cells Count', unit: '', type: 'UINT16', category: 'Settings', group: 'battery' },
+    { id: 322, label: 'Max Cycles Count', unit: '', type: 'UINT16', category: 'Settings', group: 'battery' },
+    { id: 328, label: 'Manual SOC Set', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings', group: 'battery' },
+
+    // Groupe 2: Safety Limits
+    { id: 315, label: 'Over-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'safety' },
+    { id: 316, label: 'Under-Voltage Cutoff', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'safety' },
+    { id: 317, label: 'Discharge Over-Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings', group: 'safety' },
+    { id: 318, label: 'Charge Over-Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings', group: 'safety' },
+    { id: 305, label: 'Peak Discharge Current', unit: 'A', type: 'UINT16', scale: 1, category: 'Settings', group: 'safety' },
+    { id: 319, label: 'Over-Heat Cutoff', unit: '°C', type: 'INT16', scale: 1, category: 'Settings', group: 'safety' },
+    { id: 320, label: 'Low Temp Charge Cutoff', unit: '°C', type: 'INT16', scale: 1, category: 'Settings', group: 'safety' },
+
+    // Groupe 3: Balancing & Charging
+    { id: 303, label: 'Early Balancing Threshold', unit: 'V', type: 'UINT16', scale: 0.001, category: 'Settings', group: 'balance' },
+    { id: 304, label: 'Charge Finished Current', unit: 'mA', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
+    { id: 308, label: 'Allowed Disbalance', unit: 'mV', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
+    { id: 321, label: 'Charge Restart Level', unit: '%', type: 'UINT16', category: 'Settings', group: 'balance' },
+    { id: 332, label: 'Automatic Recovery Time', unit: 's', type: 'UINT16', category: 'Settings', group: 'balance' },
+
+    // Groupe 4: Hardware & Peripherals
+    { id: 310, label: 'Charger Startup Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 311, label: 'Charger Disable Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 312, label: 'Pulses Per Unit', unit: '', type: 'UINT32', category: 'Settings', group: 'hardware' },
+    { id: 330, label: 'Charger Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' }, // Packed bits usually, simplified here
+    { id: 340, label: 'Operation Mode', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' }, // 0=Dual, 1=Single
+    { id: 343, label: 'Protocol', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+
     // --- VERSION (500+) ---
     { id: 501, label: 'Firmware Version', type: 'UINT16', category: 'Version' }
 ];
@@ -178,7 +196,8 @@ class TinyBMS {
                     label: def.label,
                     value: parseFloat(finalValue.toFixed(4)),
                     unit: def.unit || '',
-                    category: def.category
+                    category: def.category,
+                    group: def.group // Passer l'info de groupe au frontend
                 };
             }
         }
