@@ -34,30 +34,21 @@ socket.on('bms-settings', (data) => {
     if(data[300]) axisMax = data[300].value;
     if(data[301]) axisMin = data[301].value;
 
-    // Group IDs defined in HTML ids
     const groups = ['battery', 'safety', 'balance', 'hardware'];
-    
     groups.forEach(gid => {
         const container = document.getElementById(`conf-${gid}`);
         if(container && container.innerHTML.includes("Loading")) container.innerHTML = "";
     });
 
     Object.values(data).forEach(reg => {
-        // Trouver le bon container en fonction du groupe
-        const targetId = `conf-${reg.group || 'hardware'}`;
-        const container = document.getElementById(targetId);
-        
+        const gid = reg.group || 'hardware';
+        const container = document.getElementById(`conf-${gid}`);
         if (container) {
             if (!document.getElementById(`wrapper-${reg.id}`)) {
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.id = `wrapper-${reg.id}`;
-                div.innerHTML = `
-                    <label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label>
-                    <div class="input-wrapper">
-                        <input type="number" id="reg-${reg.id}" value="${reg.value}" step="0.001" data-group="${reg.group}">
-                        <span>${reg.unit}</span>
-                    </div>`;
+                div.innerHTML = `<label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label><div class="input-wrapper"><input type="number" id="reg-${reg.id}" value="${reg.value}" step="0.001"><span>${reg.unit}</span></div>`;
                 container.appendChild(div);
             } else {
                 const input = document.getElementById(`reg-${reg.id}`);
@@ -71,30 +62,25 @@ async function saveSection(groupId) {
     const container = document.getElementById(`conf-${groupId}`);
     const inputs = container.querySelectorAll('input');
     const changes = [];
-
     inputs.forEach(input => {
         const id = input.id.replace('reg-', '');
         changes.push({ id: id, value: input.value });
     });
-
     if (changes.length === 0) return;
 
-    // Feedback visuel
     const btn = container.parentNode.querySelector('button');
     const oldText = btn.innerText;
     btn.innerText = "Sending..."; btn.disabled = true;
 
     try {
         const res = await fetch('/api/write-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ changes })
         });
         const data = await res.json();
         if(data.success) btn.innerText = "Saved ✅";
         else { alert("Error"); btn.innerText = "Error ❌"; }
     } catch(e) { alert(e.message); btn.innerText = "Error ❌"; }
-
     setTimeout(() => { btn.innerText = oldText; btn.disabled = false; }, 2000);
 }
 
@@ -143,7 +129,6 @@ socket.on('bms-live', (data) => {
     document.getElementById('cell-diff-txt').innerText = (maxV-minV).toFixed(3)+' V';
 });
 
-// --- INIT & COMMON ---
 function initCharts() {
     const gauge = (col, name) => ({
         series: [{ type: 'gauge', radius:'100%', center:['50%','70%'], startAngle:180, endAngle:0, min:0, max:100, splitNumber:5, axisLine:{lineStyle:{width:8,color:[[1,'#333']]}}, progress:{show:true,width:8,itemStyle:{color:col}}, pointer:{show:false}, axisLabel:{show:false}, axisTick:{show:false}, splitLine:{show:false}, detail:{valueAnimation:true,offsetCenter:[0,'-20%'],fontSize:24,formatter:'{value}%',color:'#fff'}, data:[{value:0,name}] }]
