@@ -80,4 +80,19 @@ Détail des cellules : Visualisation des 16 cellules avec min/max/delta.
 Dark Mode : CSS optimisé pour une utilisation agréable.
 
 Modulaire : La logique de communication tinybms.js est séparée pour être facilement étendue (ex: ajouter l'écriture des paramètres).
-    
+
+
+### Instructions rapides pour l'installation
+
+1.  Copiez ce contenu dans un fichier nommé `package.json` à la racine de votre dossier `tinybms-web`.
+2.  Ouvrez votre terminal dans ce dossier.
+3.  Lancez la commande pour tout installer automatiquement :
+    ```bash
+    npm install
+    ```
+4.  Pour lancer le serveur :
+    ```bash
+    npm start
+    ```
+
+**Note :** J'ai ajouté `nodemon` dans les `devDependencies` et un script `npm run dev`. C'est très utile pendant le développement car cela redémarre automatiquement le serveur Node.js à chaque fois que vous modifiez un fichier (comme `server.js` ou `tinybms.js`), vous évitant de devoir couper et relancer le serveur manuellement.    
