@@ -8,11 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', resizeCharts);
 });
 
+// --- TABS & UI ---
 function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-links li').forEach(el => el.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
-    const idx = tabId === 'dashboard' ? 0 : (tabId === 'stats' ? 1 : 2);
+    const idx = tabId === 'dashboard' ? 0 : (tabId === 'settings' ? 1 : 2);
     document.querySelectorAll('.nav-links li')[idx].classList.add('active');
     if (tabId === 'dashboard') setTimeout(resizeCharts, 50);
 }
@@ -21,7 +22,32 @@ function resizeCharts() {
     if(chartSoc) chartSoc.resize(); if(chartSoh) chartSoh.resize(); if(chartCells) chartCells.resize();
 }
 
-// --- CHARTS INIT ---
+function updateConnectionUI(mode) {
+    const dot = document.getElementById('connectionDot');
+    const badge = document.getElementById('modeBadge');
+    const btn = document.querySelector('.port-selector button');
+
+    dot.className = 'status-dot';
+    badge.className = 'mode-badge';
+
+    if (mode === 'CONNECTED') {
+        dot.classList.add('connected');
+        badge.classList.add('connected');
+        badge.innerText = 'ONLINE (USB)';
+        btn.innerText = "Disconnect";
+    } else if (mode === 'SIMULATION') {
+        dot.classList.add('simulation');
+        badge.classList.add('simulation');
+        badge.innerText = 'SIMULATION MODE';
+        btn.innerText = "Stop Sim";
+    } else {
+        badge.classList.add('disconnected');
+        badge.innerText = 'DISCONNECTED';
+        btn.innerText = "Connect";
+    }
+}
+
+// --- CHARTS ---
 function initCharts() {
     const gaugeOpts = (color, name) => ({
         series: [{
@@ -50,7 +76,9 @@ function initCharts() {
     });
 }
 
-// --- DATA HANDLING ---
+// --- SOCKET EVENTS ---
+socket.on('status-change', (data) => updateConnectionUI(data.mode));
+
 socket.on('bms-live', (data) => {
     if(!data) return;
     const getVal = (id) => data[id] ? data[id].value : 0;
@@ -59,15 +87,15 @@ socket.on('bms-live', (data) => {
     document.getElementById('val-current').innerText = getVal(38).toFixed(2);
     document.getElementById('val-power').innerText = (getVal(36) * getVal(38)).toFixed(0);
     
-    const stateMap = { 0x91: 'CHARGING', 0x92: 'FULL', 0x93: 'DISCHARGING', 0x97: 'IDLE', 0x9B: 'FAULT' };
     const stateVal = getVal(50);
+    const states = { 0x91: 'CHARGING', 0x92: 'FULL', 0x93: 'DISCHARGING', 0x97: 'IDLE', 0x9B: 'FAULT' };
     const stateEl = document.getElementById('bmsState');
-    stateEl.innerText = stateMap[stateVal] || 'UNKNOWN';
-    stateEl.style.color = stateVal === 0x9B ? '#ef4444' : (stateVal === 0x91 ? '#10b981' : '#fff');
+    stateEl.innerText = states[stateVal] || 'UNKNOWN';
+    stateEl.style.color = stateVal === 0x9B ? 'var(--danger)' : (stateVal === 0x91 ? 'var(--success)' : '#fff');
 
-    document.getElementById('temp-int').innerText = getVal(48) + '°';
-    document.getElementById('temp-ext1').innerText = getVal(42) + '°';
-    document.getElementById('temp-ext2').innerText = getVal(43) + '°';
+    document.getElementById('temp-int').innerText = getVal(48).toFixed(1) + '°';
+    document.getElementById('temp-ext1').innerText = getVal(42).toFixed(1) + '°';
+    document.getElementById('temp-ext2').innerText = getVal(43).toFixed(1) + '°';
 
     if(chartSoc) chartSoc.setOption({ series: [{ data: [{ value: getVal(46).toFixed(1), name:'SOC' }] }] });
     if(chartSoh) chartSoh.setOption({ series: [{ data: [{ value: getVal(45).toFixed(1), name:'SOH' }] }] });
@@ -89,9 +117,9 @@ socket.on('bms-live', (data) => {
     const seriesData = voltages.map((val, index) => {
         if(val < 0.1) return { value: 0, itemStyle: { color: '#333' } };
         let color = '#6366f1';
-        if((balMask >> index) & 1) color = '#f59e0b';
-        else if(val === maxV) color = '#ec4899';
-        else if(val === minV) color = '#06b6d4';
+        if((balMask >> index) & 1) color = '#f59e0b'; // Balancing
+        else if(val === maxV) color = '#ec4899'; // Max
+        else if(val === minV) color = '#06b6d4'; // Min
         return { value: val, itemStyle: { color } };
     });
 
@@ -107,22 +135,12 @@ socket.on('bms-live', (data) => {
     document.getElementById('cell-diff-txt').innerText = (maxV - minV).toFixed(3) + ' V';
 });
 
-// --- STATS & SETTINGS ---
-socket.on('bms-stats', (data) => {
-    const container = document.getElementById('stats-container');
-    let html = '';
-    Object.values(data).forEach(reg => {
-        html += `<div class="card mini"><div style="color:#aaa; font-size:0.8em;">${reg.label}</div><div style="font-size:1.1em; font-weight:bold;">${reg.value} <span style="font-size:0.7em; color:#666;">${reg.unit}</span></div></div>`;
-    });
-    container.innerHTML = html;
-});
-
 socket.on('bms-settings', (data) => {
     if(data[300]) axisMax = data[300].value;
     if(data[301]) axisMin = data[301].value;
 
     const container = document.getElementById('settings-form-container');
-    if(container.innerHTML.includes("Loading")) container.innerHTML = "";
+    if(container.innerHTML.includes("Waiting")) container.innerHTML = "";
 
     Object.values(data).forEach(reg => {
         if (!document.getElementById(`wrapper-${reg.id}`)) {
@@ -144,6 +162,15 @@ socket.on('bms-settings', (data) => {
     });
 });
 
+socket.on('bms-stats', (data) => {
+    const container = document.getElementById('stats-container');
+    let html = '';
+    Object.values(data).forEach(reg => {
+        html += `<div class="card" style="padding:10px;"><div style="color:#aaa; font-size:0.8em;">${reg.label}</div><div style="font-size:1.1em; font-weight:bold;">${reg.value} <span style="font-size:0.7em; color:#666;">${reg.unit}</span></div></div>`;
+    });
+    container.innerHTML = html;
+});
+
 async function saveSetting(id) {
     const input = document.getElementById(`reg-${id}`);
     const btn = document.querySelector(`#wrapper-${id} .btn-save`);
@@ -158,21 +185,20 @@ async function saveSetting(id) {
         });
         const data = await res.json();
         if(data.success) btn.innerText = "✅";
-        else alert("Write failed: " + data.error);
+        else alert("Write failed");
     } catch(e) { alert("Error: " + e.message); }
-    
     setTimeout(() => { btn.innerText = originalText; btn.disabled = false; }, 1500);
 }
 
-// --- CONNECT ---
 async function fetchPorts() {
-    const res = await fetch('/api/ports');
-    const ports = await res.json();
-    document.getElementById('portSelect').innerHTML = ports.map(p => `<option value="${p.path}">${p.path}</option>`).join('');
+    try {
+        const res = await fetch('/api/ports');
+        const ports = await res.json();
+        document.getElementById('portSelect').innerHTML = ports.map(p => `<option value="${p.path}">${p.path === 'SIMULATION' ? '🛠️ SIMULATION MODE' : p.path}</option>`).join('');
+    } catch(e){}
 }
 
 async function connectBMS() {
     const path = document.getElementById('portSelect').value;
     await fetch('/api/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
-    document.getElementById('connectionStatus').classList.add('connected');
 }
