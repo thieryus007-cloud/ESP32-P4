@@ -248,13 +248,18 @@ function initCharts() {
                 max: 6000,
                 splitNumber: 6,
                 itemStyle: { color: '#6366f1' },
-                progress: { show: true, width: 5 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 4,
+                    itemStyle: { color: '#6366f1' }
+                },
                 axisLine: { lineStyle: { width: 5, color: [[1, '#333']] } },
                 axisTick: { distance: -22, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
                 splitLine: { distance: -24, length: 10, lineStyle: { width: 1.5, color: '#555' } },
                 axisLabel: { distance: -10, color: '#999', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
-                anchor: { show: false },
+                anchor: { show: true, size: 8, itemStyle: { color: '#6366f1' } },
                 title: { show: true, offsetCenter: [0, '90%'], fontSize: 12, color: '#999' },
                 detail: { valueAnimation: true, width: '60%', lineHeight: 20, borderRadius: 8, offsetCenter: [0, '-10%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
                 data: [{ value: 0, name: 'Power' }]
@@ -269,13 +274,18 @@ function initCharts() {
                 max: 120,
                 splitNumber: 4,
                 itemStyle: { color: '#10b981' },
-                progress: { show: true, width: 4 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 3,
+                    itemStyle: { color: '#10b981' }
+                },
                 axisLine: { lineStyle: { width: 4, color: [[1, '#333']] } },
                 axisTick: { distance: -18, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
                 splitLine: { distance: -20, length: 8, lineStyle: { width: 1.5, color: '#555' } },
                 axisLabel: { distance: -8, color: '#999', fontSize: 9 },
-                anchor: { show: false },
+                anchor: { show: true, size: 6, itemStyle: { color: '#10b981' } },
                 title: { show: true, offsetCenter: [0, '90%'], fontSize: 11, color: '#999' },
                 detail: { valueAnimation: true, width: '60%', lineHeight: 16, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
                 data: [{ value: 0, name: 'Current' }]
