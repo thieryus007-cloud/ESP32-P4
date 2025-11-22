@@ -225,43 +225,55 @@ function initCharts() {
         series: [
             {
                 type: 'gauge',
-                radius: '90%',
-                center: ['50%', '60%'],
+                radius: '85%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
                 max: 100,
                 splitNumber: 5,
                 itemStyle: { color: '#6366f1' },
-                progress: { show: true, width: 6 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 5,
+                    itemStyle: { color: '#6366f1' }
+                },
                 axisLine: { lineStyle: { width: 6, color: [[1, '#2a2a3a']] } },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                title: { show: true, offsetCenter: [0, '35%'], fontSize: 12, color: '#999' },
-                detail: { valueAnimation: true, offsetCenter: [0, '20%'], fontSize: 18, fontWeight: 'bolder', formatter: '{value}%', color: '#6366f1' },
-                data: [{ value: 0, name: 'SOC' }]
+                anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
+                title: { show: false },
+                detail: { valueAnimation: true, offsetCenter: ['-40%', '95%'], fontSize: 16, fontWeight: 'bolder', formatter: 'SOC {value}%', color: '#6366f1' },
+                data: [{ value: 0 }]
             },
             {
                 type: 'gauge',
-                radius: '70%',
-                center: ['50%', '60%'],
+                radius: '65%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
                 max: 100,
                 splitNumber: 5,
                 itemStyle: { color: '#10b981' },
-                progress: { show: true, width: 5 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 4,
+                    itemStyle: { color: '#10b981' }
+                },
                 axisLine: { lineStyle: { width: 5, color: [[1, '#2a2a3a']] } },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                title: { show: true, offsetCenter: [0, '65%'], fontSize: 11, color: '#999' },
-                detail: { valueAnimation: true, offsetCenter: [0, '50%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value}%', color: '#10b981' },
-                data: [{ value: 0, name: 'SOH' }]
+                anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
+                title: { show: false },
+                detail: { valueAnimation: true, offsetCenter: ['40%', '95%'], fontSize: 16, fontWeight: 'bolder', formatter: 'SOH {value}%', color: '#10b981' },
+                data: [{ value: 0 }]
             }
         ]
     });
@@ -272,63 +284,81 @@ function initCharts() {
         series: [
             {
                 type: 'gauge',
-                radius: '90%',
-                center: ['50%', '60%'],
+                radius: '85%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
                 max: 60,
                 splitNumber: 3,
                 itemStyle: { color: '#f59e0b' },
-                progress: { show: true, width: 5 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 4,
+                    itemStyle: { color: '#f59e0b' }
+                },
                 axisLine: { lineStyle: { width: 5, color: [[1, '#2a2a3a']] } },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                title: { show: true, offsetCenter: [0, '20%'], fontSize: 10, color: '#999' },
-                detail: { valueAnimation: true, offsetCenter: [0, '10%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#f59e0b' },
-                data: [{ value: 0, name: 'Internal' }]
+                anchor: { show: true, size: 8, itemStyle: { color: '#f59e0b' } },
+                title: { show: false },
+                detail: { valueAnimation: true, offsetCenter: ['-45%', '95%'], fontSize: 14, fontWeight: 'bolder', formatter: 'Int {value}°', color: '#f59e0b' },
+                data: [{ value: 0 }]
             },
             {
                 type: 'gauge',
-                radius: '70%',
-                center: ['50%', '60%'],
+                radius: '65%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
                 max: 60,
                 splitNumber: 3,
                 itemStyle: { color: '#ec4899' },
-                progress: { show: true, width: 4 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 3,
+                    itemStyle: { color: '#ec4899' }
+                },
                 axisLine: { lineStyle: { width: 4, color: [[1, '#2a2a3a']] } },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                title: { show: true, offsetCenter: [0, '50%'], fontSize: 10, color: '#999' },
-                detail: { valueAnimation: true, offsetCenter: [0, '40%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#ec4899' },
-                data: [{ value: 0, name: 'Sensor 1' }]
+                anchor: { show: true, size: 6, itemStyle: { color: '#ec4899' } },
+                title: { show: false },
+                detail: { valueAnimation: true, offsetCenter: ['0%', '95%'], fontSize: 14, fontWeight: 'bolder', formatter: 'S1 {value}°', color: '#ec4899' },
+                data: [{ value: 0 }]
             },
             {
                 type: 'gauge',
-                radius: '50%',
-                center: ['50%', '60%'],
+                radius: '45%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
                 max: 60,
                 splitNumber: 3,
                 itemStyle: { color: '#06b6d4' },
-                progress: { show: true, width: 3 },
-                pointer: { show: false },
+                progress: { show: false },
+                pointer: {
+                    show: true,
+                    length: '70%',
+                    width: 2,
+                    itemStyle: { color: '#06b6d4' }
+                },
                 axisLine: { lineStyle: { width: 3, color: [[1, '#2a2a3a']] } },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                title: { show: true, offsetCenter: [0, '80%'], fontSize: 10, color: '#999' },
-                detail: { valueAnimation: true, offsetCenter: [0, '70%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#06b6d4' },
-                data: [{ value: 0, name: 'Sensor 2' }]
+                anchor: { show: true, size: 5, itemStyle: { color: '#06b6d4' } },
+                title: { show: false },
+                detail: { valueAnimation: true, offsetCenter: ['45%', '95%'], fontSize: 14, fontWeight: 'bolder', formatter: 'S2 {value}°', color: '#06b6d4' },
+                data: [{ value: 0 }]
             }
         ]
     });
