@@ -437,7 +437,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 5, itemStyle: { color: '#06b6d4' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['65%', '200%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
+                detail: { valueAnimation: true, offsetCenter: ['130%', '200%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
                 data: [{ value: 22 }]
             }
         ]
