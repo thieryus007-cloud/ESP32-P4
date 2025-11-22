@@ -262,7 +262,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['-45%', '100%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOC {value}%', color: '#6366f1' },
+                detail: { valueAnimation: true, offsetCenter: ['-50%', '100%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOC {value}%', color: '#6366f1' },
                 data: [{ value: 80 }]
             },
             {
@@ -304,7 +304,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['45%', '133%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
+                detail: { valueAnimation: true, offsetCenter: ['50%', '133%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
                 data: [{ value: 95 }]
             }
         ]
@@ -353,7 +353,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 8, itemStyle: { color: '#f59e0b' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['-50%', '100%'], fontSize: 12, fontWeight: 'bold', formatter: 'Int {value}°', color: '#f59e0b' },
+                detail: { valueAnimation: true, offsetCenter: ['-65%', '100%'], fontSize: 12, fontWeight: 'bold', formatter: 'Int {value}°', color: '#f59e0b' },
                 data: [{ value: 25 }]
             },
             {
@@ -437,7 +437,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 5, itemStyle: { color: '#06b6d4' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['50%', '200%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
+                detail: { valueAnimation: true, offsetCenter: ['65%', '200%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
                 data: [{ value: 22 }]
             }
         ]
