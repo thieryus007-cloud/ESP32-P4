@@ -19,6 +19,33 @@ function switchTab(tabId) {
 
 function resizeCharts() { if(chartSocSoh) chartSocSoh.resize(); if(chartTemps) chartTemps.resize(); if(chartCells) chartCells.resize(); if(chartBattery) chartBattery.resize(); }
 
+// Fonction helper pour calculer les segments de couleur de l'arc
+function getColoredAxisLine(values, min, max, defaultColor = '#2a2a3a') {
+    // values: array de {value: number, color: string}
+    // Trier les valeurs par ordre croissant
+    const sorted = values.map(v => ({
+        normalized: (v.value - min) / (max - min),
+        color: v.color
+    })).sort((a, b) => a.normalized - b.normalized);
+
+    const segments = [];
+    let prevNorm = 0;
+
+    sorted.forEach((item) => {
+        if (item.normalized > prevNorm) {
+            segments.push([item.normalized, item.color]);
+        }
+        prevNorm = item.normalized;
+    });
+
+    // Ajouter le segment final avec la couleur par défaut si nécessaire
+    if (prevNorm < 1) {
+        segments.push([1, defaultColor]);
+    }
+
+    return segments;
+}
+
 function updateConnectionUI(mode) {
     const dot = document.getElementById('connectionDot');
     const badge = document.getElementById('modeBadge');
@@ -175,21 +202,43 @@ socket.on('bms-live', (data) => {
 
     // Mise à jour du gauge SOC/SOH
     if(chartSocSoh) {
+        const socVal = parseFloat(getVal(46).toFixed(1));
+        const sohVal = parseFloat(getVal(45).toFixed(1));
+        const socSohColors = getColoredAxisLine([
+            { value: socVal, color: '#6366f1' },
+            { value: sohVal, color: '#10b981' }
+        ], 20, 100);
+
         chartSocSoh.setOption({
             series: [
-                { data: [{ value: getVal(46).toFixed(1), name: 'SOC' }] },
-                { data: [{ value: getVal(45).toFixed(1), name: 'SOH' }] }
+                {
+                    data: [{ value: socVal, name: 'SOC' }],
+                    axisLine: { lineStyle: { width: 5, color: socSohColors } }
+                },
+                { data: [{ value: sohVal, name: 'SOH' }] }
             ]
         });
     }
 
     // Mise à jour du gauge températures
     if(chartTemps) {
+        const tempInt = parseFloat(getVal(48).toFixed(1));
+        const tempS1 = parseFloat(getVal(42).toFixed(1));
+        const tempS2 = parseFloat(getVal(43).toFixed(1));
+        const tempColors = getColoredAxisLine([
+            { value: tempS2, color: '#06b6d4' },
+            { value: tempS1, color: '#ec4899' },
+            { value: tempInt, color: '#f59e0b' }
+        ], 0, 70);
+
         chartTemps.setOption({
             series: [
-                { data: [{ value: getVal(48).toFixed(1), name: 'Internal' }] },
-                { data: [{ value: getVal(42).toFixed(1), name: 'Sensor 1' }] },
-                { data: [{ value: getVal(43).toFixed(1), name: 'Sensor 2' }] }
+                {
+                    data: [{ value: tempInt, name: 'Internal' }],
+                    axisLine: { lineStyle: { width: 4, color: tempColors } }
+                },
+                { data: [{ value: tempS1, name: 'Sensor 1' }] },
+                { data: [{ value: tempS2, name: 'Sensor 2' }] }
             ]
         });
     }
@@ -221,6 +270,11 @@ socket.on('bms-live', (data) => {
 function initCharts() {
     // Gauge combinée SOC/SOH
     chartSocSoh = echarts.init(document.getElementById('chart-soc-soh'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+    const socSohColors = getColoredAxisLine([
+        { value: 80, color: '#6366f1' },
+        { value: 95, color: '#10b981' }
+    ], 20, 100);
+
     chartSocSoh.setOption({
         series: [
             {
@@ -240,7 +294,7 @@ function initCharts() {
                     width: 5,
                     itemStyle: { color: '#6366f1' }
                 },
-                axisLine: { lineStyle: { width: 5, color: [[1, '#2a2a3a']] } },
+                axisLine: { lineStyle: { width: 5, color: socSohColors } },
                 axisTick: {
                     show: true,
                     distance: -18,
@@ -296,6 +350,12 @@ function initCharts() {
 
     // Gauge multi-températures
     chartTemps = echarts.init(document.getElementById('chart-temps'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+    const tempColors = getColoredAxisLine([
+        { value: 22, color: '#06b6d4' },
+        { value: 23, color: '#ec4899' },
+        { value: 25, color: '#f59e0b' }
+    ], 0, 70);
+
     chartTemps.setOption({
         series: [
             {
@@ -315,7 +375,7 @@ function initCharts() {
                     width: 4,
                     itemStyle: { color: '#f59e0b' }
                 },
-                axisLine: { lineStyle: { width: 4, color: [[1, '#2a2a3a']] } },
+                axisLine: { lineStyle: { width: 4, color: tempColors } },
                 axisTick: {
                     show: true,
                     distance: -16,
