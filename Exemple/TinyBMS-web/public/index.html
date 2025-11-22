@@ -35,9 +35,9 @@
                     <span id="bmsState">UNKNOWN</span>
                 </header>
                 <div class="top-row">
-                    <div class="card gauge-card"><h3>SOC %</h3><div id="chart-soc" class="chart-box"></div></div>
+                    <div class="card gauge-card"><h3>Battery Status</h3><div id="chart-soc-soh" class="chart-box"></div></div>
                     <div class="card gauge-card"><h3>Battery Monitor</h3><div id="chart-battery" class="chart-box"></div></div>
-                    <div class="card gauge-card"><h3>Health</h3><div id="chart-soh" class="chart-box"></div></div>
+                    <div class="card gauge-card"><h3>Temperatures</h3><div id="chart-temps" class="chart-box"></div></div>
                 </div>
 
                 <div class="middle-row">
@@ -55,17 +55,6 @@
                             <span>Min: <strong id="cell-min-txt" style="color:var(--info)">--</strong></span>
                             <span>Max: <strong id="cell-max-txt" style="color:var(--danger)">--</strong></span>
                             <span>Delta: <strong id="cell-diff-txt" style="color:var(--warning)">--</strong></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bottom-row">
-                    <div class="card">
-                        <h3>Temperatures</h3>
-                        <div class="temp-grid">
-                            <div class="temp-item"><span>Internal</span><strong id="temp-int">--</strong></div>
-                            <div class="temp-item"><span>Sensor 1</span><strong id="temp-ext1">--</strong></div>
-                            <div class="temp-item"><span>Sensor 2</span><strong id="temp-ext2">--</strong></div>
                         </div>
                     </div>
                 </div>

@@ -1,5 +1,5 @@
 const socket = io();
-let chartSoc = null, chartSoh = null, chartCells = null, chartBattery = null;
+let chartSocSoh = null, chartTemps = null, chartCells = null, chartBattery = null;
 let axisMin = 2.8, axisMax = 4.2;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,7 +17,7 @@ function switchTab(tabId) {
     if (tabId === 'dashboard') setTimeout(resizeCharts, 50);
 }
 
-function resizeCharts() { if(chartSoc) chartSoc.resize(); if(chartSoh) chartSoh.resize(); if(chartCells) chartCells.resize(); if(chartBattery) chartBattery.resize(); }
+function resizeCharts() { if(chartSocSoh) chartSocSoh.resize(); if(chartTemps) chartTemps.resize(); if(chartCells) chartCells.resize(); if(chartBattery) chartBattery.resize(); }
 
 function updateConnectionUI(mode) {
     const dot = document.getElementById('connectionDot');
@@ -173,12 +173,26 @@ socket.on('bms-live', (data) => {
     sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
     sEl.style.color = sVal===0x9B?'var(--danger)':(sVal===0x91?'var(--success)':'#fff');
 
-    document.getElementById('temp-int').innerText = getVal(48).toFixed(1)+'°';
-    document.getElementById('temp-ext1').innerText = getVal(42).toFixed(1)+'°';
-    document.getElementById('temp-ext2').innerText = getVal(43).toFixed(1)+'°';
+    // Mise à jour du gauge SOC/SOH
+    if(chartSocSoh) {
+        chartSocSoh.setOption({
+            series: [
+                { data: [{ value: getVal(46).toFixed(1), name: 'SOC' }] },
+                { data: [{ value: getVal(45).toFixed(1), name: 'SOH' }] }
+            ]
+        });
+    }
 
-    if(chartSoc) chartSoc.setOption({ series: [{ data: [{ value: getVal(46).toFixed(1), name:'SOC' }] }] });
-    if(chartSoh) chartSoh.setOption({ series: [{ data: [{ value: getVal(45).toFixed(1), name:'SOH' }] }] });
+    // Mise à jour du gauge températures
+    if(chartTemps) {
+        chartTemps.setOption({
+            series: [
+                { data: [{ value: getVal(48).toFixed(1), name: 'Internal' }] },
+                { data: [{ value: getVal(42).toFixed(1), name: 'Sensor 1' }] },
+                { data: [{ value: getVal(43).toFixed(1), name: 'Sensor 2' }] }
+            ]
+        });
+    }
 
     const voltages = [], balMask = getVal(52);
     let minV=99, maxV=0;
@@ -205,13 +219,119 @@ socket.on('bms-live', (data) => {
 });
 
 function initCharts() {
-    const gauge = (col, name) => ({
-        series: [{ type: 'gauge', radius:'100%', center:['50%','70%'], startAngle:180, endAngle:0, min:0, max:100, splitNumber:5, axisLine:{lineStyle:{width:8,color:[[1,'#333']]}}, progress:{show:true,width:8,itemStyle:{color:col}}, pointer:{show:false}, axisLabel:{show:false}, axisTick:{show:false}, splitLine:{show:false}, detail:{valueAnimation:true,offsetCenter:[0,'-20%'],fontSize:24,formatter:'{value}%',color:'#fff'}, data:[{value:0,name}] }]
+    // Gauge combinée SOC/SOH
+    chartSocSoh = echarts.init(document.getElementById('chart-soc-soh'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+    chartSocSoh.setOption({
+        series: [
+            {
+                type: 'gauge',
+                radius: '90%',
+                center: ['50%', '60%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 100,
+                splitNumber: 5,
+                itemStyle: { color: '#6366f1' },
+                progress: { show: true, width: 6 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 6, color: [[1, '#2a2a3a']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '35%'], fontSize: 12, color: '#999' },
+                detail: { valueAnimation: true, offsetCenter: [0, '20%'], fontSize: 18, fontWeight: 'bolder', formatter: '{value}%', color: '#6366f1' },
+                data: [{ value: 0, name: 'SOC' }]
+            },
+            {
+                type: 'gauge',
+                radius: '70%',
+                center: ['50%', '60%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 100,
+                splitNumber: 5,
+                itemStyle: { color: '#10b981' },
+                progress: { show: true, width: 5 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 5, color: [[1, '#2a2a3a']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '65%'], fontSize: 11, color: '#999' },
+                detail: { valueAnimation: true, offsetCenter: [0, '50%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value}%', color: '#10b981' },
+                data: [{ value: 0, name: 'SOH' }]
+            }
+        ]
     });
-    chartSoc = echarts.init(document.getElementById('chart-soc'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
-    chartSoc.setOption(gauge('#6366f1','SOC'));
-    chartSoh = echarts.init(document.getElementById('chart-soh'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
-    chartSoh.setOption(gauge('#10b981','SOH'));
+
+    // Gauge multi-températures
+    chartTemps = echarts.init(document.getElementById('chart-temps'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+    chartTemps.setOption({
+        series: [
+            {
+                type: 'gauge',
+                radius: '90%',
+                center: ['50%', '60%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 60,
+                splitNumber: 3,
+                itemStyle: { color: '#f59e0b' },
+                progress: { show: true, width: 5 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 5, color: [[1, '#2a2a3a']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '20%'], fontSize: 10, color: '#999' },
+                detail: { valueAnimation: true, offsetCenter: [0, '10%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#f59e0b' },
+                data: [{ value: 0, name: 'Internal' }]
+            },
+            {
+                type: 'gauge',
+                radius: '70%',
+                center: ['50%', '60%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 60,
+                splitNumber: 3,
+                itemStyle: { color: '#ec4899' },
+                progress: { show: true, width: 4 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 4, color: [[1, '#2a2a3a']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '50%'], fontSize: 10, color: '#999' },
+                detail: { valueAnimation: true, offsetCenter: [0, '40%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#ec4899' },
+                data: [{ value: 0, name: 'Sensor 1' }]
+            },
+            {
+                type: 'gauge',
+                radius: '50%',
+                center: ['50%', '60%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 60,
+                splitNumber: 3,
+                itemStyle: { color: '#06b6d4' },
+                progress: { show: true, width: 3 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 3, color: [[1, '#2a2a3a']] } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '80%'], fontSize: 10, color: '#999' },
+                detail: { valueAnimation: true, offsetCenter: [0, '70%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value}°C', color: '#06b6d4' },
+                data: [{ value: 0, name: 'Sensor 2' }]
+            }
+        ]
+    });
 
     // Triple gauge pour Voltage, Power, Current
     chartBattery = echarts.init(document.getElementById('chart-battery'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
