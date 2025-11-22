@@ -1,5 +1,5 @@
 const socket = io();
-let chartSoc = null, chartSoh = null, chartCells = null;
+let chartSoc = null, chartSoh = null, chartCells = null, chartBattery = null;
 let axisMin = 2.8, axisMax = 4.2;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,7 +17,7 @@ function switchTab(tabId) {
     if (tabId === 'dashboard') setTimeout(resizeCharts, 50);
 }
 
-function resizeCharts() { if(chartSoc) chartSoc.resize(); if(chartSoh) chartSoh.resize(); if(chartCells) chartCells.resize(); }
+function resizeCharts() { if(chartSoc) chartSoc.resize(); if(chartSoh) chartSoh.resize(); if(chartCells) chartCells.resize(); if(chartBattery) chartBattery.resize(); }
 
 function updateConnectionUI(mode) {
     const dot = document.getElementById('connectionDot');
@@ -153,10 +153,21 @@ socket.on('bms-live', (data) => {
     if(!data) return;
     const getVal = (id) => data[id] ? data[id].value : 0;
 
-    document.getElementById('val-voltage').innerText = getVal(36).toFixed(2);
-    document.getElementById('val-current').innerText = getVal(38).toFixed(2);
-    document.getElementById('val-power').innerText = (getVal(36) * getVal(38)).toFixed(0);
-    
+    const voltage = getVal(36);
+    const current = getVal(38);
+    const power = voltage * current;
+
+    // Mise à jour du triple gauge
+    if(chartBattery) {
+        chartBattery.setOption({
+            series: [
+                { data: [{ value: voltage.toFixed(2), name: 'Voltage' }] },
+                { data: [{ value: power.toFixed(0), name: 'Power' }] },
+                { data: [{ value: current.toFixed(2), name: 'Current' }] }
+            ]
+        });
+    }
+
     const sVal = getVal(50);
     const sEl = document.getElementById('bmsState');
     sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
@@ -201,6 +212,77 @@ function initCharts() {
     chartSoc.setOption(gauge('#6366f1','SOC'));
     chartSoh = echarts.init(document.getElementById('chart-soh'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
     chartSoh.setOption(gauge('#10b981','SOH'));
+
+    // Triple gauge pour Voltage, Power, Current
+    chartBattery = echarts.init(document.getElementById('chart-battery'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+    chartBattery.setOption({
+        series: [
+            {
+                type: 'gauge',
+                radius: '45%',
+                center: ['20%', '55%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 40,
+                max: 60,
+                splitNumber: 4,
+                itemStyle: { color: '#06b6d4' },
+                progress: { show: true, width: 6 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 6, color: [[1, '#333']] } },
+                axisTick: { distance: -20, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
+                splitLine: { distance: -22, length: 8, lineStyle: { width: 2, color: '#555' } },
+                axisLabel: { distance: -10, color: '#999', fontSize: 10 },
+                anchor: { show: false },
+                title: { show: true, offsetCenter: [0, '90%'], fontSize: 12, color: '#999' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 20, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
+                data: [{ value: 50, name: 'Voltage' }]
+            },
+            {
+                type: 'gauge',
+                radius: '55%',
+                center: ['50%', '55%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: -6000,
+                max: 6000,
+                splitNumber: 6,
+                itemStyle: { color: '#6366f1' },
+                progress: { show: true, width: 8 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 8, color: [[1, '#333']] } },
+                axisTick: { distance: -25, splitNumber: 5, lineStyle: { width: 1.5, color: '#555' } },
+                splitLine: { distance: -28, length: 10, lineStyle: { width: 2, color: '#555' } },
+                axisLabel: { distance: -12, color: '#999', fontSize: 11, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
+                anchor: { show: false },
+                title: { show: true, offsetCenter: [0, '90%'], fontSize: 14, color: '#999' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 24, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 20, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
+                data: [{ value: 0, name: 'Power' }]
+            },
+            {
+                type: 'gauge',
+                radius: '45%',
+                center: ['80%', '55%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: -120,
+                max: 120,
+                splitNumber: 4,
+                itemStyle: { color: '#10b981' },
+                progress: { show: true, width: 6 },
+                pointer: { show: false },
+                axisLine: { lineStyle: { width: 6, color: [[1, '#333']] } },
+                axisTick: { distance: -20, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
+                splitLine: { distance: -22, length: 8, lineStyle: { width: 2, color: '#555' } },
+                axisLabel: { distance: -10, color: '#999', fontSize: 10 },
+                anchor: { show: false },
+                title: { show: true, offsetCenter: [0, '90%'], fontSize: 12, color: '#999' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 20, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
+                data: [{ value: 0, name: 'Current' }]
+            }
+        ]
+    });
+
     chartCells = echarts.init(document.getElementById('chart-cells'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
     chartCells.setOption({
         tooltip: { trigger:'axis', formatter:(p)=>`C${p[0].name}: <b>${p[0].value} V</b>` },
