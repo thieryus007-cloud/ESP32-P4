@@ -161,9 +161,9 @@ socket.on('bms-live', (data) => {
     if(chartBattery) {
         chartBattery.setOption({
             series: [
-                { data: [{ value: voltage.toFixed(2), name: 'Voltage' }] },
-                { data: [{ value: power.toFixed(0), name: 'Power' }] },
-                { data: [{ value: current.toFixed(2), name: 'Current' }] }
+                { data: [{ value: voltage.toFixed(2) }] },
+                { data: [{ value: power.toFixed(0) }] },
+                { data: [{ value: current.toFixed(2) }] }
             ]
         });
     }
@@ -234,9 +234,9 @@ function initCharts() {
                 splitLine: { distance: -20, length: 8, lineStyle: { width: 1.5, color: '#555' } },
                 axisLabel: { distance: -8, color: '#999', fontSize: 9 },
                 anchor: { show: false },
-                title: { show: true, offsetCenter: [0, '90%'], fontSize: 11, color: '#999' },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 16, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
-                data: [{ value: 50, name: 'Voltage' }]
+                title: { show: false },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
+                data: [{ value: 50 }]
             },
             {
                 type: 'gauge',
@@ -260,9 +260,9 @@ function initCharts() {
                 splitLine: { distance: -24, length: 10, lineStyle: { width: 1.5, color: '#555' } },
                 axisLabel: { distance: -10, color: '#999', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
                 anchor: { show: true, size: 8, itemStyle: { color: '#6366f1' } },
-                title: { show: true, offsetCenter: [0, '90%'], fontSize: 12, color: '#999' },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 20, borderRadius: 8, offsetCenter: [0, '-10%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
-                data: [{ value: 0, name: 'Power' }]
+                title: { show: false },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
+                data: [{ value: 0 }]
             },
             {
                 type: 'gauge',
@@ -286,9 +286,9 @@ function initCharts() {
                 splitLine: { distance: -20, length: 8, lineStyle: { width: 1.5, color: '#555' } },
                 axisLabel: { distance: -8, color: '#999', fontSize: 9 },
                 anchor: { show: true, size: 6, itemStyle: { color: '#10b981' } },
-                title: { show: true, offsetCenter: [0, '90%'], fontSize: 11, color: '#999' },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 16, borderRadius: 8, offsetCenter: [0, '0%'], fontSize: 13, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
-                data: [{ value: 0, name: 'Current' }]
+                title: { show: false },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
+                data: [{ value: 0 }]
             }
         ]
     });
