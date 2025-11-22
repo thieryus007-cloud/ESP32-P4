@@ -267,7 +267,7 @@ function initCharts() {
             },
             {
                 type: 'gauge',
-                radius: '60%',
+                radius: '80%',
                 center: ['50%', '45%'],
                 startAngle: 200,
                 endAngle: -20,
@@ -278,33 +278,17 @@ function initCharts() {
                 progress: { show: false },
                 pointer: {
                     show: true,
-                    length: '70%',
+                    length: '60%',
                     width: 4,
                     itemStyle: { color: '#10b981' }
                 },
-                axisLine: { lineStyle: { width: 4, color: [[1, '#2a2a3a']] } },
-                axisTick: {
-                    show: true,
-                    distance: -14,
-                    length: 5,
-                    splitNumber: 5,
-                    lineStyle: { width: 1, color: '#555' }
-                },
-                splitLine: {
-                    show: true,
-                    distance: -14,
-                    length: 10,
-                    lineStyle: { width: 2, color: '#888' }
-                },
-                axisLabel: {
-                    show: true,
-                    distance: -2,
-                    color: '#999',
-                    fontSize: 8
-                },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
                 anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['50%', '133%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
+                detail: { valueAnimation: true, offsetCenter: ['50%', '100%'], fontSize: 13, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
                 data: [{ value: 95 }]
             }
         ]
@@ -358,7 +342,7 @@ function initCharts() {
             },
             {
                 type: 'gauge',
-                radius: '60%',
+                radius: '80%',
                 center: ['50%', '45%'],
                 startAngle: 200,
                 endAngle: -20,
@@ -369,38 +353,22 @@ function initCharts() {
                 progress: { show: false },
                 pointer: {
                     show: true,
-                    length: '70%',
+                    length: '60%',
                     width: 3,
                     itemStyle: { color: '#ec4899' }
                 },
-                axisLine: { lineStyle: { width: 3, color: [[1, '#2a2a3a']] } },
-                axisTick: {
-                    show: true,
-                    distance: -12,
-                    length: 4,
-                    splitNumber: 2,
-                    lineStyle: { width: 1, color: '#555' }
-                },
-                splitLine: {
-                    show: true,
-                    distance: -12,
-                    length: 8,
-                    lineStyle: { width: 1.5, color: '#888' }
-                },
-                axisLabel: {
-                    show: true,
-                    distance: 0,
-                    color: '#999',
-                    fontSize: 7
-                },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
                 anchor: { show: true, size: 6, itemStyle: { color: '#ec4899' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['0%', '133%'], fontSize: 12, fontWeight: 'bold', formatter: 'S1 {value}°', color: '#ec4899' },
+                detail: { valueAnimation: true, offsetCenter: ['0%', '100%'], fontSize: 12, fontWeight: 'bold', formatter: 'S1 {value}°', color: '#ec4899' },
                 data: [{ value: 23 }]
             },
             {
                 type: 'gauge',
-                radius: '40%',
+                radius: '80%',
                 center: ['50%', '45%'],
                 startAngle: 200,
                 endAngle: -20,
@@ -411,33 +379,17 @@ function initCharts() {
                 progress: { show: false },
                 pointer: {
                     show: true,
-                    length: '70%',
+                    length: '50%',
                     width: 2,
                     itemStyle: { color: '#06b6d4' }
                 },
-                axisLine: { lineStyle: { width: 2.5, color: [[1, '#2a2a3a']] } },
-                axisTick: {
-                    show: true,
-                    distance: -10,
-                    length: 3,
-                    splitNumber: 2,
-                    lineStyle: { width: 1, color: '#555' }
-                },
-                splitLine: {
-                    show: true,
-                    distance: -10,
-                    length: 6,
-                    lineStyle: { width: 1.5, color: '#888' }
-                },
-                axisLabel: {
-                    show: true,
-                    distance: 2,
-                    color: '#999',
-                    fontSize: 6
-                },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
                 anchor: { show: true, size: 5, itemStyle: { color: '#06b6d4' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['130%', '200%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
+                detail: { valueAnimation: true, offsetCenter: ['65%', '100%'], fontSize: 12, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
                 data: [{ value: 22 }]
             }
         ]
