@@ -349,9 +349,9 @@ function initCharts() {
                 },
                 axisLabel: {
                     show: true,
-                    distance: 22,
+                    distance: 10,
                     color: '#ddd',
-                    fontSize: 11
+                    fontSize: 10
                 },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
