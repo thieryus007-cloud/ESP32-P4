@@ -504,7 +504,7 @@ function initCharts() {
             },
             {
                 type: 'gauge',
-                radius: '65%',
+                radius: '90%',
                 center: ['50%', '60%'],
                 startAngle: 180,
                 endAngle: 0,
