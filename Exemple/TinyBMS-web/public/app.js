@@ -61,17 +61,32 @@ socket.on('bms-settings', (data) => {
     if(data[300]) axisMax = data[300].value;
     if(data[301]) axisMin = data[301].value;
 
-    // Update dashboard summary information from settings
+    // Update dashboard configuration summary
     if(data[340]) {
         const modeValue = data[340].value;
         const modeText = modeValue === 0 ? 'Dual Port Mode' : modeValue === 1 ? 'Single Port Mode' : 'Unknown';
         document.getElementById('info-mode').innerText = modeText;
+    }
+    if(data[306]) {
+        document.getElementById('info-capacity').innerText = `${data[306].value} ${data[306].unit}`;
+    }
+    if(data[307]) {
+        document.getElementById('info-cells-count').innerText = data[307].value;
+    }
+    if(data[315]) {
+        document.getElementById('info-ov-cutoff').innerText = `${data[315].value} ${data[315].unit}`;
+    }
+    if(data[316]) {
+        document.getElementById('info-uv-cutoff').innerText = `${data[316].value} ${data[316].unit}`;
     }
     if(data[317]) {
         document.getElementById('info-discharge-oc').innerText = `${data[317].value} ${data[317].unit}`;
     }
     if(data[318]) {
         document.getElementById('info-charge-oc').innerText = `${data[318].value} ${data[318].unit}`;
+    }
+    if(data[305]) {
+        document.getElementById('info-peak-discharge').innerText = `${data[305].value} ${data[305].unit}`;
     }
 
     const groups = ['battery', 'safety', 'balance', 'hardware'];
@@ -196,20 +211,6 @@ socket.on('bms-live', (data) => {
     const voltage = getVal(36);
     const current = getVal(38);
     const power = voltage * current;
-
-    // Update dashboard summary information from live data
-    const sVal = getVal(50);
-    const statusText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
-    document.getElementById('info-status').innerText = statusText;
-    document.getElementById('info-voltage').innerText = `${voltage.toFixed(2)} V`;
-    document.getElementById('info-current').innerText = `${current.toFixed(2)} A`;
-
-    const socVal = getVal(46);
-    const sohVal = getVal(45);
-    document.getElementById('info-soc-soh').innerText = `${socVal.toFixed(1)}% / ${sohVal.toFixed(1)}%`;
-
-    const tempInt = getVal(48);
-    document.getElementById('info-temp').innerText = `${tempInt.toFixed(1)} °C`;
 
     // Mise à jour du triple gauge
     if(chartBattery) {
