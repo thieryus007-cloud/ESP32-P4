@@ -453,7 +453,8 @@ function initCharts() {
                 },
                 axisLabel: {
                     show: true,
-                    distance: 20
+                    fontSize: 10,
+                    distance: 15
                 },
                 splitLine: {
                     show: true,
