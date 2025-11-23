@@ -512,7 +512,7 @@ function initCharts() {
                 max: 5000,
                 splitNumber: 6,
                 itemStyle: { color: '#6366f1' },
-                progress: { show: false },
+                progress: { show: true, width: 4 },
                 pointer: {
                     show: true,
                     length: '65%',
@@ -538,7 +538,7 @@ function initCharts() {
                 max: 120,
                 splitNumber: 4,
                 itemStyle: { color: '#10b981' },
-                progress: { show: false },
+                progress: { show: true, width: 4 },
                 pointer: {
                     show: true,
                     length: '65%',
