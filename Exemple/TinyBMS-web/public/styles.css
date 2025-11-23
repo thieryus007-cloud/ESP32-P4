@@ -42,8 +42,9 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .middle-row { flex: 1; min-height: 350px; }
 .bottom-row { display: grid; grid-template-columns: 1fr; gap: 20px; height: 120px; }
 .card { background: var(--bg-panel); padding: 15px; border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; }
+.gauge-card { padding: 10px 12px; }
 .chart-main { justify-content: flex-start; }
-h3 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; text-transform: uppercase; }
+h3 { font-size: 0.7em; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 .value { font-size: 2em; font-weight: 800; } .unit { font-size: 0.5em; color: var(--text-muted); }
 
 .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -63,20 +64,20 @@ h3 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; font-weig
 
 /* BMS Info Summary Section - Top Banner */
 .bms-info-summary {
-    margin-bottom: 15px;
+    margin-bottom: 12px;
     border: 1px solid rgba(99, 102, 241, 0.3);
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.03) 100%);
-    padding: 12px 15px;
+    padding: 8px 12px;
 }
 .info-summary-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
+    gap: 8px;
 }
 .info-item {
     display: flex;
     flex-direction: column;
-    padding: 8px 12px;
+    padding: 6px 10px;
     background: var(--bg-dark);
     border-radius: 6px;
     border: 1px solid var(--border);
@@ -91,22 +92,22 @@ h3 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; font-weig
     color: var(--success);
 }
 .info-label {
-    font-size: 0.7em;
+    font-size: 0.6em;
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 .info-value {
-    font-size: 1.1em;
+    font-size: 0.9em;
     color: var(--primary);
     font-weight: 700;
     font-family: monospace;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 .info-register {
-    font-size: 0.6em;
+    font-size: 0.55em;
     color: #555;
     font-family: monospace;
 }
