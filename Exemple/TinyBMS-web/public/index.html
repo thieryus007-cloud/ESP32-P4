@@ -34,6 +34,54 @@
                     <h1>Dashboard</h1>
                     <span id="bmsState">UNKNOWN</span>
                 </header>
+
+                <!-- BMS Key Information Summary -->
+                <div class="card bms-info-summary">
+                    <h3>🔑 Key BMS Information</h3>
+                    <div class="info-summary-grid">
+                        <div class="info-item">
+                            <span class="info-label">BMS Status</span>
+                            <span class="info-value" id="info-status">--</span>
+                            <span class="info-register">[50]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Operation Mode</span>
+                            <span class="info-value" id="info-mode">--</span>
+                            <span class="info-register">[340]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Pack Voltage</span>
+                            <span class="info-value" id="info-voltage">--</span>
+                            <span class="info-register">[36]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Pack Current</span>
+                            <span class="info-value" id="info-current">--</span>
+                            <span class="info-register">[38]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">SOC / SOH</span>
+                            <span class="info-value" id="info-soc-soh">--</span>
+                            <span class="info-register">[46/45]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Internal Temp</span>
+                            <span class="info-value" id="info-temp">--</span>
+                            <span class="info-register">[48]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Discharge OC Limit</span>
+                            <span class="info-value" id="info-discharge-oc">--</span>
+                            <span class="info-register">[317]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Charge OC Limit</span>
+                            <span class="info-value" id="info-charge-oc">--</span>
+                            <span class="info-register">[318]</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="top-row">
                     <div class="card gauge-card"><h3>Battery Status</h3><div id="chart-soc-soh" class="chart-box"></div></div>
                     <div class="card gauge-card"><h3>Battery Monitor</h3><div id="chart-battery" class="chart-box"></div></div>
@@ -62,29 +110,6 @@
 
             <div id="settings" class="tab-content">
                 <header><h1>Configuration (Read/Write)</h1></header>
-
-                <!-- BMS Key Information Summary -->
-                <div class="card bms-info-summary">
-                    <h3>🔑 Key BMS Information</h3>
-                    <div class="info-summary-grid">
-                        <div class="info-item">
-                            <span class="info-label">BMS Operation Mode</span>
-                            <span class="info-value" id="info-mode">--</span>
-                            <span class="info-register">[340]</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Discharge Over Current</span>
-                            <span class="info-value" id="info-discharge-oc">--</span>
-                            <span class="info-register">[317]</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Charge Over Current</span>
-                            <span class="info-value" id="info-charge-oc">--</span>
-                            <span class="info-register">[318]</span>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="settings-grid-layout">
                     <div class="card settings-card">
                         <div class="group-header"><h3>🔋 Battery</h3><button onclick="saveSection('battery')">Save</button></div>

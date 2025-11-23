@@ -61,7 +61,7 @@ socket.on('bms-settings', (data) => {
     if(data[300]) axisMax = data[300].value;
     if(data[301]) axisMin = data[301].value;
 
-    // Update summary information at top of settings page
+    // Update dashboard summary information from settings
     if(data[340]) {
         const modeValue = data[340].value;
         const modeText = modeValue === 0 ? 'Dual Port Mode' : modeValue === 1 ? 'Single Port Mode' : 'Unknown';
@@ -196,6 +196,20 @@ socket.on('bms-live', (data) => {
     const voltage = getVal(36);
     const current = getVal(38);
     const power = voltage * current;
+
+    // Update dashboard summary information from live data
+    const sVal = getVal(50);
+    const statusText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
+    document.getElementById('info-status').innerText = statusText;
+    document.getElementById('info-voltage').innerText = `${voltage.toFixed(2)} V`;
+    document.getElementById('info-current').innerText = `${current.toFixed(2)} A`;
+
+    const socVal = getVal(46);
+    const sohVal = getVal(45);
+    document.getElementById('info-soc-soh').innerText = `${socVal.toFixed(1)}% / ${sohVal.toFixed(1)}%`;
+
+    const tempInt = getVal(48);
+    document.getElementById('info-temp').innerText = `${tempInt.toFixed(1)} °C`;
 
     // Mise à jour du triple gauge
     if(chartBattery) {
