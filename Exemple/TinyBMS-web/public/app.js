@@ -245,19 +245,40 @@ socket.on('bms-live', (data) => {
         });
     }
 
-    // Mise à jour du gauge températures (échelle 0-100)
+    // Mise à jour du gauge températures - Format de l'exemple ECharts
     if(chartTemps) {
         const tempInt = parseFloat(getVal(48).toFixed(1));
         const tempS1 = parseFloat(getVal(42).toFixed(1));
         const tempS2 = parseFloat(getVal(43).toFixed(1));
 
+        const tempGaugeData = [
+            {
+                value: tempS2,
+                name: 'S2',
+                title: { offsetCenter: ['-40%', '80%'] },
+                detail: { offsetCenter: ['-40%', '95%'] },
+                itemStyle: { color: '#06b6d4' }
+            },
+            {
+                value: tempS1,
+                name: 'S1',
+                title: { offsetCenter: ['0%', '80%'] },
+                detail: { offsetCenter: ['0%', '95%'] },
+                itemStyle: { color: '#ec4899' }
+            },
+            {
+                value: tempInt,
+                name: 'Int',
+                title: { offsetCenter: ['40%', '80%'] },
+                detail: { offsetCenter: ['40%', '95%'] },
+                itemStyle: { color: '#f59e0b' }
+            }
+        ];
+
         chartTemps.setOption({
-            series: [
-                {}, // Arc de fond (pas de mise à jour)
-                { data: [{ value: tempS2, name: 'S2' }] },  // Série 1: S2
-                { data: [{ value: tempS1, name: 'S1' }] },  // Série 2: S1
-                { data: [{ value: tempInt, name: 'Int' }] } // Série 3: Int
-            ]
+            series: [{
+                data: tempGaugeData
+            }]
         });
     }
 
@@ -366,196 +387,77 @@ function initCharts() {
         ]
     });
 
-    // Gauge multi-températures - Style ECharts Multi-Title (EXACT)
+    // Gauge multi-températures - CODE SOURCE EXACT de l'exemple ECharts
     chartTemps = echarts.init(document.getElementById('chart-temps'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
+
+    const tempGaugeData = [
+        {
+            value: 25,
+            name: 'S2',
+            title: { offsetCenter: ['-40%', '80%'] },
+            detail: { offsetCenter: ['-40%', '95%'] },
+            itemStyle: { color: '#06b6d4' }
+        },
+        {
+            value: 40,
+            name: 'S1',
+            title: { offsetCenter: ['0%', '80%'] },
+            detail: { offsetCenter: ['0%', '95%'] },
+            itemStyle: { color: '#ec4899' }
+        },
+        {
+            value: 55,
+            name: 'Int',
+            title: { offsetCenter: ['40%', '80%'] },
+            detail: { offsetCenter: ['40%', '95%'] },
+            itemStyle: { color: '#f59e0b' }
+        }
+    ];
 
     chartTemps.setOption({
         series: [
-            // Arc de fond avec zones colorées et labels
             {
                 type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
-                startAngle: 225,
-                endAngle: -45,
                 min: 0,
                 max: 100,
-                splitNumber: 10,
-                progress: { show: false },
-                pointer: { show: false },
-                axisLine: {
-                    lineStyle: {
-                        width: 30,
-                        color: [
-                            [0.33, '#5470c6'],  // Good (Bleu)
-                            [0.66, '#91cc75'],  // Better (Vert)
-                            [1, '#ee6666']      // Hot (Rouge)
-                        ]
-                    }
-                },
-                axisTick: {
-                    show: true,
-                    distance: -30,
-                    length: 8,
-                    splitNumber: 5,
-                    lineStyle: { width: 2, color: '#fff' }
-                },
-                splitLine: {
-                    show: true,
-                    distance: -30,
-                    length: 14,
-                    lineStyle: { width: 3, color: '#fff' }
-                },
-                axisLabel: {
-                    show: true,
-                    distance: 45,
-                    color: '#999',
-                    fontSize: 10
-                },
-                anchor: { show: false },
-                title: { show: false },
-                detail: { show: false },
-                data: []
-            },
-            // Aiguille S2 (Cyan) - la plus courte
-            {
-                type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
-                startAngle: 225,
-                endAngle: -45,
-                min: 0,
-                max: 100,
-                pointer: {
-                    show: true,
-                    length: '50%',
-                    width: 5,
-                    itemStyle: { color: '#06b6d4' }
-                },
-                progress: { show: false },
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
-                anchor: {
-                    show: true,
-                    size: 8,
-                    itemStyle: { color: '#06b6d4' }
-                },
-                title: {
-                    show: true,
-                    offsetCenter: ['-40%', '80%'],
-                    fontSize: 13,
-                    color: '#aaa'
-                },
-                detail: {
-                    show: true,
-                    valueAnimation: true,
-                    offsetCenter: ['-40%', '100%'],
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    formatter: '{value}°C',
-                    color: '#06b6d4',
-                    backgroundColor: '#5470c6',
-                    borderRadius: 4,
-                    padding: [4, 8]
-                },
-                data: [{ value: 25, name: 'S2' }]
-            },
-            // Aiguille S1 (Rose) - moyenne
-            {
-                type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
-                startAngle: 225,
-                endAngle: -45,
-                min: 0,
-                max: 100,
-                pointer: {
-                    show: true,
-                    length: '65%',
-                    width: 5,
-                    itemStyle: { color: '#ec4899' }
-                },
-                progress: { show: false },
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
-                anchor: {
-                    show: true,
-                    size: 10,
-                    itemStyle: { color: '#ec4899' }
-                },
-                title: {
-                    show: true,
-                    offsetCenter: ['0%', '80%'],
-                    fontSize: 13,
-                    color: '#aaa'
-                },
-                detail: {
-                    show: true,
-                    valueAnimation: true,
-                    offsetCenter: ['0%', '100%'],
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    formatter: '{value}°C',
-                    color: '#fff',
-                    backgroundColor: '#91cc75',
-                    borderRadius: 4,
-                    padding: [4, 8]
-                },
-                data: [{ value: 40, name: 'S1' }]
-            },
-            // Aiguille Int (Orange) - la plus longue
-            {
-                type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
-                startAngle: 225,
-                endAngle: -45,
-                min: 0,
-                max: 100,
-                pointer: {
-                    show: true,
-                    length: '75%',
-                    width: 6,
-                    itemStyle: { color: '#f59e0b' }
-                },
-                progress: { show: false },
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
                 anchor: {
                     show: true,
                     showAbove: true,
-                    size: 12,
-                    itemStyle: {
-                        color: '#1a1a2e',
-                        borderColor: '#f59e0b',
-                        borderWidth: 3
-                    }
+                    size: 18,
+                    itemStyle: { color: '#FAC858' }
                 },
-                title: {
+                pointer: {
+                    icon: 'path://M2.9,0.7L2.9,0.7c1.4,0,2.6,1.2,2.6,2.6v115c0,1.4-1.2,2.6-2.6,2.6l0,0c-1.4,0-2.6-1.2-2.6-2.6V3.3C0.3,1.9,1.4,0.7,2.9,0.7z',
+                    width: 8,
+                    length: '80%',
+                    offsetCenter: [0, '8%']
+                },
+                progress: {
                     show: true,
-                    offsetCenter: ['40%', '80%'],
-                    fontSize: 13,
-                    color: '#aaa'
+                    overlap: true,
+                    roundCap: true
+                },
+                axisLine: {
+                    roundCap: true,
+                    lineStyle: { width: 8 }
+                },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                data: tempGaugeData,
+                title: {
+                    fontSize: 14,
+                    color: '#ddd'
                 },
                 detail: {
-                    show: true,
-                    valueAnimation: true,
-                    offsetCenter: ['40%', '100%'],
-                    fontSize: 18,
-                    fontWeight: 'bold',
-                    formatter: '{value}°C',
+                    width: 50,
+                    height: 18,
+                    fontSize: 14,
                     color: '#fff',
-                    backgroundColor: '#ee6666',
-                    borderRadius: 4,
-                    padding: [4, 8]
-                },
-                data: [{ value: 55, name: 'Int' }]
+                    backgroundColor: 'inherit',
+                    borderRadius: 3,
+                    formatter: '{value}°C'
+                }
             }
         ]
     });
