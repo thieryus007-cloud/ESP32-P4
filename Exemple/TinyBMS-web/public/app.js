@@ -525,7 +525,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '55%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '30%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
                 data: [{ value: 0 }]
             },
             {
