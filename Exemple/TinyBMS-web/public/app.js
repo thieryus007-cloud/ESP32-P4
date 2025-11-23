@@ -418,6 +418,8 @@ function initCharts() {
         series: [
             {
                 type: 'gauge',
+                min: 0,
+                max: 70,
                 anchor: {
                     show: true,
                     showAbove: true,
@@ -435,10 +437,14 @@ function initCharts() {
                 progress: {
                     show: true,
                     overlap: true,
-                    roundCap: true
+                    roundCap: true,
+                    width: 5
                 },
                 axisLine: {
-                    roundCap: true
+                    roundCap: true,
+                    lineStyle: {
+                        width: 5
+                    }
                 },
                 data: tempGaugeData,
                 title: {
