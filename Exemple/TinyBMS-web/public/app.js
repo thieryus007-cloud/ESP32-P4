@@ -255,8 +255,8 @@ socket.on('bms-live', (data) => {
             {
                 value: tempS2,
                 name: 'S2',
-                title: { offsetCenter: ['-40%', '80%'] },
-                detail: { offsetCenter: ['-40%', '95%'] },
+                title: { offsetCenter: ['-80%', '80%'] },
+                detail: { offsetCenter: ['-80%', '95%'] },
                 itemStyle: { color: '#06b6d4' }
             },
             {
@@ -269,8 +269,8 @@ socket.on('bms-live', (data) => {
             {
                 value: tempInt,
                 name: 'Int',
-                title: { offsetCenter: ['40%', '80%'] },
-                detail: { offsetCenter: ['40%', '95%'] },
+                title: { offsetCenter: ['80%', '80%'] },
+                detail: { offsetCenter: ['80%', '95%'] },
                 itemStyle: { color: '#f59e0b' }
             }
         ];
@@ -394,8 +394,8 @@ function initCharts() {
         {
             value: 25,
             name: 'S2',
-            title: { offsetCenter: ['-40%', '80%'] },
-            detail: { offsetCenter: ['-40%', '95%'] },
+            title: { offsetCenter: ['-80%', '80%'] },
+            detail: { offsetCenter: ['-80%', '95%'] },
             itemStyle: { color: '#06b6d4' }
         },
         {
@@ -408,8 +408,8 @@ function initCharts() {
         {
             value: 55,
             name: 'Int',
-            title: { offsetCenter: ['40%', '80%'] },
-            detail: { offsetCenter: ['40%', '95%'] },
+            title: { offsetCenter: ['80%', '80%'] },
+            detail: { offsetCenter: ['80%', '95%'] },
             itemStyle: { color: '#f59e0b' }
         }
     ];
@@ -420,6 +420,7 @@ function initCharts() {
                 type: 'gauge',
                 min: 0,
                 max: 70,
+                splitNumber: 7,
                 anchor: {
                     show: true,
                     showAbove: true,
@@ -445,6 +446,18 @@ function initCharts() {
                     lineStyle: {
                         width: 5
                     }
+                },
+                axisTick: {
+                    show: true,
+                    splitNumber: 2
+                },
+                axisLabel: {
+                    show: true,
+                    distance: 20
+                },
+                splitLine: {
+                    show: true,
+                    length: 10
                 },
                 data: tempGaugeData,
                 title: {
