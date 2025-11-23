@@ -256,21 +256,21 @@ socket.on('bms-live', (data) => {
                 value: tempS2,
                 name: 'S2',
                 title: { offsetCenter: ['-80%', '80%'] },
-                detail: { offsetCenter: ['-80%', '95%'] },
+                detail: { offsetCenter: ['-80%', '100%'] },
                 itemStyle: { color: '#06b6d4' }
             },
             {
                 value: tempS1,
                 name: 'S1',
                 title: { offsetCenter: ['0%', '80%'] },
-                detail: { offsetCenter: ['0%', '95%'] },
+                detail: { offsetCenter: ['0%', '100%'] },
                 itemStyle: { color: '#ec4899' }
             },
             {
                 value: tempInt,
                 name: 'Int',
                 title: { offsetCenter: ['80%', '80%'] },
-                detail: { offsetCenter: ['80%', '95%'] },
+                detail: { offsetCenter: ['80%', '100%'] },
                 itemStyle: { color: '#f59e0b' }
             }
         ];
@@ -424,14 +424,14 @@ function initCharts() {
                 anchor: {
                     show: true,
                     showAbove: true,
-                    size: 18,
+                    size: 4,
                     itemStyle: {
                         color: '#FAC858'
                     }
                 },
                 pointer: {
                     icon: 'path://M2.9,0.7L2.9,0.7c1.4,0,2.6,1.2,2.6,2.6v115c0,1.4-1.2,2.6-2.6,2.6l0,0c-1.4,0-2.6-1.2-2.6-2.6V3.3C0.3,1.9,1.4,0.7,2.9,0.7z',
-                    width: 8,
+                    width: 4,
                     length: '80%',
                     offsetCenter: [0, '8%']
                 },
@@ -461,12 +461,12 @@ function initCharts() {
                 },
                 data: tempGaugeData,
                 title: {
-                    fontSize: 14
+                    fontSize: 12
                 },
                 detail: {
-                    width: 40,
-                    height: 14,
-                    fontSize: 14,
+                    width: 25,
+                    height: 12,
+                    fontSize: 12,
                     color: '#fff',
                     backgroundColor: 'inherit',
                     borderRadius: 3,
