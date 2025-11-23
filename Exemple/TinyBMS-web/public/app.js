@@ -61,6 +61,19 @@ socket.on('bms-settings', (data) => {
     if(data[300]) axisMax = data[300].value;
     if(data[301]) axisMin = data[301].value;
 
+    // Update summary information at top of settings page
+    if(data[340]) {
+        const modeValue = data[340].value;
+        const modeText = modeValue === 0 ? 'Dual Port Mode' : modeValue === 1 ? 'Single Port Mode' : 'Unknown';
+        document.getElementById('info-mode').innerText = modeText;
+    }
+    if(data[317]) {
+        document.getElementById('info-discharge-oc').innerText = `${data[317].value} ${data[317].unit}`;
+    }
+    if(data[318]) {
+        document.getElementById('info-charge-oc').innerText = `${data[318].value} ${data[318].unit}`;
+    }
+
     const groups = ['battery', 'safety', 'balance', 'hardware'];
     groups.forEach(gid => {
         const container = document.getElementById(`conf-${gid}`);
