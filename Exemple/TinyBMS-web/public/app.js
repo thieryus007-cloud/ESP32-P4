@@ -238,7 +238,7 @@ socket.on('bms-live', (data) => {
             series: [
                 {
                     data: [{ value: socVal, name: 'SOC' }],
-                    axisLine: { lineStyle: { width: 5, color: socSohColors } }
+                    axisLine: { lineStyle: { width: 12, color: socSohColors } }
                 },
                 { data: [{ value: sohVal, name: 'SOH' }] }
             ]
@@ -260,7 +260,7 @@ socket.on('bms-live', (data) => {
             series: [
                 {
                     data: [{ value: tempInt, name: 'Internal' }],
-                    axisLine: { lineStyle: { width: 4, color: tempColors } }
+                    axisLine: { lineStyle: { width: 12, color: tempColors } }
                 },
                 { data: [{ value: tempS1, name: 'Sensor 1' }] },
                 { data: [{ value: tempS2, name: 'Sensor 2' }] }
@@ -319,25 +319,25 @@ function initCharts() {
                     width: 5,
                     itemStyle: { color: '#6366f1' }
                 },
-                axisLine: { lineStyle: { width: 5, color: socSohColors } },
+                axisLine: { lineStyle: { width: 12, color: socSohColors } },
                 axisTick: {
                     show: true,
-                    distance: -18,
-                    length: 6,
+                    distance: -28,
+                    length: 5,
                     splitNumber: 5,
                     lineStyle: { width: 1, color: '#555' }
                 },
                 splitLine: {
                     show: true,
-                    distance: -18,
-                    length: 12,
+                    distance: -28,
+                    length: 10,
                     lineStyle: { width: 2, color: '#888' }
                 },
                 axisLabel: {
                     show: true,
-                    distance: -5,
-                    color: '#999',
-                    fontSize: 9
+                    distance: -45,
+                    color: '#bbb',
+                    fontSize: 10
                 },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
@@ -400,25 +400,25 @@ function initCharts() {
                     width: 4,
                     itemStyle: { color: '#f59e0b' }
                 },
-                axisLine: { lineStyle: { width: 4, color: tempColors } },
+                axisLine: { lineStyle: { width: 12, color: tempColors } },
                 axisTick: {
                     show: true,
-                    distance: -16,
+                    distance: -28,
                     length: 5,
                     splitNumber: 2,
                     lineStyle: { width: 1, color: '#555' }
                 },
                 splitLine: {
                     show: true,
-                    distance: -16,
+                    distance: -28,
                     length: 10,
                     lineStyle: { width: 2, color: '#888' }
                 },
                 axisLabel: {
                     show: true,
-                    distance: -3,
-                    color: '#999',
-                    fontSize: 8
+                    distance: -45,
+                    color: '#bbb',
+                    fontSize: 10
                 },
                 anchor: { show: true, size: 8, itemStyle: { color: '#f59e0b' } },
                 title: { show: false },
@@ -494,12 +494,12 @@ function initCharts() {
                 max: 60,
                 splitNumber: 4,
                 itemStyle: { color: '#06b6d4' },
-                progress: { show: true, width: 4 },
+                progress: { show: true, width: 8 },
                 pointer: { show: false },
-                axisLine: { lineStyle: { width: 4, color: [[1, '#333']] } },
-                axisTick: { distance: -18, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
-                splitLine: { distance: -20, length: 8, lineStyle: { width: 1.5, color: '#555' } },
-                axisLabel: { distance: -8, color: '#999', fontSize: 9 },
+                axisLine: { lineStyle: { width: 8, color: [[1, '#333']] } },
+                axisTick: { distance: -24, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
+                splitLine: { distance: -24, length: 8, lineStyle: { width: 1.5, color: '#555' } },
+                axisLabel: { distance: -40, color: '#bbb', fontSize: 10 },
                 anchor: { show: false },
                 title: { show: false },
                 detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
@@ -522,10 +522,10 @@ function initCharts() {
                     width: 4,
                     itemStyle: { color: '#6366f1' }
                 },
-                axisLine: { lineStyle: { width: 5, color: [[1, '#333']] } },
-                axisTick: { distance: -22, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
-                splitLine: { distance: -24, length: 10, lineStyle: { width: 1.5, color: '#555' } },
-                axisLabel: { distance: -10, color: '#999', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
+                axisLine: { lineStyle: { width: 10, color: [[1, '#333']] } },
+                axisTick: { distance: -30, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
+                splitLine: { distance: -30, length: 10, lineStyle: { width: 1.5, color: '#555' } },
+                axisLabel: { distance: -48, color: '#bbb', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
                 anchor: { show: true, size: 8, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
                 detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
@@ -548,10 +548,10 @@ function initCharts() {
                     width: 3,
                     itemStyle: { color: '#10b981' }
                 },
-                axisLine: { lineStyle: { width: 4, color: [[1, '#333']] } },
-                axisTick: { distance: -18, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
-                splitLine: { distance: -20, length: 8, lineStyle: { width: 1.5, color: '#555' } },
-                axisLabel: { distance: -8, color: '#999', fontSize: 9 },
+                axisLine: { lineStyle: { width: 8, color: [[1, '#333']] } },
+                axisTick: { distance: -24, splitNumber: 5, lineStyle: { width: 1, color: '#555' } },
+                splitLine: { distance: -24, length: 8, lineStyle: { width: 1.5, color: '#555' } },
+                axisLabel: { distance: -40, color: '#bbb', fontSize: 10 },
                 anchor: { show: true, size: 6, itemStyle: { color: '#10b981' } },
                 title: { show: false },
                 detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '85%'], fontSize: 14, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
