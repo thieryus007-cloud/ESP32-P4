@@ -245,25 +245,18 @@ socket.on('bms-live', (data) => {
         });
     }
 
-    // Mise à jour du gauge températures
+    // Mise à jour du gauge températures (échelle 0-100)
     if(chartTemps) {
         const tempInt = parseFloat(getVal(48).toFixed(1));
         const tempS1 = parseFloat(getVal(42).toFixed(1));
         const tempS2 = parseFloat(getVal(43).toFixed(1));
-        const tempColors = getColoredAxisLine([
-            { value: tempS2, color: '#06b6d4' },
-            { value: tempS1, color: '#ec4899' },
-            { value: tempInt, color: '#f59e0b' }
-        ], 0, 70);
 
         chartTemps.setOption({
             series: [
-                {
-                    data: [{ value: tempInt, name: 'Internal' }],
-                    axisLine: { lineStyle: { width: 4, color: tempColors } }
-                },
-                { data: [{ value: tempS1, name: 'Sensor 1' }] },
-                { data: [{ value: tempS2, name: 'Sensor 2' }] }
+                { data: [{ value: 0 }] }, // Arc de fond (pas de mise à jour)
+                { data: [{ value: tempInt, name: 'Int' }] },
+                { data: [{ value: tempS1, name: 'S1' }] },
+                { data: [{ value: tempS2, name: 'S2' }] }
             ]
         });
     }
@@ -373,109 +366,181 @@ function initCharts() {
         ]
     });
 
-    // Gauge multi-températures
+    // Gauge multi-températures - Style ECharts Multi-Title
     chartTemps = echarts.init(document.getElementById('chart-temps'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
-    const tempColors = getColoredAxisLine([
-        { value: 22, color: '#06b6d4' },
-        { value: 23, color: '#ec4899' },
-        { value: 25, color: '#f59e0b' }
-    ], 0, 70);
 
     chartTemps.setOption({
         series: [
             {
                 type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
+                radius: '80%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
-                max: 70,
-                splitNumber: 7,
-                itemStyle: { color: '#f59e0b' },
+                max: 100,
+                splitNumber: 10,
                 progress: { show: false },
-                pointer: {
-                    show: true,
-                    length: '65%',
-                    width: 4,
-                    itemStyle: { color: '#f59e0b' }
+                pointer: { show: false },
+                axisLine: {
+                    lineStyle: {
+                        width: 30,
+                        color: [
+                            [0.3, '#5470c6'],  // Good: 0-30°C (Bleu)
+                            [0.7, '#91cc75'],  // Better: 30-70°C (Vert)
+                            [1, '#fac858']     // Perfect: 70-100°C (Jaune/Orange)
+                        ]
+                    }
                 },
-                axisLine: { lineStyle: { width: 4, color: tempColors } },
                 axisTick: {
                     show: true,
-                    distance: 5,
-                    length: 6,
-                    splitNumber: 2,
-                    lineStyle: { width: 1, color: '#888' }
+                    distance: -30,
+                    length: 8,
+                    splitNumber: 5,
+                    lineStyle: { width: 2, color: '#fff' }
                 },
                 splitLine: {
                     show: true,
-                    distance: 5,
-                    length: 12,
-                    lineStyle: { width: 2, color: '#aaa' }
+                    distance: -30,
+                    length: 14,
+                    lineStyle: { width: 3, color: '#fff' }
                 },
                 axisLabel: {
                     show: true,
-                    distance: 22,
+                    distance: 40,
                     color: '#ddd',
-                    fontSize: 11
+                    fontSize: 12
                 },
-                anchor: { show: true, size: 8, itemStyle: { color: '#f59e0b' } },
+                anchor: { show: false },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['-65%', '95%'], fontSize: 13, fontWeight: 'bold', formatter: 'Int {value}°', color: '#f59e0b' },
-                data: [{ value: 25 }]
+                detail: { show: false },
+                data: [{ value: 0 }]
             },
+            // Aiguille Internal Temperature (Orange)
             {
                 type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
+                radius: '80%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
-                max: 70,
-                splitNumber: 7,
-                itemStyle: { color: '#ec4899' },
-                progress: { show: false },
+                max: 100,
                 pointer: {
                     show: true,
-                    length: '55%',
-                    width: 3,
-                    itemStyle: { color: '#ec4899' }
+                    length: '75%',
+                    width: 6,
+                    itemStyle: { color: '#f59e0b' }
                 },
+                progress: { show: false },
                 axisLine: { show: false },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                anchor: { show: true, size: 6, itemStyle: { color: '#ec4899' } },
-                title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['0%', '95%'], fontSize: 13, fontWeight: 'bold', formatter: 'S1 {value}°', color: '#ec4899' },
-                data: [{ value: 23 }]
+                anchor: {
+                    show: true,
+                    showAbove: true,
+                    size: 16,
+                    itemStyle: {
+                        borderWidth: 4,
+                        borderColor: '#f59e0b',
+                        color: '#1a1a2e'
+                    }
+                },
+                title: {
+                    show: true,
+                    offsetCenter: ['-40%', '90%'],
+                    fontSize: 14,
+                    fontWeight: 'bold',
+                    color: '#ddd'
+                },
+                detail: {
+                    show: true,
+                    valueAnimation: true,
+                    offsetCenter: ['-40%', '105%'],
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    formatter: '{value}°C',
+                    color: '#f59e0b'
+                },
+                data: [{ value: 32.5, name: 'Int' }]
             },
+            // Aiguille Sensor 1 (Rose)
             {
                 type: 'gauge',
-                radius: '75%',
-                center: ['50%', '55%'],
+                radius: '80%',
+                center: ['50%', '50%'],
                 startAngle: 200,
                 endAngle: -20,
                 min: 0,
-                max: 70,
-                splitNumber: 7,
-                itemStyle: { color: '#06b6d4' },
+                max: 100,
+                pointer: {
+                    show: true,
+                    length: '60%',
+                    width: 5,
+                    itemStyle: { color: '#ec4899' }
+                },
                 progress: { show: false },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                anchor: { show: false },
+                title: {
+                    show: true,
+                    offsetCenter: ['0%', '90%'],
+                    fontSize: 14,
+                    fontWeight: 'bold',
+                    color: '#ddd'
+                },
+                detail: {
+                    show: true,
+                    valueAnimation: true,
+                    offsetCenter: ['0%', '105%'],
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    formatter: '{value}°C',
+                    color: '#ec4899'
+                },
+                data: [{ value: 24, name: 'S1' }]
+            },
+            // Aiguille Sensor 2 (Cyan)
+            {
+                type: 'gauge',
+                radius: '80%',
+                center: ['50%', '50%'],
+                startAngle: 200,
+                endAngle: -20,
+                min: 0,
+                max: 100,
                 pointer: {
                     show: true,
                     length: '45%',
-                    width: 2,
+                    width: 4,
                     itemStyle: { color: '#06b6d4' }
                 },
+                progress: { show: false },
                 axisLine: { show: false },
                 axisTick: { show: false },
                 splitLine: { show: false },
                 axisLabel: { show: false },
-                anchor: { show: true, size: 5, itemStyle: { color: '#06b6d4' } },
-                title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['65%', '95%'], fontSize: 13, fontWeight: 'bold', formatter: 'S2 {value}°', color: '#06b6d4' },
-                data: [{ value: 22 }]
+                anchor: { show: false },
+                title: {
+                    show: true,
+                    offsetCenter: ['40%', '90%'],
+                    fontSize: 14,
+                    fontWeight: 'bold',
+                    color: '#ddd'
+                },
+                detail: {
+                    show: true,
+                    valueAnimation: true,
+                    offsetCenter: ['40%', '105%'],
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    formatter: '{value}°C',
+                    color: '#06b6d4'
+                },
+                data: [{ value: 25, name: 'S2' }]
             }
         ]
     });
