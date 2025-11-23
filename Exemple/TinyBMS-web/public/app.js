@@ -485,8 +485,8 @@ function initCharts() {
                 type: 'gauge',
                 radius: '55%',
                 center: ['20%', '60%'],
-                startAngle: 200,
-                endAngle: -20,
+                startAngle: 280,
+                endAngle: 60,
                 min: 40,
                 max: 60,
                 splitNumber: 4,
@@ -499,7 +499,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10 },
                 anchor: { show: false },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '65%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: ['60%', '10%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
                 data: [{ value: 50 }]
             },
             {
@@ -532,8 +532,8 @@ function initCharts() {
                 type: 'gauge',
                 radius: '55%',
                 center: ['80%', '60%'],
-                startAngle: 180,
-                endAngle: 0,
+                startAngle: 120,
+                endAngle: 280,
                 min: -120,
                 max: 120,
                 splitNumber: 4,
@@ -551,7 +551,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10 },
                 anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '65%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: ['-60%', '10%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
                 data: [{ value: 0 }]
             }
         ]
