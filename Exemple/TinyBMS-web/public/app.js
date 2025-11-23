@@ -418,6 +418,8 @@ function initCharts() {
         series: [
             {
                 type: 'gauge',
+                center: ['50%', '55%'],
+                radius: '75%',
                 min: 0,
                 max: 70,
                 splitNumber: 7,
