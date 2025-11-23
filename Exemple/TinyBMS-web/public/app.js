@@ -492,7 +492,7 @@ function initCharts() {
                 splitNumber: 4,
                 itemStyle: { color: '#06b6d4' },
                 progress: { show: true, width: 4 },
-                pointer: { show: false },
+                pointer: { show: true },
                 axisLine: { lineStyle: { width: 4, color: [[1, '#333']] } },
                 axisTick: { distance: 4, splitNumber: 5, lineStyle: { width: 1, color: '#888' } },
                 splitLine: { distance: 4, length: 10, lineStyle: { width: 1.5, color: '#aaa' } },
