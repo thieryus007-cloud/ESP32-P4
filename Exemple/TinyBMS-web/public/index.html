@@ -30,14 +30,8 @@
 
         <main class="content">
             <div id="dashboard" class="tab-content active">
-                <header>
-                    <h1>Dashboard</h1>
-                    <span id="bmsState">UNKNOWN</span>
-                </header>
-
                 <!-- BMS Key Information Summary -->
                 <div class="card bms-info-summary">
-                    <h3>🔑 BMS Configuration Summary</h3>
                     <div class="info-summary-grid">
                         <div class="info-item">
                             <span class="info-label">Operation Mode</span>
@@ -48,11 +42,6 @@
                             <span class="info-label">Battery Capacity</span>
                             <span class="info-value" id="info-capacity">--</span>
                             <span class="info-register">[306]</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Series Cells Count</span>
-                            <span class="info-value" id="info-cells-count">--</span>
-                            <span class="info-register">[307]</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Over-Voltage Cutoff</span>
@@ -78,6 +67,11 @@
                             <span class="info-label">Peak Discharge Current</span>
                             <span class="info-value" id="info-peak-discharge">--</span>
                             <span class="info-register">[305]</span>
+                        </div>
+                        <div class="info-item info-item-status">
+                            <span class="info-label">BMS Status</span>
+                            <span class="info-value" id="bmsState">UNKNOWN</span>
+                            <span class="info-register">[50]</span>
                         </div>
                     </div>
                 </div>
