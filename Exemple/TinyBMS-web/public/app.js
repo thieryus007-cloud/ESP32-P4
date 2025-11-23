@@ -418,13 +418,13 @@ function initCharts() {
         series: [
             {
                 type: 'gauge',
-                min: 0,
-                max: 100,
                 anchor: {
                     show: true,
                     showAbove: true,
                     size: 18,
-                    itemStyle: { color: '#FAC858' }
+                    itemStyle: {
+                        color: '#FAC858'
+                    }
                 },
                 pointer: {
                     icon: 'path://M2.9,0.7L2.9,0.7c1.4,0,2.6,1.2,2.6,2.6v115c0,1.4-1.2,2.6-2.6,2.6l0,0c-1.4,0-2.6-1.2-2.6-2.6V3.3C0.3,1.9,1.4,0.7,2.9,0.7z',
@@ -438,20 +438,15 @@ function initCharts() {
                     roundCap: true
                 },
                 axisLine: {
-                    roundCap: true,
-                    lineStyle: { width: 8 }
+                    roundCap: true
                 },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
                 data: tempGaugeData,
                 title: {
-                    fontSize: 14,
-                    color: '#ddd'
+                    fontSize: 14
                 },
                 detail: {
-                    width: 50,
-                    height: 18,
+                    width: 40,
+                    height: 14,
                     fontSize: 14,
                     color: '#fff',
                     backgroundColor: 'inherit',
