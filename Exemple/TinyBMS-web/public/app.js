@@ -253,10 +253,10 @@ socket.on('bms-live', (data) => {
 
         chartTemps.setOption({
             series: [
-                { data: [{ value: 0 }] }, // Arc de fond (pas de mise à jour)
-                { data: [{ value: tempInt, name: 'Int' }] },
-                { data: [{ value: tempS1, name: 'S1' }] },
-                { data: [{ value: tempS2, name: 'S2' }] }
+                {}, // Arc de fond (pas de mise à jour)
+                { data: [{ value: tempS2, name: 'S2' }] },  // Série 1: S2
+                { data: [{ value: tempS1, name: 'S1' }] },  // Série 2: S1
+                { data: [{ value: tempInt, name: 'Int' }] } // Série 3: Int
             ]
         });
     }
@@ -366,17 +366,18 @@ function initCharts() {
         ]
     });
 
-    // Gauge multi-températures - Style ECharts Multi-Title
+    // Gauge multi-températures - Style ECharts Multi-Title (EXACT)
     chartTemps = echarts.init(document.getElementById('chart-temps'), 'dark', {renderer:'canvas', backgroundColor:'transparent'});
 
     chartTemps.setOption({
         series: [
+            // Arc de fond avec zones colorées et labels
             {
                 type: 'gauge',
-                radius: '80%',
-                center: ['50%', '50%'],
-                startAngle: 200,
-                endAngle: -20,
+                radius: '75%',
+                center: ['50%', '55%'],
+                startAngle: 225,
+                endAngle: -45,
                 min: 0,
                 max: 100,
                 splitNumber: 10,
@@ -386,9 +387,9 @@ function initCharts() {
                     lineStyle: {
                         width: 30,
                         color: [
-                            [0.3, '#5470c6'],  // Good: 0-30°C (Bleu)
-                            [0.7, '#91cc75'],  // Better: 30-70°C (Vert)
-                            [1, '#fac858']     // Perfect: 70-100°C (Jaune/Orange)
+                            [0.33, '#5470c6'],  // Good (Bleu)
+                            [0.66, '#91cc75'],  // Better (Vert)
+                            [1, '#ee6666']      // Hot (Rouge)
                         ]
                     }
                 },
@@ -407,22 +408,112 @@ function initCharts() {
                 },
                 axisLabel: {
                     show: true,
-                    distance: 40,
-                    color: '#ddd',
-                    fontSize: 12
+                    distance: 45,
+                    color: '#999',
+                    fontSize: 10
                 },
                 anchor: { show: false },
                 title: { show: false },
                 detail: { show: false },
-                data: [{ value: 0 }]
+                data: []
             },
-            // Aiguille Internal Temperature (Orange)
+            // Aiguille S2 (Cyan) - la plus courte
             {
                 type: 'gauge',
-                radius: '80%',
-                center: ['50%', '50%'],
-                startAngle: 200,
-                endAngle: -20,
+                radius: '75%',
+                center: ['50%', '55%'],
+                startAngle: 225,
+                endAngle: -45,
+                min: 0,
+                max: 100,
+                pointer: {
+                    show: true,
+                    length: '50%',
+                    width: 5,
+                    itemStyle: { color: '#06b6d4' }
+                },
+                progress: { show: false },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                anchor: {
+                    show: true,
+                    size: 8,
+                    itemStyle: { color: '#06b6d4' }
+                },
+                title: {
+                    show: true,
+                    offsetCenter: ['-40%', '80%'],
+                    fontSize: 13,
+                    color: '#aaa'
+                },
+                detail: {
+                    show: true,
+                    valueAnimation: true,
+                    offsetCenter: ['-40%', '100%'],
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    formatter: '{value}°C',
+                    color: '#06b6d4',
+                    backgroundColor: '#5470c6',
+                    borderRadius: 4,
+                    padding: [4, 8]
+                },
+                data: [{ value: 25, name: 'S2' }]
+            },
+            // Aiguille S1 (Rose) - moyenne
+            {
+                type: 'gauge',
+                radius: '75%',
+                center: ['50%', '55%'],
+                startAngle: 225,
+                endAngle: -45,
+                min: 0,
+                max: 100,
+                pointer: {
+                    show: true,
+                    length: '65%',
+                    width: 5,
+                    itemStyle: { color: '#ec4899' }
+                },
+                progress: { show: false },
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                anchor: {
+                    show: true,
+                    size: 10,
+                    itemStyle: { color: '#ec4899' }
+                },
+                title: {
+                    show: true,
+                    offsetCenter: ['0%', '80%'],
+                    fontSize: 13,
+                    color: '#aaa'
+                },
+                detail: {
+                    show: true,
+                    valueAnimation: true,
+                    offsetCenter: ['0%', '100%'],
+                    fontSize: 18,
+                    fontWeight: 'bold',
+                    formatter: '{value}°C',
+                    color: '#fff',
+                    backgroundColor: '#91cc75',
+                    borderRadius: 4,
+                    padding: [4, 8]
+                },
+                data: [{ value: 40, name: 'S1' }]
+            },
+            // Aiguille Int (Orange) - la plus longue
+            {
+                type: 'gauge',
+                radius: '75%',
+                center: ['50%', '55%'],
+                startAngle: 225,
+                endAngle: -45,
                 min: 0,
                 max: 100,
                 pointer: {
@@ -439,108 +530,32 @@ function initCharts() {
                 anchor: {
                     show: true,
                     showAbove: true,
-                    size: 16,
+                    size: 12,
                     itemStyle: {
-                        borderWidth: 4,
+                        color: '#1a1a2e',
                         borderColor: '#f59e0b',
-                        color: '#1a1a2e'
+                        borderWidth: 3
                     }
                 },
                 title: {
                     show: true,
-                    offsetCenter: ['-40%', '90%'],
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    color: '#ddd'
+                    offsetCenter: ['40%', '80%'],
+                    fontSize: 13,
+                    color: '#aaa'
                 },
                 detail: {
                     show: true,
                     valueAnimation: true,
-                    offsetCenter: ['-40%', '105%'],
-                    fontSize: 16,
+                    offsetCenter: ['40%', '100%'],
+                    fontSize: 18,
                     fontWeight: 'bold',
                     formatter: '{value}°C',
-                    color: '#f59e0b'
+                    color: '#fff',
+                    backgroundColor: '#ee6666',
+                    borderRadius: 4,
+                    padding: [4, 8]
                 },
-                data: [{ value: 32.5, name: 'Int' }]
-            },
-            // Aiguille Sensor 1 (Rose)
-            {
-                type: 'gauge',
-                radius: '80%',
-                center: ['50%', '50%'],
-                startAngle: 200,
-                endAngle: -20,
-                min: 0,
-                max: 100,
-                pointer: {
-                    show: true,
-                    length: '60%',
-                    width: 5,
-                    itemStyle: { color: '#ec4899' }
-                },
-                progress: { show: false },
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
-                anchor: { show: false },
-                title: {
-                    show: true,
-                    offsetCenter: ['0%', '90%'],
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    color: '#ddd'
-                },
-                detail: {
-                    show: true,
-                    valueAnimation: true,
-                    offsetCenter: ['0%', '105%'],
-                    fontSize: 16,
-                    fontWeight: 'bold',
-                    formatter: '{value}°C',
-                    color: '#ec4899'
-                },
-                data: [{ value: 24, name: 'S1' }]
-            },
-            // Aiguille Sensor 2 (Cyan)
-            {
-                type: 'gauge',
-                radius: '80%',
-                center: ['50%', '50%'],
-                startAngle: 200,
-                endAngle: -20,
-                min: 0,
-                max: 100,
-                pointer: {
-                    show: true,
-                    length: '45%',
-                    width: 4,
-                    itemStyle: { color: '#06b6d4' }
-                },
-                progress: { show: false },
-                axisLine: { show: false },
-                axisTick: { show: false },
-                splitLine: { show: false },
-                axisLabel: { show: false },
-                anchor: { show: false },
-                title: {
-                    show: true,
-                    offsetCenter: ['40%', '90%'],
-                    fontSize: 14,
-                    fontWeight: 'bold',
-                    color: '#ddd'
-                },
-                detail: {
-                    show: true,
-                    valueAnimation: true,
-                    offsetCenter: ['40%', '105%'],
-                    fontSize: 16,
-                    fontWeight: 'bold',
-                    formatter: '{value}°C',
-                    color: '#06b6d4'
-                },
-                data: [{ value: 25, name: 'S2' }]
+                data: [{ value: 55, name: 'Int' }]
             }
         ]
     });
