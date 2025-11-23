@@ -499,7 +499,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10 },
                 anchor: { show: false },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '95%'], fontSize: 15, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '65%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} V', color: '#fff' },
                 data: [{ value: 50 }]
             },
             {
@@ -525,7 +525,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10, formatter: (v) => v === 0 ? '0' : (v / 1000).toFixed(0) + 'k' },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '95%'], fontSize: 16, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '55%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} W', color: '#fff' },
                 data: [{ value: 0 }]
             },
             {
@@ -551,7 +551,7 @@ function initCharts() {
                 axisLabel: { distance: 10, color: '#ddd', fontSize: 10 },
                 anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
                 title: { show: false },
-                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '95%'], fontSize: 15, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
+                detail: { valueAnimation: true, width: '60%', lineHeight: 18, borderRadius: 8, offsetCenter: [0, '65%'], fontSize: 12, fontWeight: 'bolder', formatter: '{value} A', color: '#fff' },
                 data: [{ value: 0 }]
             }
         ]
