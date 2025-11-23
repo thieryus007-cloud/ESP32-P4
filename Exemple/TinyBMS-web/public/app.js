@@ -355,7 +355,7 @@ function initCharts() {
                 },
                 anchor: { show: true, size: 10, itemStyle: { color: '#6366f1' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['-50%', '95%'], fontSize: 14, fontWeight: 'bold', formatter: 'SOC {value}%', color: '#6366f1' },
+                detail: { valueAnimation: true, offsetCenter: ['-50%', '65%'], fontSize: 12, fontWeight: 'bold', formatter: 'SOC {value}%', color: '#6366f1' },
                 data: [{ value: 80 }]
             },
             {
@@ -381,7 +381,7 @@ function initCharts() {
                 axisLabel: { show: false },
                 anchor: { show: true, size: 8, itemStyle: { color: '#10b981' } },
                 title: { show: false },
-                detail: { valueAnimation: true, offsetCenter: ['50%', '95%'], fontSize: 14, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
+                detail: { valueAnimation: true, offsetCenter: ['50%', '65%'], fontSize: 12, fontWeight: 'bold', formatter: 'SOH {value}%', color: '#10b981' },
                 data: [{ value: 95 }]
             }
         ]
