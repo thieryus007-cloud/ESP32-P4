@@ -61,30 +61,55 @@ h3 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 10px; font-weig
 .group-inputs { display: grid; gap: 12px; }
 .form-group label { display: block; font-size: 0.8em; color: var(--text-muted); margin-bottom: 4px; }
 
-/* BMS Info Summary Section */
-.bms-info-summary { margin-bottom: 20px; border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.05); }
+/* BMS Info Summary Section - Top Banner */
+.bms-info-summary {
+    margin-bottom: 15px;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.03) 100%);
+    padding: 12px 15px;
+}
 .info-summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-top: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
 }
 .info-item {
     display: flex;
     flex-direction: column;
-    padding: 10px 12px;
+    padding: 8px 12px;
     background: var(--bg-dark);
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid var(--border);
-    transition: transform 0.2s, border-color 0.2s;
+    transition: all 0.2s ease;
 }
 .info-item:hover {
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
 }
-.info-label { font-size: 0.75em; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-.info-value { font-size: 1.2em; color: var(--primary); font-weight: 700; font-family: monospace; margin-bottom: 4px; }
-.info-register { font-size: 0.65em; color: #555; font-family: monospace; }
+.info-item-status .info-value {
+    color: var(--success);
+}
+.info-label {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.info-value {
+    font-size: 1.1em;
+    color: var(--primary);
+    font-weight: 700;
+    font-family: monospace;
+    margin-bottom: 2px;
+}
+.info-register {
+    font-size: 0.6em;
+    color: #555;
+    font-family: monospace;
+}
 
 /* Nouveau layout compact pour les champs doubles */
 .dual-input-wrapper { display: flex; gap: 8px; align-items: center; }

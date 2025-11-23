@@ -70,9 +70,6 @@ socket.on('bms-settings', (data) => {
     if(data[306]) {
         document.getElementById('info-capacity').innerText = `${data[306].value} ${data[306].unit}`;
     }
-    if(data[307]) {
-        document.getElementById('info-cells-count').innerText = data[307].value;
-    }
     if(data[315]) {
         document.getElementById('info-ov-cutoff').innerText = `${data[315].value} ${data[315].unit}`;
     }
