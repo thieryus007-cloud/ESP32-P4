@@ -62,6 +62,29 @@
 
             <div id="settings" class="tab-content">
                 <header><h1>Configuration (Read/Write)</h1></header>
+
+                <!-- BMS Key Information Summary -->
+                <div class="card bms-info-summary">
+                    <h3>🔑 Key BMS Information</h3>
+                    <div class="info-summary-grid">
+                        <div class="info-item">
+                            <span class="info-label">BMS Operation Mode</span>
+                            <span class="info-value" id="info-mode">--</span>
+                            <span class="info-register">[340]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Discharge Over Current</span>
+                            <span class="info-value" id="info-discharge-oc">--</span>
+                            <span class="info-register">[317]</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Charge Over Current</span>
+                            <span class="info-value" id="info-charge-oc">--</span>
+                            <span class="info-register">[318]</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="settings-grid-layout">
                     <div class="card settings-card">
                         <div class="group-header"><h3>🔋 Battery</h3><button onclick="saveSection('battery')">Save</button></div>
