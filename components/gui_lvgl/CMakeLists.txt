@@ -22,6 +22,8 @@ idf_component_register(
          "widgets/src/widget_cell_bar.c"
          "widgets/src/widget_value_display.c"
          "widgets/src/widget_keyboard.c"
+         "widgets/src/widget_gauge_circular.c"
+         "widgets/src/widget_gauge_semicircular.c"
     INCLUDE_DIRS "." "include" "widgets/include"
     REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher nvs_flash
 )

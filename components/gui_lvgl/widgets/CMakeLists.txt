@@ -4,6 +4,8 @@ idf_component_register(
          "src/widget_cell_bar.c"
          "src/widget_value_display.c"
          "src/widget_keyboard.c"
+         "src/widget_gauge_circular.c"
+         "src/widget_gauge_semicircular.c"
     INCLUDE_DIRS "include"
     REQUIRES lvgl
 )
