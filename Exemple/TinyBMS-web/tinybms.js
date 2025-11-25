@@ -108,12 +108,12 @@ class TinyBMS {
     }
 
     // Lecture par bloc (Fonction 0x03)
-    // Note: Address uses Little Endian (LSB, MSB) for TinyBMS Rev D
+    // Note: Address uses Big Endian (MSB, LSB) per TinyBMS documentation Rev D
     readRegisterBlock(startAddr, count) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject("Not connected");
 
-            const cmd = [0xAA, 0x03, startAddr & 0xFF, (startAddr >> 8) & 0xFF, 0x00, count & 0xFF]; // Address LSB, MSB (Little Endian)
+            const cmd = [0xAA, 0x03, (startAddr >> 8) & 0xFF, startAddr & 0xFF, 0x00, count & 0xFF]; // Address MSB, LSB (Big Endian)
             const crc = this.calculateCRC(Buffer.from(cmd));
             const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
@@ -155,8 +155,8 @@ class TinyBMS {
             if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
             else dataBytes.writeUInt16BE(rawValue);
 
-            // Header: AA 10 AddrL AddrH 00 01 02 (Address uses Little Endian for TinyBMS Rev D)
-            const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB
+            // Header: AA 10 AddrMSB AddrLSB 00 01 02 (Address uses Big Endian per TinyBMS documentation Rev D)
+            const header = [0xAA, 0x10, (regId >> 8) & 0xFF, regId & 0xFF, 0x00, 0x01, 0x02]; // Address MSB, LSB (Big Endian)
             const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
             const crc = this.calculateCRC(cmdNoCrc);
             const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
