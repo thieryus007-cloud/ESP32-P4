@@ -17,8 +17,12 @@ idf_component_register(
          "screen_history.cpp"
          "ui_notifications.cpp"
          "ui_theme.cpp"
-    INCLUDE_DIRS "." "include"
-    REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher
+         "widgets/src/widget_soc_gauge.c"
+         "widgets/src/widget_status_indicator.c"
+         "widgets/src/widget_cell_bar.c"
+         "widgets/src/widget_value_display.c"
+    INCLUDE_DIRS "." "include" "widgets/include"
+    REQUIRES lvgl esp_lvgl_port event_bus event_types tinybms_client tinybms_model can_victron can_publisher nvs_flash
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
