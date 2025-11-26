@@ -22,7 +22,7 @@ const REGISTER_MAP = [
     { id: 52, label: 'Real Balancing', type: 'UINT16', category: 'Live' },
 
     // --- STATISTICS (100-199) ---
-    { id: 101, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' },
+    { id: 100, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' },
     { id: 106, label: 'Over-Voltage Count', type: 'UINT16', category: 'Stats' },
     { id: 105, label: 'Under-Voltage Count', type: 'UINT16', category: 'Stats' },
     { id: 111, label: 'Charging Count', type: 'UINT16', category: 'Stats' },

@@ -222,8 +222,8 @@ socket.on('bms-live', (data) => {
 
     const sVal = getVal(50);
     const sEl = document.getElementById('bmsState');
-    sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
-    sEl.style.color = sVal===0x9B?'var(--danger)':(sVal===0x91?'var(--success)':'#fff');
+    sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x96:'REGENERATION',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
+    sEl.style.color = sVal===0x9B?'var(--danger)':(sVal===0x91||sVal===0x96?'var(--success)':'#fff');
 
     // Mise à jour du gauge SOC/SOH
     if(chartSocSoh) {
