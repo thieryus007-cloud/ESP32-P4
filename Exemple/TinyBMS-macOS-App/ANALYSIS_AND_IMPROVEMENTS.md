@@ -2,7 +2,13 @@
 
 ## Résumé Exécutif
 
-Cette analyse compare l'implémentation actuelle de l'application TinyBMS macOS avec la documentation officielle **Enepaq Communication Protocols Rev D (2025-07-04)**. L'application présente une bonne base architecturale mais nécessite plusieurs corrections et améliorations pour être pleinement conforme au protocole.
+Cette analyse compare l'implémentation de référence originale de l'application TinyBMS macOS avec la documentation officielle **Enepaq Communication Protocols Rev D (2025-07-04)**. Ce document identifie les problèmes trouvés dans l'implémentation originale et propose des corrections.
+
+**📁 Fichiers de Référence Corrigés Fournis :**
+- `RegisterMap_Complete.swift` - Carte complète des registres conforme au protocole
+- `TinyBMSProtocol_Corrected.swift` - Implémentation corrigée du protocole avec toutes les corrections appliquées
+
+Ces fichiers corrigés peuvent être utilisés directement dans votre application macOS.
 
 ---
 
