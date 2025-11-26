@@ -128,6 +128,149 @@ constexpr register_descriptor_t make_descriptor(
 }
 
 constexpr RegisterCatalog kRegisterCatalog = {{{
+    // =========================================================================
+    // Live Data group (Read-only telemetry registers)
+    // =========================================================================
+
+    // Cell voltages (REG 0-15, Protocol Rev D page 18)
+    make_descriptor(0, "cell1_voltage_mv", "Cell 1 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(1, "cell2_voltage_mv", "Cell 2 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(2, "cell3_voltage_mv", "Cell 3 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(3, "cell4_voltage_mv", "Cell 4 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(4, "cell5_voltage_mv", "Cell 5 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(5, "cell6_voltage_mv", "Cell 6 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(6, "cell7_voltage_mv", "Cell 7 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(7, "cell8_voltage_mv", "Cell 8 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(8, "cell9_voltage_mv", "Cell 9 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(9, "cell10_voltage_mv", "Cell 10 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(10, "cell11_voltage_mv", "Cell 11 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(11, "cell12_voltage_mv", "Cell 12 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(12, "cell13_voltage_mv", "Cell 13 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(13, "cell14_voltage_mv", "Cell 14 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(14, "cell15_voltage_mv", "Cell 15 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(15, "cell16_voltage_mv", "Cell 16 Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Individual cell voltage",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // Pack voltage and current (REG 36, 38 - Protocol Rev D page 18)
+    make_descriptor(36, "pack_voltage_v", "Pack Voltage", "V",
+                    REG_GROUP_LIVE_DATA, "Total battery pack voltage",
+                    TYPE_FLOAT, true, 1.0f, 1, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(38, "pack_current_a", "Pack Current", "A",
+                    REG_GROUP_LIVE_DATA, "Battery pack current (+ charge, - discharge)",
+                    TYPE_FLOAT, true, 1.0f, 2, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // Min/Max cell voltages (REG 40, 41)
+    make_descriptor(40, "min_cell_voltage_mv", "Min Cell Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Lowest cell voltage in pack",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(41, "max_cell_voltage_mv", "Max Cell Voltage", "mV",
+                    REG_GROUP_LIVE_DATA, "Highest cell voltage in pack",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // External temperature sensors (REG 42, 43)
+    make_descriptor(42, "ext_temp_sensor_1_decidegc", "External Temp Sensor 1", "°C",
+                    REG_GROUP_LIVE_DATA, "External temperature sensor 1 (-32768 if disconnected)",
+                    TYPE_INT16, true, 0.1f, 1, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(43, "ext_temp_sensor_2_decidegc", "External Temp Sensor 2", "°C",
+                    REG_GROUP_LIVE_DATA, "External temperature sensor 2 (-32768 if disconnected)",
+                    TYPE_INT16, true, 0.1f, 1, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // State of Health and Charge (REG 45, 46)
+    make_descriptor(45, "state_of_health_raw", "State of Health", "%",
+                    REG_GROUP_LIVE_DATA, "Battery state of health (0-50000, scale 0.002%)",
+                    TYPE_UINT16, true, 0.002f, 1, true, 0, true, 50000, 1, 50000,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(46, "state_of_charge_raw", "State of Charge", "%",
+                    REG_GROUP_LIVE_DATA, "Battery state of charge (UINT32, scale 0.000001%)",
+                    TYPE_UINT32, true, 0.000001f, 2, true, 0, true, 100000000, 1, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // Internal temperature (REG 48)
+    make_descriptor(48, "internal_temperature_decidegc", "Internal Temperature", "°C",
+                    REG_GROUP_LIVE_DATA, "BMS internal temperature",
+                    TYPE_INT16, true, 0.1f, 1, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // Online status (REG 50)
+    make_descriptor(50, "online_status", "Online Status", "code",
+                    REG_GROUP_LIVE_DATA, "BMS operational status (0x91=Charging, 0x92=Full, 0x93=Discharging, 0x96=Regen, 0x97=Idle, 0x9B=Fault)",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // Balancing status (REG 51, 52)
+    make_descriptor(51, "balancing_decision", "Balancing Decision", "bitmask",
+                    REG_GROUP_LIVE_DATA, "Balancing decision bitmask (bit per cell)",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+    make_descriptor(52, "real_balancing", "Real Balancing", "bitmask",
+                    REG_GROUP_LIVE_DATA, "Actual balancing status bitmask (bit per cell)",
+                    TYPE_UINT16, true, 1.0f, 0, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // =========================================================================
+    // Statistics group (Read-only statistics registers)
+    // =========================================================================
+
+    // Total Distance (REG 100 - Protocol Rev D page 20)
+    make_descriptor(100, "stats_total_distance_centikm", "Total Distance", "km",
+                    REG_GROUP_STATISTICS, "Total distance traveled (UINT32, scale 0.01 km)",
+                    TYPE_UINT32, true, 0.01f, 2, false, 0, false, 0, 0, 0,
+                    VALUE_CLASS_NUMERIC, nullptr, 0),
+
+    // =========================================================================
     // Battery group
     make_descriptor(0x012C, "fully_charged_voltage_mv", "Fully Charged Voltage", "mV",
                     REG_GROUP_BATTERY, "Cell voltage when considered fully charged",
