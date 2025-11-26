@@ -23,7 +23,9 @@ extern "C" {
  */
 #ifdef __cplusplus
 enum class register_group_t : uint8_t {
-    Battery = 0,
+    LiveData = 0,
+    Statistics,
+    Battery,
     Charger,
     Safety,
     Advanced,
@@ -31,6 +33,8 @@ enum class register_group_t : uint8_t {
     Max
 };
 
+#define REG_GROUP_LIVE_DATA register_group_t::LiveData
+#define REG_GROUP_STATISTICS register_group_t::Statistics
 #define REG_GROUP_BATTERY register_group_t::Battery
 #define REG_GROUP_CHARGER register_group_t::Charger
 #define REG_GROUP_SAFETY register_group_t::Safety
@@ -40,7 +44,9 @@ enum class register_group_t : uint8_t {
 
 #else
 typedef enum {
-    REG_GROUP_BATTERY = 0,
+    REG_GROUP_LIVE_DATA = 0,
+    REG_GROUP_STATISTICS,
+    REG_GROUP_BATTERY,
     REG_GROUP_CHARGER,
     REG_GROUP_SAFETY,
     REG_GROUP_ADVANCED,
@@ -75,17 +81,32 @@ typedef enum {
 enum class register_type_t : uint8_t {
     Uint16 = 0,
     Int16,
+    Uint32,
+    Int32,
+    Float,
+    Uint8,
+    Int8,
     Enum
 };
 
 #define TYPE_UINT16 register_type_t::Uint16
 #define TYPE_INT16 register_type_t::Int16
+#define TYPE_UINT32 register_type_t::Uint32
+#define TYPE_INT32 register_type_t::Int32
+#define TYPE_FLOAT register_type_t::Float
+#define TYPE_UINT8 register_type_t::Uint8
+#define TYPE_INT8 register_type_t::Int8
 #define TYPE_ENUM register_type_t::Enum
 
 #else
 typedef enum {
     TYPE_UINT16 = 0,
     TYPE_INT16,
+    TYPE_UINT32,
+    TYPE_INT32,
+    TYPE_FLOAT,
+    TYPE_UINT8,
+    TYPE_INT8,
     TYPE_ENUM
 } register_type_t;
 #endif
@@ -135,8 +156,9 @@ typedef struct {
     uint32_t last_update_ms;
 } register_cache_entry_t;
 
-// Register count
-#define TINYBMS_REGISTER_COUNT 34
+// Register count (29 live data + 1 statistics + 34 config = 64 total)
+// Note: Only essential registers are included for now
+#define TINYBMS_REGISTER_COUNT 64
 
 /**
  * @brief Get the register catalog
