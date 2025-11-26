@@ -15,6 +15,7 @@ Interface Homme-Machine (HMI) pour système de gestion de batterie (BMS) basée 
 - [Serveur de test](#-serveur-de-test)
 - [État du développement](#-état-du-développement)
 - [Interfaces matérielles](#-interfaces-matérielles)
+- [Corrections protocole TinyBMS](#-corrections-protocole-tinybms)
 
 ## 🎯 Présentation du projet
 
@@ -469,6 +470,31 @@ npm start
 4. **Data-Driven** : Schémas JSON mappés directement vers structures C
 5. **Composants modulaires** : Chaque composant est indépendant et testable
 6. **Main minimal** : `app_main.c` orchestre uniquement, pas de logique métier
+
+## 🔧 Corrections protocole TinyBMS
+
+Ce projet intègre des corrections pour garantir la conformité totale avec le protocole **TinyBMS Communication Protocols Rev D** (2025-07-04).
+
+### Corrections appliquées
+
+1. **Registre Total Distance** (`docs/tinybms_protocol_full.h`)
+   - ❌ Avant: Registre 101
+   - ✅ Après: Registre 100 (occupe 100-101 car UINT32)
+   - 📖 Référence: Protocole Rev D, page 23
+
+2. **Code de statut REGENERATION** (`docs/tinybms_protocol_full.h`)
+   - ✅ Code 0x96 correctement défini
+   - Utilisé pour le freinage régénératif
+
+### Documentation
+
+Consultez [`TINYBMS_CORRECTIONS_ESP32_P4.md`](TINYBMS_CORRECTIONS_ESP32_P4.md) pour:
+- Détails complets des corrections
+- Tests de validation
+- Références au protocole officiel
+- Notes de mise en œuvre UINT32
+
+Ces corrections garantissent que l'ESP32-P4 communique correctement avec les TinyBMS via RS485/UART et interprète les données de télémétrie de manière conforme au protocole officiel.
 
 ## 📝 Roadmap
 
