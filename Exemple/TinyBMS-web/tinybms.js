@@ -90,6 +90,34 @@ class TinyBMS {
         });
     }
 
+    /**
+     * Configure le protocole de communication du TinyBMS
+     * @param {number} protocolValue - 0 pour MODBUS (défaut), 1 pour ASCII
+     * @returns {Promise<boolean>} true si la configuration a réussi
+     */
+    async setProtocol(protocolValue = 1) {
+        if (!this.isConnected) {
+            throw new Error("Cannot set protocol: not connected");
+        }
+
+        console.log(`Setting TinyBMS protocol to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}...`);
+
+        try {
+            const success = await this.writeRegister(343, protocolValue);
+            if (success) {
+                console.log(`Protocol successfully set to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}`);
+                // Attendre un peu pour que le BMS applique le changement
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+                console.warn('Protocol write command sent but no confirmation received');
+            }
+            return success;
+        } catch (error) {
+            console.error('Failed to set protocol:', error.message);
+            throw error;
+        }
+    }
+
     // Calcul CRC Modbus (Poly 0xA001)
     calculateCRC(buffer) {
         let crc = 0xFFFF;

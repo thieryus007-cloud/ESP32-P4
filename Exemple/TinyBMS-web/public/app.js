@@ -578,4 +578,8 @@ socket.on('bms-stats', (d) => {
 });
 
 async function fetchPorts() { try { const r=await fetch('/api/ports'); const p=await r.json(); document.getElementById('portSelect').innerHTML=p.map(x=>`<option value="${x.path}">${x.path==='SIMULATION'?'🛠️ SIMULATION':x.path}</option>`).join(''); } catch(e){} }
-async function connectBMS() { const path=document.getElementById('portSelect').value; await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}); }
+async function connectBMS() {
+    const path=document.getElementById('portSelect').value;
+    const protocol=document.getElementById('protocolSelect').value;
+    await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path, protocol: parseInt(protocol)})});
+}

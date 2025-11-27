@@ -28,7 +28,7 @@ app.get('/api/ports', async (req, res) => {
 });
 
 app.post('/api/connect', async (req, res) => {
-    const { path } = req.body;
+    const { path, protocol } = req.body; // protocol: 0=MODBUS, 1=ASCII
     stopAll();
 
     if (path === 'SIMULATION') {
@@ -43,9 +43,23 @@ app.post('/api/connect', async (req, res) => {
                 await new Promise(resolve => bms.port.close(resolve));
             }
             await bms.connect();
+
+            // Configuration du protocole si spécifié (par défaut ASCII = 1)
+            const selectedProtocol = protocol !== undefined ? parseInt(protocol) : 1;
+            console.log(`Configuring TinyBMS protocol to ${selectedProtocol === 1 ? 'ASCII' : 'MODBUS'}...`);
+
+            try {
+                await bms.setProtocol(selectedProtocol);
+                console.log('Protocol configuration successful');
+            } catch (protocolError) {
+                console.warn('Protocol configuration failed:', protocolError.message);
+                // Continue même si la configuration du protocole échoue
+                // (le BMS pourrait déjà être sur le bon protocole)
+            }
+
             currentMode = 'CONNECTED';
             startRealPolling();
-            res.json({ success: true, mode: 'CONNECTED' });
+            res.json({ success: true, mode: 'CONNECTED', protocol: selectedProtocol });
             io.emit('status-change', { mode: 'CONNECTED' });
         } catch (e) {
             res.status(500).json({ error: e.message });
