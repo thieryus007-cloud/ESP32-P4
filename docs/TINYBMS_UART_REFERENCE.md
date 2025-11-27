@@ -1011,6 +1011,32 @@ Le timestamp est en secondes (UINT24), l'Event ID est défini dans la section 7.
 | 0x01 | ASCII |
 | 0x02 | SOC BAR |
 
+Registre 343 - Protocol
+
+Ce registre configure le format de communication utilisé par le TinyBMS pour la diffusion automatique (broadcast) de données UART. Il travaille en tandem avec le registre 342 (Broadcast Time).
+
+Valeurs possibles selon la documentation TinyBMS :
+Valeur	Protocole	Description
+0x00	CA V3	Protocole binaire (propriétaire)
+0x01	ASCII	Protocole texte lisible
+0x02	SOC BAR	Protocole d'affichage de barre SOC
+
+CA V3 semble être le protocole binaire propriétaire du fabricant TinyBMS. Bien que la signification exacte de "CA V3" ne soit pas documentée, il s'agit probablement de :
+Coulomb Accumulator Version 3, ou
+Un protocole binaire compact pour la transmission efficace de données BMS
+Points importants :
+Protocole par défaut : CA V3 (0x00) est le protocole binaire natif du TinyBMS
+
+Format binaire : Plus compact et efficace que ASCII pour la transmission de données
+
+Utilisé avec Broadcast : Fonctionne avec le registre 342 pour définir l'intervalle d'envoi automatique
+
+Note sur l'implémentation ESP32 :
+
+Dans le code ESP32 (tinybms_registers.cpp:82-84), l'implémentation ne supporte actuellement que 2 protocoles :
+0 = "Binary" (correspond à CA V3)
+1 = "ASCII"
+
 ---
 
 ### 6.5 Version Data (Registres 500-599)
