@@ -143,6 +143,11 @@ class TinyBMS {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject(new Error("Not connected"));
 
+            // Vider le buffer série avant la lecture pour éviter les données anciennes
+            this.port.flush((err) => {
+                if (err) console.warn('[TinyBMS] Flush error:', err.message);
+            });
+
             const cmd = [0xAA, 0x03, startAddr & 0xFF, (startAddr >> 8) & 0xFF, 0x00, count & 0xFF]; // Address LSB, MSB (Little Endian)
             const crc = this.calculateCRC(Buffer.from(cmd));
             const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
@@ -188,7 +193,7 @@ class TinyBMS {
             setTimeout(() => {
                 this.port.removeListener('data', onData);
                 reject(new Error("Timeout Read"));
-            }, 800);
+            }, 2000); // Augmenté de 800ms à 2000ms pour laisser plus de temps au BMS
         });
     }
 
@@ -243,11 +248,11 @@ class TinyBMS {
             this.port.on('data', onData);
             console.log(`[TinyBMS] Sending write command: reg=${regId}, value=${rawValue}, bytes=${finalBuf.toString('hex')}`);
             this.port.write(finalBuf);
-            
+
             setTimeout(() => {
                 this.port.removeListener('data', onData);
-                resolve(false); 
-            }, 800);
+                resolve(false);
+            }, 2000); // Augmenté de 800ms à 2000ms
         });
     }
 
