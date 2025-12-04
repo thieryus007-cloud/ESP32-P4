@@ -102,11 +102,17 @@ app.post('/api/write-batch', async (req, res) => {
             for (const c of changes) {
                 await bms.writeRegister(parseInt(c.id), parseFloat(c.value));
                 sendLog(`Register ${c.id} written: ${c.value}`, 'success');
-                // Petit délai pour pas saturer le BMS
-                await new Promise(r => setTimeout(r, 100));
+                // Attendre que le BMS enregistre en EEPROM (critique !)
+                await new Promise(r => setTimeout(r, 500));
             }
 
-            // Relire les settings pour confirmer et mettre à jour l'interface immédiatement
+            // IMPORTANT: Attendre encore avant de relire pour laisser le temps au BMS
+            // d'écrire les valeurs en mémoire flash (EEPROM)
+            sendLog('Waiting for BMS to save to EEPROM...', 'info');
+            await new Promise(r => setTimeout(r, 1000));
+
+            // Relire les settings pour confirmer et mettre à jour l'interface
+            sendLog('Reading back settings to verify...', 'info');
             const settings = await bms.readRegisterBlock(300, 45);
             io.emit('bms-settings', settings);
 
