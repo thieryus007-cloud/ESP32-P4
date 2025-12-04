@@ -249,6 +249,63 @@ class TinyBMS {
         });
     }
 
+    // Lecture des registres de configuration testés (34 registres)
+    // Lit uniquement les registres qui ont été validés par le test
+    async readConfigurationSettings() {
+        if (!this.isConnected) throw new Error("Not connected");
+
+        // Liste des registres validés (34 registres - registre 300 exclu car timeout)
+        const TESTED_REGISTERS = [
+            301, 303, 304, 305, 306, 307, 308, 310, 311,
+            315, 316, 317, 318, 319, 320, 321, 322, 323, 328,
+            329, 330, 331, 332, 333, 334, 335, 337, 338, 339,
+            340, 341, 342, 343
+        ];
+
+        console.log(`[TinyBMS] Reading ${TESTED_REGISTERS.length} configuration registers...`);
+
+        const result = {};
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const regId of TESTED_REGISTERS) {
+            const def = REGISTER_MAP.find(r => r.id === regId);
+            if (!def) {
+                console.warn(`[TinyBMS] Register ${regId} not found in REGISTER_MAP, skipping`);
+                continue;
+            }
+
+            try {
+                const rawValue = await this.readIndividualRegister(regId);
+
+                // Appliquer le scale
+                let finalValue = rawValue;
+                if (def.scale) finalValue = rawValue * def.scale;
+
+                result[regId] = {
+                    id: def.id,
+                    label: def.label,
+                    value: parseFloat(finalValue.toFixed(4)),
+                    unit: def.unit || '',
+                    category: def.category,
+                    group: def.group
+                };
+
+                successCount++;
+
+                // Petit délai entre les lectures (réduit à 50ms pour l'interface)
+                await new Promise(r => setTimeout(r, 50));
+            } catch (error) {
+                console.error(`[TinyBMS] Error reading register ${regId} (${def.label}):`, error.message);
+                errorCount++;
+                // Continuer avec les autres registres au lieu de tout arrêter
+            }
+        }
+
+        console.log(`[TinyBMS] ✅ Configuration read complete: ${successCount} success, ${errorCount} errors`);
+        return result;
+    }
+
     // Lecture par bloc - lit les registres individuellement avec la commande 0x09
     // Cette approche est plus fiable que la commande 0x07 qui ne fonctionne pas correctement
     async readRegisterBlock(startAddr, count) {
