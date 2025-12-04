@@ -620,69 +620,151 @@ function clearLogs() {
     }
 }
 
-// Écouter les événements Socket.IO pour logger
+// ======================
+// BMS EVENTS MANAGEMENT
+// ======================
+let previousBmsStatus = null;
+let previousBalancingCells = 0;
+
+function addEvent(message, type = 'info', icon = 'ℹ️') {
+    const container = document.getElementById('events-container');
+    if (!container) return;
+
+    const entry = document.createElement('div');
+    entry.className = `event-entry event-${type}`;
+
+    const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    entry.innerHTML = `
+        <span class="event-icon">${icon}</span>
+        <span class="event-time">${time}</span>
+        <span class="event-message">${message}</span>
+    `;
+
+    container.insertBefore(entry, container.firstChild);
+
+    // Limiter à 50 événements
+    while (container.children.length > 50) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+function clearEvents() {
+    const container = document.getElementById('events-container');
+    if (container) container.innerHTML = '';
+    addEvent('Events cleared', 'info', 'ℹ️');
+}
+
+function updateBmsStatusBadges(data) {
+    if (!data) return;
+
+    // Status Balancing (registre 52)
+    const balancingReg = data[52];
+    if (balancingReg !== undefined) {
+        const balancingValue = balancingReg.value || 0;
+        const activeCells = balancingValue.toString(2).split('1').length - 1;
+
+        document.getElementById('balancing-cells').textContent = activeCells > 0 ? `${activeCells} cells` : 'Inactive';
+        const balancingBadge = document.getElementById('status-balancing');
+        balancingBadge.classList.toggle('active', activeCells > 0);
+
+        // Événement si changement
+        if (activeCells > 0 && previousBalancingCells === 0) {
+            addEvent(`Balancing started on ${activeCells} cell(s)`, 'info', '⚖️');
+        } else if (activeCells === 0 && previousBalancingCells > 0) {
+            addEvent('Balancing completed', 'success', '✅');
+        }
+        previousBalancingCells = activeCells;
+    }
+
+    // Status Charging (registre 50)
+    const statusReg = data[50];
+    if (statusReg !== undefined) {
+        const statusValue = statusReg.value || 0;
+        const statusMap = {
+            0x91: { text: 'CHARGING', icon: '🔌', type: 'active' },
+            0x92: { text: 'FULL', icon: '✅', type: 'active' },
+            0x93: { text: 'DISCHARGING', icon: '⚡', type: 'active' },
+            0x96: { text: 'REGENERATION', icon: '♻️', type: 'active' },
+            0x97: { text: 'IDLE', icon: '💤', type: '' },
+            0x9B: { text: 'FAULT', icon: '⚠️', type: 'error' }
+        };
+
+        const status = statusMap[statusValue] || { text: 'UNKNOWN', icon: '❓', type: '' };
+        document.getElementById('charging-status').textContent = status.text;
+        const chargingBadge = document.getElementById('status-charging');
+        chargingBadge.className = 'status-badge';
+        if (status.type) chargingBadge.classList.add(status.type);
+
+        // Événement si changement de statut
+        if (previousBmsStatus !== null && previousBmsStatus !== statusValue) {
+            const eventType = statusValue === 0x9B ? 'alarm' : 'info';
+            addEvent(`Status changed: ${status.text}`, eventType, status.icon);
+        }
+        previousBmsStatus = statusValue;
+
+        // Update fault count
+        document.getElementById('fault-count').textContent = statusValue === 0x9B ? '1' : '0';
+        const faultBadge = document.getElementById('status-fault');
+        faultBadge.classList.toggle('error', statusValue === 0x9B);
+    }
+}
+
+// Écouter les événements Socket.IO
 socket.on('connect', () => {
-    addLog('Connected to server', 'success');
+    addEvent('Connected to server', 'success', '🟢');
 });
 
 socket.on('disconnect', () => {
-    addLog('Disconnected from server', 'warning');
+    addEvent('Disconnected from server', 'warning', '🔴');
 });
 
 socket.on('status-change', (data) => {
     const mode = data.mode;
-    let message = '';
-    let type = 'info';
+    const icons = {
+        'CONNECTED': '🔌',
+        'SIMULATION': '🎮',
+        'DISCONNECTED': '⏸️'
+    };
+    const types = {
+        'CONNECTED': 'success',
+        'SIMULATION': 'info',
+        'DISCONNECTED': 'warning'
+    };
 
-    if (mode === 'CONNECTED') {
-        message = 'BMS connected successfully';
-        type = 'success';
-    } else if (mode === 'SIMULATION') {
-        message = 'Simulation mode started';
-        type = 'system';
-    } else if (mode === 'DISCONNECTED') {
-        message = 'BMS disconnected';
-        type = 'warning';
+    if (mode) {
+        addEvent(`Mode: ${mode}`, types[mode] || 'info', icons[mode] || 'ℹ️');
     }
-
-    if (message) addLog(message, type);
 });
 
 socket.on('bms-live', (data) => {
     if (!data) return;
-    // Log uniquement les événements importants (pas chaque lecture de données)
-    // Pour éviter de spammer les logs, on ne log pas chaque mise à jour
+    updateBmsStatusBadges(data);
+
+    // Détecter les alarmes de tension
+    const minCell = data[40];
+    const maxCell = data[41];
+    if (minCell && maxCell) {
+        if (minCell.value < 2.8) {
+            addEvent(`Under-voltage alarm: ${minCell.value.toFixed(3)}V`, 'alarm', '⚠️');
+        }
+        if (maxCell.value > 4.2) {
+            addEvent(`Over-voltage alarm: ${maxCell.value.toFixed(3)}V`, 'alarm', '⚠️');
+        }
+    }
 });
 
 socket.on('bms-settings', (data) => {
     if (data && Object.keys(data).length > 0) {
-        addLog(`Settings updated (${Object.keys(data).length} registers)`, 'info');
+        addEvent(`Settings loaded (${Object.keys(data).length} registers)`, 'info', '⚙️');
     }
 });
 
-socket.on('bms-stats', (data) => {
-    if (data && Object.keys(data).length > 0) {
-        addLog(`Statistics updated (${Object.keys(data).length} registers)`, 'info');
-    }
-});
-
-// Écouter les événements de log personnalisés envoyés par le serveur
+// Log personnalisés du serveur
 socket.on('log', (data) => {
-    addLog(data.message, data.type || 'info');
+    const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', system: '🔧' };
+    addEvent(data.message, data.type || 'info', icons[data.type] || 'ℹ️');
 });
-
-// Surcharger la fonction saveSection pour logger les écritures
-const originalSaveSection = saveSection;
-window.saveSection = async function(groupId) {
-    addLog(`Saving ${groupId} settings...`, 'system');
-    try {
-        await originalSaveSection(groupId);
-        addLog(`${groupId} settings saved successfully`, 'success');
-    } catch (e) {
-        addLog(`Error saving ${groupId} settings: ${e.message}`, 'error');
-        throw e;
-    }
-};
 
 // Log initial au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {
