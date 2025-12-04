@@ -178,8 +178,7 @@ async function startRealPolling() {
             }
             cycle++;
         } catch (e) {
-            console.error("Polling error:", e.message);
-            sendLog(`Polling error: ${e.message}`, 'error');
+            console.error("Polling error:", e.message || e);
             // Optional: Check if error is fatal (disconnect)
         }
 
