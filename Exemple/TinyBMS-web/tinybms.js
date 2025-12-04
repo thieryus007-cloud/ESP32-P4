@@ -276,6 +276,15 @@ class TinyBMS {
                 let rawValue = 0;
                 let byteOffset = i * 2;
 
+                // DEBUG: Log les octets bruts pour le registre 306 (Battery Capacity)
+                if (currentRegId === 306) {
+                    const byte0 = buffer[byteOffset];
+                    const byte1 = buffer[byteOffset + 1];
+                    console.log(`[DEBUG] Reg 306 Battery Capacity - Raw bytes: [${byte0.toString(16).padStart(2, '0')}, ${byte1.toString(16).padStart(2, '0')}]`);
+                    console.log(`[DEBUG] Reg 306 - If read as BE: ${buffer.readUInt16BE(byteOffset)} (0x${buffer.readUInt16BE(byteOffset).toString(16)})`);
+                    console.log(`[DEBUG] Reg 306 - If read as LE: ${buffer.readUInt16LE(byteOffset)} (0x${buffer.readUInt16LE(byteOffset).toString(16)})`);
+                }
+
                 if (def.type === 'FLOAT') {
                     if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatBE(byteOffset);
                 } else if (def.type === 'UINT32') {
@@ -288,6 +297,11 @@ class TinyBMS {
 
                 let finalValue = rawValue;
                 if (def.scale) finalValue = rawValue * def.scale;
+
+                // DEBUG: Log les valeurs pour le registre 306
+                if (currentRegId === 306) {
+                    console.log(`[DEBUG] Reg 306 - rawValue (BE): ${rawValue}, finalValue (after scale ${def.scale}): ${finalValue}`);
+                }
 
                 // On nettoie les flottants (ex: 3.90000001 -> 3.9)
                 result[currentRegId] = {
