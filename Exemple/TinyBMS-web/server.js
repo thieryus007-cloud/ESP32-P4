@@ -113,7 +113,7 @@ app.post('/api/write-batch', async (req, res) => {
 
             // Relire les settings pour confirmer et mettre à jour l'interface
             sendLog('Reading back settings to verify...', 'info');
-            const settings = await bms.readRegisterBlock(300, 45);
+            const settings = await bms.readConfigurationSettings();
             io.emit('bms-settings', settings);
 
             // Resume polling
@@ -197,9 +197,9 @@ async function startRealPolling() {
                 }
             }
 
-            // Lecture Settings (300-343)
+            // Lecture Settings (registres de configuration testés - 33 registres)
             if (cycle % 5 === 0) {
-                const settings = await bms.readRegisterBlock(300, 45);
+                const settings = await bms.readConfigurationSettings();
                 io.emit('bms-settings', settings);
             }
             cycle++;
