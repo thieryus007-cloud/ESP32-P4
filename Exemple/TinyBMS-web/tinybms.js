@@ -136,8 +136,9 @@ class TinyBMS {
     }
 
     // Lecture par bloc (Fonction 0x03)
-    // Note: Address uses Little Endian (LSB, MSB) despite TinyBMS documentation Rev D claiming Big Endian
-    // The actual device firmware expects LSB first, as confirmed by working implementations
+    // Note: IMPORTANT - Actual TinyBMS firmware uses Little Endian for BOTH addresses AND data
+    // despite TinyBMS documentation Rev D claiming Big Endian
+    // Both address and data bytes are sent/received as LSB first, MSB second
     readRegisterBlock(startAddr, count) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject(new Error("Not connected"));
@@ -169,6 +170,7 @@ class TinyBMS {
 
     // Ecriture (Fonction 0x10 - Write Multiple Registers)
     // Utilisé ici pour écrire 1 seul registre à la fois par sécurité
+    // Note: Uses Little Endian for both address and data (LSB, MSB)
     writeRegister(regId, value) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject(new Error("Not connected"));
@@ -179,10 +181,10 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
-            // Préparation données (2 octets) - Big Endian for MODBUS
+            // Préparation données (2 octets) - Little Endian (LSB, MSB) comme pour les adresses
             const dataBytes = Buffer.alloc(2);
-            if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
-            else dataBytes.writeUInt16BE(rawValue);
+            if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
+            else dataBytes.writeUInt16LE(rawValue);
 
             // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Address uses Little Endian despite TinyBMS documentation Rev D)
             const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
@@ -222,13 +224,13 @@ class TinyBMS {
                 let byteOffset = i * 2;
 
                 if (def.type === 'FLOAT') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatBE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatLE(byteOffset);
                 } else if (def.type === 'UINT32') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32BE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32LE(byteOffset);
                 } else if (def.type === 'INT16') {
-                    rawValue = buffer.readInt16BE(byteOffset);
+                    rawValue = buffer.readInt16LE(byteOffset);
                 } else {
-                    rawValue = buffer.readUInt16BE(byteOffset);
+                    rawValue = buffer.readUInt16LE(byteOffset);
                 }
 
                 let finalValue = rawValue;
