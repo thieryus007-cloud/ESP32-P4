@@ -135,118 +135,124 @@ class TinyBMS {
         return crc;
     }
 
-    // Lecture par bloc (Fonction 0x07 - TinyBMS propriétaire)
-    // Format: AA 07 RL AddrLSB AddrMSB CRC_LSB CRC_MSB
+    // Lecture d'un registre individuel (Fonction 0x09 - Read Individual Register)
+    // Format: AA 09 02 AddrLSB AddrMSB CRC_LSB CRC_MSB
+    // Réponse: AA 09 02 DataLSB DataMSB CRC_LSB CRC_MSB (7 bytes)
     // Note: Configuration byte order pour TinyBMS:
     // - ADRESSES: Little Endian (LSB first, MSB second)
     // - DONNÉES: Little Endian (LSB first, MSB second) - confirmé par test_tinybms.py
     // - CRC: Little Endian (LSB first, MSB second)
-    readRegisterBlock(startAddr, count) {
+    readIndividualRegister(address) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject(new Error("Not connected"));
 
-            // Vider le buffer série et attendre que ce soit terminé
+            // Vider le buffer série
             this.port.flush(async (err) => {
-                if (err) {
-                    console.warn('[TinyBMS] Flush error:', err.message);
-                }
-
-                // Attendre un peu après le flush pour s'assurer que le buffer est bien vidé
+                if (err) console.warn('[TinyBMS] Flush error:', err.message);
                 await new Promise(r => setTimeout(r, 100));
 
-                // Commande 0x07 : AA 07 RL AddrLSB AddrMSB CRC
-                const cmd = [0xAA, 0x07, count & 0xFF, startAddr & 0xFF, (startAddr >> 8) & 0xFF];
+                // Commande 0x09 : AA 09 02 AddrLSB AddrMSB CRC_LSB CRC_MSB
+                const cmd = [0xAA, 0x09, 0x02, address & 0xFF, (address >> 8) & 0xFF];
                 const crc = this.calculateCRC(Buffer.from(cmd));
                 const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
                 let rxBuffer = Buffer.alloc(0);
 
-                const onData = (chunk) => {
-                    console.log(`[TinyBMS] Received ${chunk.length} bytes (total: ${rxBuffer.length + chunk.length})`);
+                const searchForValidFrame = () => {
+                    for (let i = 0; i < rxBuffer.length - 7; i++) {
+                        if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x09) {
+                            const potentialFrame = rxBuffer.slice(i, i + 7);
+                            const receivedCrc = (potentialFrame[6] << 8) | potentialFrame[5];
+                            const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, 5));
 
-                    // Accumuler les données reçues
-                    rxBuffer = Buffer.concat([rxBuffer, chunk]);
-
-                    // Fonction helper pour chercher une trame valide
-                    const searchForValidFrame = () => {
-                        for (let i = 0; i < rxBuffer.length - 5; i++) {
-                            if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x07) {
-                                const payloadLen = rxBuffer[i + 2];
-                                const frameLen = 3 + payloadLen + 2;
-
-                                if (i + frameLen <= rxBuffer.length) {
-                                    const potentialFrame = rxBuffer.slice(i, i + frameLen);
-                                    // Vérifier le CRC
-                                    const receivedCrc = (potentialFrame[frameLen - 1] << 8) | potentialFrame[frameLen - 2];
-                                    const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, -2));
-
-                                    if (receivedCrc === calculatedCrc) {
-                                        console.log(`[TinyBMS] ✅ Valid frame found at offset ${i}`);
-                                        return potentialFrame;
-                                    }
-                                }
+                            if (receivedCrc === calculatedCrc) {
+                                console.log(`[TinyBMS] ✅ Valid register response at offset ${i}`);
+                                return potentialFrame;
                             }
                         }
-                        return null;
-                    };
+                    }
+                    return null;
+                };
 
-                    // Si on reçoit plus de 50 bytes (probablement du debug ASCII mélangé), chercher une trame valide
-                    if (rxBuffer.length > 50) {
-                        console.log(`[TinyBMS] Buffer size ${rxBuffer.length} bytes - searching for valid MODBUS frame...`);
+                const onData = (chunk) => {
+                    rxBuffer = Buffer.concat([rxBuffer, chunk]);
+                    console.log(`[TinyBMS] Read reg ${address}: ${rxBuffer.length} bytes accumulated`);
+
+                    // Chercher une trame valide si buffer > 20 bytes
+                    if (rxBuffer.length > 20) {
                         const foundFrame = searchForValidFrame();
-
                         if (foundFrame) {
                             rxBuffer = foundFrame;
                         } else {
-                            console.log(`[TinyBMS] ⏳ No complete valid frame yet, waiting for more data...`);
+                            console.log(`[TinyBMS] ⏳ Waiting for valid frame...`);
                             return;
                         }
                     }
 
-                    // Vérifier si on a au moins le header
-                    if (rxBuffer.length < 3) return;
+                    // Attendre au moins 7 bytes
+                    if (rxBuffer.length < 7) return;
 
-                    // Vérification Header AA 07
-                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x07) {
-                        // Header invalide - probablement du debug ASCII
-                        // Chercher une trame valide dans le buffer
-                        console.log(`[TinyBMS] Invalid header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)} - searching for valid frame...`);
-
+                    // Vérifier header
+                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x09) {
                         const foundFrame = searchForValidFrame();
                         if (foundFrame) {
                             rxBuffer = foundFrame;
-                            console.log(`[TinyBMS] Frame recovered from ASCII debug pollution`);
                         } else {
-                            console.log(`[TinyBMS] No valid frame found yet in ${rxBuffer.length} bytes, waiting...`);
-                            return; // Continue waiting instead of rejecting immediately
+                            console.log(`[TinyBMS] Invalid header, waiting...`);
+                            return;
                         }
                     }
 
-                    const len = rxBuffer[2];
-                    const expectedLen = 3 + len + 2;
+                    // Extraire les données (bytes 3 et 4) - Little Endian
+                    const dataLSB = rxBuffer[3];
+                    const dataMSB = rxBuffer[4];
+                    const value = dataLSB | (dataMSB << 8);
 
-                    console.log(`[TinyBMS] Frame progress: ${rxBuffer.length}/${expectedLen} bytes`);
-
-                    if (rxBuffer.length < expectedLen) {
-                        return; // Attendre plus de données
-                    }
-
-                    const payload = rxBuffer.slice(3, 3 + len);
                     this.port.removeListener('data', onData);
-                    console.log(`[TinyBMS] Read successful, ${len} bytes payload, full frame: ${rxBuffer.slice(0, expectedLen).toString('hex')}`);
-                    resolve(this.parseBlock(startAddr, payload));
+                    console.log(`[TinyBMS] ✅ Reg ${address} = ${value} (0x${value.toString(16).padStart(4, '0')}) [bytes: ${dataLSB.toString(16).padStart(2,'0')} ${dataMSB.toString(16).padStart(2,'0')}]`);
+                    resolve(value);
                 };
 
                 this.port.on('data', onData);
-                console.log(`[TinyBMS] Sending read command: addr=${startAddr}, count=${count}, bytes=${finalBuf.toString('hex')}`);
+                console.log(`[TinyBMS] Reading register ${address}, cmd: ${finalBuf.toString('hex')}`);
                 this.port.write(finalBuf);
 
                 setTimeout(() => {
                     this.port.removeListener('data', onData);
-                    reject(new Error("Timeout Read"));
-                }, 2000); // Augmenté de 800ms à 2000ms pour laisser plus de temps au BMS
+                    reject(new Error(`Timeout reading register ${address}`));
+                }, 2000);
             });
         });
+    }
+
+    // Lecture par bloc - lit les registres individuellement avec la commande 0x09
+    // Cette approche est plus fiable que la commande 0x07 qui ne fonctionne pas correctement
+    async readRegisterBlock(startAddr, count) {
+        if (!this.isConnected) throw new Error("Not connected");
+
+        console.log(`[TinyBMS] Reading ${count} registers starting at ${startAddr} using individual reads (0x09)`);
+
+        // Créer un buffer pour stocker les valeurs lues (2 bytes par registre)
+        const buffer = Buffer.alloc(count * 2);
+
+        // Lire chaque registre individuellement
+        for (let i = 0; i < count; i++) {
+            const addr = startAddr + i;
+            try {
+                const value = await this.readIndividualRegister(addr);
+                // Stocker en Little Endian
+                buffer.writeUInt16LE(value, i * 2);
+
+                // Petit délai entre les lectures pour ne pas saturer le BMS
+                await new Promise(r => setTimeout(r, 50));
+            } catch (error) {
+                console.error(`[TinyBMS] Error reading register ${addr}:`, error.message);
+                throw error;
+            }
+        }
+
+        console.log(`[TinyBMS] ✅ Successfully read ${count} registers`);
+        return this.parseBlock(startAddr, buffer);
     }
 
     // Ecriture (Fonction 0x0D - Write Individual Registers)
@@ -259,8 +265,10 @@ class TinyBMS {
             const def = REGISTER_MAP.find(r => r.id === regId);
             if (!def) return reject(new Error("Unknown register ID"));
 
-            let rawValue = value;
-            if (def.scale) rawValue = Math.round(value / def.scale);
+            // IMPORTANT: value est la valeur BRUTE à écrire dans le registre
+            // L'interface web doit envoyer la valeur brute (ex: 320 pour 3.20 Ah)
+            // On n'applique PAS de division par scale ici (contrairement à la lecture où on multiplie)
+            let rawValue = Math.round(value);
 
             // Vider le buffer série AVANT l'écriture (comme test_tinybms.py)
             this.port.flush(async (err) => {
