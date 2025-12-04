@@ -113,7 +113,7 @@ class TinyBMS {
             if (success) {
                 console.log(`Protocol successfully set to ${numericValue === 1 ? 'ASCII' : 'MODBUS'}`);
                 // Attendre un peu pour que le BMS applique le changement
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 100));
             } else {
                 console.warn('Protocol write command sent but no confirmation received');
             }
@@ -256,7 +256,7 @@ class TinyBMS {
 
         // Liste des registres validés (34 registres - registre 300 exclu car timeout)
         const TESTED_REGISTERS = [
-            301, 303, 304, 305, 306, 307, 308, 310, 311,
+            300, 301, 303, 304, 305, 306, 307, 308, 310, 311,
             315, 316, 317, 318, 319, 320, 321, 322, 323, 328,
             329, 330, 331, 332, 333, 334, 335, 337, 338, 339,
             340, 341, 342, 343
@@ -474,7 +474,7 @@ class TinyBMS {
                 setTimeout(() => {
                     this.port.removeListener('data', onData);
                     resolve(false);
-                }, 2000); // Augmenté de 800ms à 2000ms
+                }, 800); // Augmenté de 800ms à 2000ms
             });
         });
     }
