@@ -231,15 +231,20 @@ class TinyBMS {
             let rxBuffer = Buffer.alloc(0);
 
             const onData = (chunk) => {
-                console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes`);
+                console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes - hex: ${chunk.toString('hex')}`);
 
                 // Accumuler les données reçues
                 rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
-                // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
-                if (rxBuffer.length < 5) return;
+                console.log(`[TinyBMS] Write accumulated buffer (${rxBuffer.length} bytes): ${rxBuffer.toString('hex')}`);
 
-                console.log(`[TinyBMS] Write full response:`, rxBuffer.toString('hex'));
+                // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
+                if (rxBuffer.length < 5) {
+                    console.log(`[TinyBMS] Waiting for more data... (need at least 5 bytes)`);
+                    return;
+                }
+
+                console.log(`[TinyBMS] Write full response: ${rxBuffer.toString('hex')}`);
 
                 // Réponse: AA 01 (ACK) ou AA 00 (NACK)
                 if (rxBuffer[0] === 0xAA) {
