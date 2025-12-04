@@ -52,14 +52,25 @@ const REGISTER_MAP = [
     { id: 304, label: 'Charge Finished Current', unit: 'mA', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
     { id: 308, label: 'Allowed Disbalance', unit: 'mV', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
     { id: 321, label: 'Charge Restart Level', unit: '%', type: 'UINT16', category: 'Settings', group: 'balance' },
+    { id: 323, label: 'SOH Setting', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings', group: 'balance' },
     { id: 332, label: 'Automatic Recovery', unit: 's', type: 'UINT16', category: 'Settings', group: 'balance' },
 
     // Groupe 4: Hardware
     { id: 310, label: 'Charger Startup Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 311, label: 'Charger Disable Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 312, label: 'Pulses Per Unit', unit: '', type: 'UINT32', category: 'Settings', group: 'hardware' },
+    { id: 329, label: 'Configuration Bits', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 330, label: 'Charger Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 331, label: 'Load Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 333, label: 'Charger Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 334, label: 'Ignition Input', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 335, label: 'Charger Detection Input', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 337, label: 'Precharge Pin', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 338, label: 'Precharge Duration', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 339, label: 'Temp Sensor Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 340, label: 'Operation Mode', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' }, // 0=Dual, 1=Single
+    { id: 341, label: 'Single Port Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+    { id: 342, label: 'Broadcast Time', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 343, label: 'Protocol', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
 
     // --- VERSION (500+) ---
@@ -254,9 +265,9 @@ class TinyBMS {
     async readConfigurationSettings() {
         if (!this.isConnected) throw new Error("Not connected");
 
-        // Liste des registres validés (34 registres - registre 300 exclu car timeout)
+        // Liste des registres de configuration (34 registres)
         const TESTED_REGISTERS = [
-            301, 303, 304, 305, 306, 307, 308, 310, 311,
+            300, 301, 303, 304, 305, 306, 307, 308, 310, 311,
             315, 316, 317, 318, 319, 320, 321, 322, 323, 328,
             329, 330, 331, 332, 333, 334, 335, 337, 338, 339,
             340, 341, 342, 343
@@ -535,3 +546,4 @@ class TinyBMS {
 }
 
 module.exports = TinyBMS;
+module.exports.REGISTER_MAP = REGISTER_MAP;

@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const TinyBMS = require('./tinybms');
+const { REGISTER_MAP } = require('./tinybms');
 const BmsSimulator = require('./simulator');
 const { SerialPort } = require('serialport');
 
@@ -100,8 +101,23 @@ app.post('/api/write-batch', async (req, res) => {
 
             sendLog(`Writing ${changes.length} register(s) to BMS...`, 'info');
             for (const c of changes) {
-                await bms.writeRegister(parseInt(c.id), parseFloat(c.value));
-                sendLog(`Register ${c.id} written: ${c.value}`, 'success');
+                const regId = parseInt(c.id);
+                const displayValue = parseFloat(c.value);
+
+                // Convertir la valeur affichée en valeur brute
+                // Exemple: Battery Capacity affiche 3.20 Ah (scale 0.01) -> écrire 320
+                const regDef = REGISTER_MAP.find(r => r.id === regId);
+                let rawValue = displayValue;
+                if (regDef && regDef.scale) {
+                    rawValue = Math.round(displayValue / regDef.scale);
+                    console.log(`[Server] Reg ${regId} (${regDef.label}): display=${displayValue} ${regDef.unit} / scale=${regDef.scale} -> raw=${rawValue}`);
+                } else {
+                    console.log(`[Server] Reg ${regId}: display=${displayValue} -> raw=${rawValue} (no scale)`);
+                }
+
+                await bms.writeRegister(regId, rawValue);
+                sendLog(`Register ${regId} written: ${displayValue} (raw: ${rawValue})`, 'success');
+
                 // Attendre que le BMS enregistre en EEPROM (critique !)
                 await new Promise(r => setTimeout(r, 500));
             }
