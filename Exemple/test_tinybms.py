@@ -281,15 +281,8 @@ def main():
     if len(sys.argv) > 1:
         PORT = sys.argv[1]
     else:
-        # Auto-détection
-        import glob
-        ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*') + glob.glob('/dev/cu.usb*')
-        if ports:
-            PORT = ports[0]
-            print(f"ℹ️  Port auto-détecté: {PORT}")
-        else:
-            PORT = '/dev/ttyUSB0'
-            print(f"⚠️  Aucun port détecté, utilisation de: {PORT}")
+        PORT = '/dev/tty.usbserial-0001'
+        print(f"ℹ️  Utilisation du port par défaut: {PORT}")
 
     BAUDRATE = 115200
 
