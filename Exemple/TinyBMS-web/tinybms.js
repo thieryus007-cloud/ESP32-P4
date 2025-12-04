@@ -92,7 +92,7 @@ class TinyBMS {
 
     /**
      * Configure le protocole de communication du TinyBMS
-     * @param {number} protocolValue - 0 pour MODBUS (défaut), 1 pour ASCII
+     * @param {number|string} protocolValue - 0/'MODBUS' pour MODBUS, 1/'ASCII' pour ASCII (défaut)
      * @returns {Promise<boolean>} true si la configuration a réussi
      */
     async setProtocol(protocolValue = 1) {
@@ -100,12 +100,18 @@ class TinyBMS {
             throw new Error("Cannot set protocol: not connected");
         }
 
-        console.log(`Setting TinyBMS protocol to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}...`);
+        // Convertir string en number si nécessaire
+        let numericValue = protocolValue;
+        if (typeof protocolValue === 'string') {
+            numericValue = protocolValue.toUpperCase() === 'ASCII' ? 1 : 0;
+        }
+
+        console.log(`Setting TinyBMS protocol to ${numericValue === 1 ? 'ASCII' : 'MODBUS'}...`);
 
         try {
-            const success = await this.writeRegister(343, protocolValue);
+            const success = await this.writeRegister(343, numericValue);
             if (success) {
-                console.log(`Protocol successfully set to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}`);
+                console.log(`Protocol successfully set to ${numericValue === 1 ? 'ASCII' : 'MODBUS'}`);
                 // Attendre un peu pour que le BMS applique le changement
                 await new Promise(resolve => setTimeout(resolve, 500));
             } else {
@@ -116,6 +122,22 @@ class TinyBMS {
             console.error('Failed to set protocol:', error.message);
             throw error;
         }
+    }
+
+    disconnect() {
+        return new Promise((resolve) => {
+            if (this.port && this.port.isOpen) {
+                this.port.close((err) => {
+                    if (err) console.error('Error closing port:', err.message);
+                    this.isConnected = false;
+                    console.log('Disconnected from TinyBMS');
+                    resolve();
+                });
+            } else {
+                this.isConnected = false;
+                resolve();
+            }
+        });
     }
 
     // Calcul CRC Modbus (Poly 0xA001)
@@ -136,11 +158,12 @@ class TinyBMS {
     }
 
     // Lecture d'un registre individuel (Fonction 0x09 - Read Individual Register)
-    // Format: AA 09 02 AddrLSB AddrMSB CRC_LSB CRC_MSB
-    // Réponse: AA 09 02 DataLSB DataMSB CRC_LSB CRC_MSB (7 bytes)
-    // Note: Configuration byte order pour TinyBMS:
+    // Format commande: AA 09 02 AddrLSB AddrMSB CRC_LSB CRC_MSB (7 bytes)
+    // Format réponse : AA 09 04 AddrEchoLSB AddrEchoMSB DataLSB DataMSB CRC_LSB CRC_MSB (9 bytes)
+    // Note: La réponse contient l'adresse (echo) aux bytes 3-4, et les DONNÉES aux bytes 5-6
+    // Configuration byte order pour TinyBMS:
     // - ADRESSES: Little Endian (LSB first, MSB second)
-    // - DONNÉES: Little Endian (LSB first, MSB second) - confirmé par test_tinybms.py
+    // - DONNÉES: Big Endian (MSB first, LSB second) - confirmé par test_tinybms.py ligne 159
     // - CRC: Little Endian (LSB first, MSB second)
     readIndividualRegister(address) {
         return new Promise((resolve, reject) => {
@@ -159,11 +182,12 @@ class TinyBMS {
                 let rxBuffer = Buffer.alloc(0);
 
                 const searchForValidFrame = () => {
-                    for (let i = 0; i < rxBuffer.length - 7; i++) {
-                        if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x09) {
-                            const potentialFrame = rxBuffer.slice(i, i + 7);
-                            const receivedCrc = (potentialFrame[6] << 8) | potentialFrame[5];
-                            const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, 5));
+                    // Chercher trame de 9 bytes: AA 09 04 AddrLSB AddrMSB DataLSB DataMSB CRC_LSB CRC_MSB
+                    for (let i = 0; i < rxBuffer.length - 9; i++) {
+                        if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x09 && rxBuffer[i + 2] === 0x04) {
+                            const potentialFrame = rxBuffer.slice(i, i + 9);
+                            const receivedCrc = (potentialFrame[8] << 8) | potentialFrame[7];
+                            const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, 7));
 
                             if (receivedCrc === calculatedCrc) {
                                 console.log(`[TinyBMS] ✅ Valid register response at offset ${i}`);
@@ -189,11 +213,11 @@ class TinyBMS {
                         }
                     }
 
-                    // Attendre au moins 7 bytes
-                    if (rxBuffer.length < 7) return;
+                    // Attendre au moins 9 bytes
+                    if (rxBuffer.length < 9) return;
 
-                    // Vérifier header
-                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x09) {
+                    // Vérifier header AA 09 04
+                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x09 || rxBuffer[2] !== 0x04) {
                         const foundFrame = searchForValidFrame();
                         if (foundFrame) {
                             rxBuffer = foundFrame;
@@ -203,13 +227,13 @@ class TinyBMS {
                         }
                     }
 
-                    // Extraire les données (bytes 3 et 4) - Little Endian
-                    const dataLSB = rxBuffer[3];
-                    const dataMSB = rxBuffer[4];
-                    const value = dataLSB | (dataMSB << 8);
+                    // Extraire les données (bytes 5 et 6) - Big Endian selon test_tinybms.py ligne 159
+                    const valueLSB = rxBuffer[5];
+                    const valueMSB = rxBuffer[6];
+                    const value = (valueMSB << 8) | valueLSB;
 
                     this.port.removeListener('data', onData);
-                    console.log(`[TinyBMS] ✅ Reg ${address} = ${value} (0x${value.toString(16).padStart(4, '0')}) [bytes: ${dataLSB.toString(16).padStart(2,'0')} ${dataMSB.toString(16).padStart(2,'0')}]`);
+                    console.log(`[TinyBMS] ✅ Reg ${address} = ${value} (0x${value.toString(16).padStart(4, '0')}) [bytes: ${valueLSB.toString(16).padStart(2,'0')} ${valueMSB.toString(16).padStart(2,'0')}]`);
                     resolve(value);
                 };
 
