@@ -135,8 +135,9 @@ class TinyBMS {
         return crc;
     }
 
-    // Lecture par bloc (Fonction 0x03)
-    // Note: IMPORTANT - Configuration byte order pour TinyBMS:
+    // Lecture par bloc (Fonction 0x07 - TinyBMS propriétaire)
+    // Format: AA 07 RL AddrLSB AddrMSB CRC_LSB CRC_MSB
+    // Note: Configuration byte order pour TinyBMS:
     // - ADRESSES: Little Endian (LSB first, MSB second)
     // - DONNÉES: Little Endian (LSB first, MSB second) - confirmé par test_tinybms.py
     // - CRC: Little Endian (LSB first, MSB second)
@@ -153,7 +154,8 @@ class TinyBMS {
                 // Attendre un peu après le flush pour s'assurer que le buffer est bien vidé
                 await new Promise(r => setTimeout(r, 100));
 
-                const cmd = [0xAA, 0x03, startAddr & 0xFF, (startAddr >> 8) & 0xFF, 0x00, count & 0xFF]; // Address LSB, MSB (Little Endian)
+                // Commande 0x07 : AA 07 RL AddrLSB AddrMSB CRC
+                const cmd = [0xAA, 0x07, count & 0xFF, startAddr & 0xFF, (startAddr >> 8) & 0xFF];
                 const crc = this.calculateCRC(Buffer.from(cmd));
                 const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
@@ -168,8 +170,8 @@ class TinyBMS {
                     // Vérifier si on a au moins le header
                     if (rxBuffer.length < 3) return;
 
-                    // Vérification Header AA 03
-                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x03) {
+                    // Vérification Header AA 07
+                    if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x07) {
                         console.log(`[TinyBMS] Invalid header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`);
                         console.log(`[TinyBMS] Full buffer: ${rxBuffer.toString('hex')}`);
                         this.port.removeListener('data', onData);
