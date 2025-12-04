@@ -106,6 +106,10 @@ app.post('/api/write-batch', async (req, res) => {
                 await new Promise(r => setTimeout(r, 100));
             }
 
+            // Relire les settings pour confirmer et mettre à jour l'interface immédiatement
+            const settings = await bms.readRegisterBlock(300, 45);
+            io.emit('bms-settings', settings);
+
             // Resume polling
             if (currentMode === 'CONNECTED') {
                 startRealPolling();
