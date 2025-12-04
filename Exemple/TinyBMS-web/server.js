@@ -172,8 +172,8 @@ async function startRealPolling() {
             const live = await bms.readRegisterBlock(0, 57);
             io.emit('bms-live', live);
 
-            // Délai entre les lectures pour laisser le BMS respirer
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // Délai plus long entre les lectures pour laisser le BMS respirer
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             // Lecture des stats et settings tous les 5 cycles
             if (cycle % 5 === 0) {
@@ -182,10 +182,12 @@ async function startRealPolling() {
                     io.emit('bms-stats', stats);
 
                     // Délai avant la prochaine lecture
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 } catch (statsError) {
                     // Les statistiques peuvent ne pas être disponibles sur tous les BMS
                     console.warn("Stats read failed (may not be supported):", statsError.message);
+                    // Délai même en cas d'erreur
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
 
@@ -201,9 +203,9 @@ async function startRealPolling() {
         }
 
         // Schedule next poll only after this one completes
-        // Augmentation du délai entre les cycles complets de 1s à 2s
+        // Augmentation du délai entre les cycles complets de 1s à 3s
         if (isPolling && currentMode === 'CONNECTED') {
-            setTimeout(pollLoop, 2000);
+            setTimeout(pollLoop, 3000);
         }
     };
 
