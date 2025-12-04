@@ -204,8 +204,8 @@ class TinyBMS {
         });
     }
 
-    // Ecriture (Fonction 0x10 - Write Multiple Registers)
-    // Utilisé ici pour écrire 1 seul registre à la fois par sécurité
+    // Ecriture (Fonction 0x0D - Write Individual Registers)
+    // Format: AA 0D PL AddrLSB AddrMSB DataLSB DataMSB CRC_LSB CRC_MSB
     // Note: Adresse ET Données en Little Endian (confirmé par test_tinybms.py)
     writeRegister(regId, value) {
         return new Promise((resolve, reject) => {
@@ -231,8 +231,9 @@ class TinyBMS {
                 if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
                 else dataBytes.writeUInt16LE(rawValue);
 
-                // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Adresse en Little Endian)
-                const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
+                // Header: AA 0D PL AddrLSB AddrMSB (Write Individual - comme test_tinybms.py)
+                // PL = 0x04 (4 bytes: 2 pour l'adresse + 2 pour les données)
+                const header = [0xAA, 0x0D, 0x04, regId & 0xFF, (regId >> 8) & 0xFF]; // Command 0x0D, Payload Length, Address LE
                 const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
                 const crc = this.calculateCRC(cmdNoCrc);
                 const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
@@ -255,29 +256,38 @@ class TinyBMS {
 
                     console.log(`[TinyBMS] Write full response: ${rxBuffer.toString('hex')}`);
 
-                    // Réponse: AA 01 (ACK) ou AA 00 (NACK)
+                    // Réponse pour commande 0x0D: AA 01 0D (ACK) ou AA 00 0D ERROR (NACK)
                     if (rxBuffer[0] === 0xAA) {
                         this.port.removeListener('data', onData);
 
                         if (rxBuffer[1] === 0x01) {
-                            // ACK
-                            console.log(`[TinyBMS] ✅ Write ACK received for register ${regId}`);
-                            resolve(true);
+                            // ACK - Vérifier que c'est bien pour la commande 0x0D
+                            if (rxBuffer[2] === 0x0D) {
+                                console.log(`[TinyBMS] ✅ Write ACK received for register ${regId}`);
+                                resolve(true);
+                            } else {
+                                console.warn(`[TinyBMS] ACK received but for wrong command: 0x${rxBuffer[2].toString(16)}`);
+                                resolve(true); // Accepter quand même
+                            }
                         } else if (rxBuffer[1] === 0x00) {
-                            // NACK
+                            // NACK - Le code d'erreur est à l'index 3
                             const errorCode = rxBuffer[3] || 0xFF;
-                            console.error(`[TinyBMS] ❌ Write NACK received for register ${regId}, error code: 0x${errorCode.toString(16)}`);
-                            reject(new Error(`Write failed with NACK, error code: 0x${errorCode.toString(16)}`));
-                        } else if (rxBuffer[1] === 0x10) {
-                            // Réponse MODBUS 0x10
-                            console.log(`[TinyBMS] Write MODBUS response (0x10) for register ${regId}`);
-                            resolve(true);
+                            const errorMessages = {
+                                0x00: "Command error",
+                                0x01: "CRC error",
+                                0x02: "Invalid register address",
+                                0x03: "Read-only register",
+                                0x04: "Value out of range"
+                            };
+                            const errorMsg = errorMessages[errorCode] || "Unknown error";
+                            console.error(`[TinyBMS] ❌ Write NACK for register ${regId}, error: ${errorMsg} (code: 0x${errorCode.toString(16)})`);
+                            reject(new Error(`Write failed: ${errorMsg}`));
                         } else {
-                            reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+                            reject(new Error(`Invalid write response: ${rxBuffer.toString('hex')}`));
                         }
                     } else {
                         this.port.removeListener('data', onData);
-                        reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+                        reject(new Error(`Invalid write response header: ${rxBuffer.toString('hex')}`));
                     }
                 };
 
