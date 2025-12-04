@@ -236,16 +236,31 @@ class TinyBMS {
                 // Accumuler les données reçues
                 rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
-                // Attendre au moins 8 bytes (taille minimale réponse write)
-                if (rxBuffer.length < 8) return;
+                // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
+                if (rxBuffer.length < 5) return;
 
                 console.log(`[TinyBMS] Write full response:`, rxBuffer.toString('hex'));
 
-                // Réponse: AA 10 ...
-                if (rxBuffer[0] === 0xAA && rxBuffer[1] === 0x10) {
+                // Réponse: AA 01 (ACK) ou AA 00 (NACK)
+                if (rxBuffer[0] === 0xAA) {
                     this.port.removeListener('data', onData);
-                    console.log(`[TinyBMS] Write successful for register ${regId}`);
-                    resolve(true);
+
+                    if (rxBuffer[1] === 0x01) {
+                        // ACK
+                        console.log(`[TinyBMS] ✅ Write ACK received for register ${regId}`);
+                        resolve(true);
+                    } else if (rxBuffer[1] === 0x00) {
+                        // NACK
+                        const errorCode = rxBuffer[3] || 0xFF;
+                        console.error(`[TinyBMS] ❌ Write NACK received for register ${regId}, error code: 0x${errorCode.toString(16)}`);
+                        reject(new Error(`Write failed with NACK, error code: 0x${errorCode.toString(16)}`));
+                    } else if (rxBuffer[1] === 0x10) {
+                        // Réponse MODBUS 0x10
+                        console.log(`[TinyBMS] Write MODBUS response (0x10) for register ${regId}`);
+                        resolve(true);
+                    } else {
+                        reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+                    }
                 } else {
                     this.port.removeListener('data', onData);
                     reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
