@@ -147,22 +147,37 @@ class TinyBMS {
             const crc = this.calculateCRC(Buffer.from(cmd));
             const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
-            const onData = (data) => {
-                console.log(`[TinyBMS] Received ${data.length} bytes:`, data.toString('hex'));
+            let rxBuffer = Buffer.alloc(0);
+
+            const onData = (chunk) => {
+                console.log(`[TinyBMS] Received ${chunk.length} bytes (total: ${rxBuffer.length + chunk.length})`);
+
+                // Accumuler les données reçues
+                rxBuffer = Buffer.concat([rxBuffer, chunk]);
+
+                // Vérifier si on a au moins le header
+                if (rxBuffer.length < 3) return;
+
                 // Vérification Header AA 03
-                if (data[0] !== 0xAA || data[1] !== 0x03) {
-                    console.log(`[TinyBMS] Invalid header: ${data[0].toString(16)} ${data[1].toString(16)}`);
+                if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x03) {
+                    console.log(`[TinyBMS] Invalid header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`);
+                    this.port.removeListener('data', onData);
+                    reject(new Error("Invalid header"));
                     return;
                 }
-                const len = data[2];
-                if (data.length < 3 + len + 2) {
-                    console.log(`[TinyBMS] Incomplete frame: got ${data.length}, expected ${3 + len + 2}`);
-                    return; // Attendre trame complète
+
+                const len = rxBuffer[2];
+                const expectedLen = 3 + len + 2;
+
+                console.log(`[TinyBMS] Frame progress: ${rxBuffer.length}/${expectedLen} bytes`);
+
+                if (rxBuffer.length < expectedLen) {
+                    return; // Attendre plus de données
                 }
 
-                const payload = data.slice(3, 3 + len);
+                const payload = rxBuffer.slice(3, 3 + len);
                 this.port.removeListener('data', onData);
-                console.log(`[TinyBMS] Read successful, ${len} bytes payload`);
+                console.log(`[TinyBMS] Read successful, ${len} bytes payload, full frame: ${rxBuffer.slice(0, expectedLen).toString('hex')}`);
                 resolve(this.parseBlock(startAddr, payload));
             };
 
@@ -201,13 +216,27 @@ class TinyBMS {
             const crc = this.calculateCRC(cmdNoCrc);
             const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
 
-            const onData = (data) => {
-                console.log(`[TinyBMS] Write response: ${data.length} bytes:`, data.toString('hex'));
+            let rxBuffer = Buffer.alloc(0);
+
+            const onData = (chunk) => {
+                console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes`);
+
+                // Accumuler les données reçues
+                rxBuffer = Buffer.concat([rxBuffer, chunk]);
+
+                // Attendre au moins 8 bytes (taille minimale réponse write)
+                if (rxBuffer.length < 8) return;
+
+                console.log(`[TinyBMS] Write full response:`, rxBuffer.toString('hex'));
+
                 // Réponse: AA 10 ...
-                if (data[0] === 0xAA && data[1] === 0x10) {
+                if (rxBuffer[0] === 0xAA && rxBuffer[1] === 0x10) {
                     this.port.removeListener('data', onData);
                     console.log(`[TinyBMS] Write successful for register ${regId}`);
                     resolve(true);
+                } else {
+                    this.port.removeListener('data', onData);
+                    reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
                 }
             };
 
