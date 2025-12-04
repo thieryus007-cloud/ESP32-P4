@@ -13,6 +13,8 @@ sdkconfig.ci
 # Python cache
 __pycache__/
 *.pyc
+.venv/
+venv/
 
 # Node / web assets
 node_modules/
