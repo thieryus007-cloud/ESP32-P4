@@ -103,13 +103,13 @@ app.post('/api/write-batch', async (req, res) => {
                 await bms.writeRegister(parseInt(c.id), parseFloat(c.value));
                 sendLog(`Register ${c.id} written: ${c.value}`, 'success');
                 // Attendre que le BMS enregistre en EEPROM (critique !)
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 100));
             }
 
             // IMPORTANT: Attendre encore avant de relire pour laisser le temps au BMS
             // d'écrire les valeurs en mémoire flash (EEPROM)
             sendLog('Waiting for BMS to save to EEPROM...', 'info');
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 250));
 
             // Relire les settings pour confirmer et mettre à jour l'interface
             sendLog('Reading back settings to verify...', 'info');
@@ -179,7 +179,7 @@ async function startRealPolling() {
             io.emit('bms-live', live);
 
             // Délai plus long entre les lectures pour laisser le BMS respirer
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 100));
 
             // Lecture des stats et settings tous les 5 cycles
             if (cycle % 5 === 0) {
@@ -188,12 +188,12 @@ async function startRealPolling() {
                     io.emit('bms-stats', stats);
 
                     // Délai avant la prochaine lecture
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 } catch (statsError) {
                     // Les statistiques peuvent ne pas être disponibles sur tous les BMS
                     console.warn("Stats read failed (may not be supported):", statsError.message);
                     // Délai même en cas d'erreur
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             }
 
@@ -211,7 +211,7 @@ async function startRealPolling() {
         // Schedule next poll only after this one completes
         // Augmentation du délai entre les cycles complets de 1s à 3s
         if (isPolling && currentMode === 'CONNECTED') {
-            setTimeout(pollLoop, 3000);
+            setTimeout(pollLoop, 500);
         }
     };
 
