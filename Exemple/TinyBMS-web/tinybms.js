@@ -138,7 +138,7 @@ class TinyBMS {
     // Lecture par bloc (Fonction 0x03)
     // Note: IMPORTANT - Configuration byte order pour TinyBMS:
     // - ADRESSES: Little Endian (LSB first, MSB second)
-    // - DONNÉES: Big Endian (MSB first, LSB second) - protocole MODBUS standard
+    // - DONNÉES: Little Endian (LSB first, MSB second) - confirmé par test_tinybms.py
     // - CRC: Little Endian (LSB first, MSB second)
     readRegisterBlock(startAddr, count) {
         return new Promise((resolve, reject) => {
@@ -206,7 +206,7 @@ class TinyBMS {
 
     // Ecriture (Fonction 0x10 - Write Multiple Registers)
     // Utilisé ici pour écrire 1 seul registre à la fois par sécurité
-    // Note: Adresse en Little Endian, Données en Big Endian (protocole MODBUS)
+    // Note: Adresse ET Données en Little Endian (confirmé par test_tinybms.py)
     writeRegister(regId, value) {
         return new Promise((resolve, reject) => {
             if (!this.isConnected) return reject(new Error("Not connected"));
@@ -217,10 +217,10 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
-            // Préparation données (2 octets) - Big Endian (MSB, LSB) selon protocole MODBUS
+            // Préparation données (2 octets) - Little Endian (LSB, MSB) comme test_tinybms.py
             const dataBytes = Buffer.alloc(2);
-            if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
-            else dataBytes.writeUInt16BE(rawValue);
+            if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
+            else dataBytes.writeUInt16LE(rawValue);
 
             // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Adresse en Little Endian)
             const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
@@ -276,18 +276,32 @@ class TinyBMS {
                 let rawValue = 0;
                 let byteOffset = i * 2;
 
+                // DEBUG: Log les octets bruts pour le registre 306 (Battery Capacity)
+                if (currentRegId === 306) {
+                    const byte0 = buffer[byteOffset];
+                    const byte1 = buffer[byteOffset + 1];
+                    console.log(`[DEBUG] Reg 306 Battery Capacity - Raw bytes: [${byte0.toString(16).padStart(2, '0')}, ${byte1.toString(16).padStart(2, '0')}]`);
+                    console.log(`[DEBUG] Reg 306 - If read as BE: ${buffer.readUInt16BE(byteOffset)} (0x${buffer.readUInt16BE(byteOffset).toString(16)})`);
+                    console.log(`[DEBUG] Reg 306 - If read as LE: ${buffer.readUInt16LE(byteOffset)} (0x${buffer.readUInt16LE(byteOffset).toString(16)})`);
+                }
+
                 if (def.type === 'FLOAT') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatBE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatLE(byteOffset);
                 } else if (def.type === 'UINT32') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32BE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32LE(byteOffset);
                 } else if (def.type === 'INT16') {
-                    rawValue = buffer.readInt16BE(byteOffset);
+                    rawValue = buffer.readInt16LE(byteOffset);
                 } else {
-                    rawValue = buffer.readUInt16BE(byteOffset);
+                    rawValue = buffer.readUInt16LE(byteOffset);
                 }
 
                 let finalValue = rawValue;
                 if (def.scale) finalValue = rawValue * def.scale;
+
+                // DEBUG: Log les valeurs pour le registre 306
+                if (currentRegId === 306) {
+                    console.log(`[DEBUG] Reg 306 - rawValue (LE): ${rawValue}, finalValue (after scale ${def.scale}): ${finalValue}`);
+                }
 
                 // On nettoie les flottants (ex: 3.90000001 -> 3.9)
                 result[currentRegId] = {
