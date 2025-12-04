@@ -167,6 +167,41 @@ class TinyBMS {
                     // Accumuler les données reçues
                     rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
+                    // Si on reçoit beaucoup de données, c'est probablement du debug ASCII
+                    if (rxBuffer.length > 200) {
+                        console.log(`[TinyBMS] Large buffer detected (${rxBuffer.length} bytes) - searching for valid MODBUS frame...`);
+
+                        // Chercher une trame valide AA 07 dans les données
+                        let foundFrame = null;
+                        for (let i = 0; i < rxBuffer.length - 5; i++) {
+                            if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x07) {
+                                const payloadLen = rxBuffer[i + 2];
+                                const frameLen = 3 + payloadLen + 2;
+
+                                if (i + frameLen <= rxBuffer.length) {
+                                    const potentialFrame = rxBuffer.slice(i, i + frameLen);
+                                    // Vérifier le CRC
+                                    const receivedCrc = (potentialFrame[frameLen - 1] << 8) | potentialFrame[frameLen - 2];
+                                    const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, -2));
+
+                                    if (receivedCrc === calculatedCrc) {
+                                        console.log(`[TinyBMS] ✅ Valid frame found at offset ${i}`);
+                                        foundFrame = potentialFrame;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                        } else {
+                            console.log(`[TinyBMS] ❌ No valid MODBUS frame found in ${rxBuffer.length} bytes`);
+                            // Continuer à attendre plus de données
+                            return;
+                        }
+                    }
+
                     // Vérifier si on a au moins le header
                     if (rxBuffer.length < 3) return;
 
@@ -249,6 +284,36 @@ class TinyBMS {
                     rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
                     console.log(`[TinyBMS] Write accumulated buffer (${rxBuffer.length} bytes): ${rxBuffer.toString('hex')}`);
+
+                    // Si on reçoit beaucoup de données, c'est probablement du debug ASCII
+                    if (rxBuffer.length > 50) {
+                        console.log(`[TinyBMS] Large write response (${rxBuffer.length} bytes) - searching for ACK/NACK...`);
+
+                        // Chercher une trame ACK/NACK valide dans les données
+                        let foundFrame = null;
+                        for (let i = 0; i < rxBuffer.length - 5; i++) {
+                            if (rxBuffer[i] === 0xAA && (rxBuffer[i + 1] === 0x01 || rxBuffer[i + 1] === 0x00)) {
+                                const potentialFrame = rxBuffer.slice(i, i + 5);
+                                // Vérifier le CRC
+                                const receivedCrc = (potentialFrame[4] << 8) | potentialFrame[3];
+                                const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, 3));
+
+                                if (receivedCrc === calculatedCrc) {
+                                    console.log(`[TinyBMS] ✅ Valid ACK/NACK found at offset ${i}`);
+                                    foundFrame = potentialFrame;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                        } else {
+                            console.log(`[TinyBMS] ❌ No valid ACK/NACK found, continuing to wait...`);
+                            // Continuer à attendre plus de données
+                            return;
+                        }
+                    }
 
                     // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
                     if (rxBuffer.length < 5) {
