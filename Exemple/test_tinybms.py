@@ -68,23 +68,26 @@ def build_write_frame(address, value):
 
     return frame
 
-def flush_serial_buffer(ser, max_attempts=5, wait_time=0.1):
+def flush_serial_buffer(ser, max_attempts=10, wait_time=0.15):
     """Vide complètement le buffer série avec plusieurs tentatives"""
+    total_flushed = 0
     for attempt in range(max_attempts):
         ser.reset_input_buffer()
         time.sleep(wait_time)
         if ser.in_waiting > 0:
             junk = ser.read(ser.in_waiting)
-            if len(junk) > 100:  # Beaucoup de données = probablement du debug
-                print(f"⚠️  Données parasites détectées et vidées ({len(junk)} octets)")
+            total_flushed += len(junk)
         else:
+            if total_flushed > 0:
+                print(f"🧹 Buffer nettoyé ({total_flushed} octets de debug vidés)")
             break
 
     # Attente finale pour s'assurer que le buffer est vide
-    time.sleep(0.2)
+    time.sleep(0.3)
     if ser.in_waiting > 0:
         junk = ser.read(ser.in_waiting)
-        print(f"⚠️  Encore {len(junk)} octets de données parasites vidés")
+        total_flushed += len(junk)
+        print(f"🧹 Nettoyage final ({total_flushed} octets au total)")
 
 def read_register(ser, address, reg_name=""):
     """Lit un registre TinyBMS"""
@@ -104,8 +107,8 @@ def read_register(ser, address, reg_name=""):
     ser.write(frame)
     ser.flush()  # S'assurer que les données sont envoyées
 
-    # Attente de la réponse
-    time.sleep(0.2)
+    # Attente de la réponse (augmentée pour laisser le temps au debug de passer)
+    time.sleep(0.5)
 
     # Lecture de la réponse
     if ser.in_waiting > 0:
@@ -114,16 +117,26 @@ def read_register(ser, address, reg_name=""):
         # Si la réponse est trop grande, c'est probablement du debug
         if len(response) > 100:
             print(f"\n⚠️  Réponse anormalement grande ({len(response)} octets) - Données de debug détectées")
-            print(f"   Aperçu ASCII: {response[:100].decode('ascii', errors='replace')[:80]}...")
 
-            # Chercher une trame valide dans les données
+            # Chercher une trame valide dans les données (plus intelligemment)
+            found_frame = None
             for i in range(len(response) - 9):
-                if response[i] == 0xAA and response[i+1] == 0x09:
-                    print(f"   Trame potentielle trouvée à l'offset {i}")
-                    response = response[i:i+9]
-                    break
+                if response[i] == 0xAA and response[i+1] == 0x09 and response[i+2] == 0x04:
+                    # Vérifier que c'est bien une trame complète (9 octets)
+                    potential_frame = response[i:i+9]
+                    # Vérifier le CRC
+                    received_crc = (potential_frame[-1] << 8) | potential_frame[-2]
+                    calculated_crc = crc16_modbus(potential_frame[:-2])
+                    if received_crc == calculated_crc:
+                        print(f"   ✅ Trame valide trouvée à l'offset {i}")
+                        found_frame = potential_frame
+                        break
+
+            if found_frame:
+                response = found_frame
             else:
-                print("❌ Aucune trame Modbus valide trouvée dans les données")
+                print("❌ Aucune trame Modbus valide trouvée dans les données de debug")
+                print(f"   Conseil: Désactivez les messages de debug du TinyBMS si possible")
                 return None
 
         print(f"\n📥 Réponse reçue ({len(response)} octets):")
@@ -180,8 +193,8 @@ def write_register(ser, address, value, reg_name=""):
     ser.write(frame)
     ser.flush()  # S'assurer que les données sont envoyées
 
-    # Attente de la réponse
-    time.sleep(0.2)
+    # Attente de la réponse (augmentée pour laisser le temps au debug de passer)
+    time.sleep(0.5)
 
     # Lecture de la réponse (ACK/NACK)
     if ser.in_waiting > 0:
@@ -190,16 +203,27 @@ def write_register(ser, address, value, reg_name=""):
         # Si la réponse est trop grande, c'est probablement du debug
         if len(response) > 100:
             print(f"\n⚠️  Réponse anormalement grande ({len(response)} octets) - Données de debug détectées")
-            print(f"   Aperçu ASCII: {response[:100].decode('ascii', errors='replace')[:80]}...")
 
-            # Chercher une trame ACK/NACK dans les données
-            for i in range(len(response) - 3):
+            # Chercher une trame ACK/NACK dans les données (plus intelligemment)
+            found_frame = None
+            for i in range(len(response) - 5):
                 if response[i] == 0xAA and (response[i+1] == 0x01 or response[i+1] == 0x00):
-                    print(f"   Trame ACK/NACK potentielle trouvée à l'offset {i}")
-                    response = response[i:i+5]  # ACK/NACK fait ~5 octets
-                    break
+                    # Trame ACK/NACK potentielle
+                    potential_frame = response[i:i+5]
+                    # Vérifier le CRC si la trame est assez longue
+                    if len(potential_frame) >= 5:
+                        received_crc = (potential_frame[-1] << 8) | potential_frame[-2]
+                        calculated_crc = crc16_modbus(potential_frame[:-2])
+                        if received_crc == calculated_crc:
+                            print(f"   ✅ Trame ACK/NACK valide trouvée à l'offset {i}")
+                            found_frame = potential_frame
+                            break
+
+            if found_frame:
+                response = found_frame
             else:
-                print("❌ Aucune trame ACK/NACK valide trouvée dans les données")
+                print("❌ Aucune trame ACK/NACK valide trouvée dans les données de debug")
+                print(f"   Conseil: Désactivez les messages de debug du TinyBMS si possible")
                 return False
 
         print(f"\n📥 Réponse reçue ({len(response)} octets):")
@@ -312,9 +336,9 @@ def main():
             time.sleep(0.5)
 
             # Vider complètement le buffer au démarrage (important!)
-            print("🔄 Vidage du buffer série initial...")
-            flush_serial_buffer(ser, max_attempts=10, wait_time=0.2)
-            print("✅ Buffer série prêt")
+            print("🔄 Vidage du buffer série initial (attendez ~3 secondes)...")
+            flush_serial_buffer(ser, max_attempts=20, wait_time=0.2)
+            print("✅ Buffer série prêt\n")
 
             # Tests automatiques
             print("\n" + "=" * 60)
