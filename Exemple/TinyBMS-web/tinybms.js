@@ -148,17 +148,26 @@ class TinyBMS {
             const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
 
             const onData = (data) => {
+                console.log(`[TinyBMS] Received ${data.length} bytes:`, data.toString('hex'));
                 // Vérification Header AA 03
-                if (data[0] !== 0xAA || data[1] !== 0x03) return; 
+                if (data[0] !== 0xAA || data[1] !== 0x03) {
+                    console.log(`[TinyBMS] Invalid header: ${data[0].toString(16)} ${data[1].toString(16)}`);
+                    return;
+                }
                 const len = data[2];
-                if (data.length < 3 + len + 2) return; // Attendre trame complète
+                if (data.length < 3 + len + 2) {
+                    console.log(`[TinyBMS] Incomplete frame: got ${data.length}, expected ${3 + len + 2}`);
+                    return; // Attendre trame complète
+                }
 
                 const payload = data.slice(3, 3 + len);
                 this.port.removeListener('data', onData);
+                console.log(`[TinyBMS] Read successful, ${len} bytes payload`);
                 resolve(this.parseBlock(startAddr, payload));
             };
 
             this.port.on('data', onData);
+            console.log(`[TinyBMS] Sending read command: addr=${startAddr}, count=${count}, bytes=${finalBuf.toString('hex')}`);
             this.port.write(finalBuf);
 
             setTimeout(() => {
@@ -181,10 +190,10 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
-            // Préparation données (2 octets) - Little Endian (LSB, MSB) comme pour les adresses
+            // Préparation données (2 octets) - Big Endian (MSB, LSB) comme dans la doc et l'implémentation C++
             const dataBytes = Buffer.alloc(2);
-            if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
-            else dataBytes.writeUInt16LE(rawValue);
+            if (def.type === 'INT16') dataBytes.writeInt16BE(rawValue);
+            else dataBytes.writeUInt16BE(rawValue);
 
             // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Address uses Little Endian despite TinyBMS documentation Rev D)
             const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
@@ -193,14 +202,17 @@ class TinyBMS {
             const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
 
             const onData = (data) => {
+                console.log(`[TinyBMS] Write response: ${data.length} bytes:`, data.toString('hex'));
                 // Réponse: AA 10 ...
                 if (data[0] === 0xAA && data[1] === 0x10) {
                     this.port.removeListener('data', onData);
+                    console.log(`[TinyBMS] Write successful for register ${regId}`);
                     resolve(true);
                 }
             };
 
             this.port.on('data', onData);
+            console.log(`[TinyBMS] Sending write command: reg=${regId}, value=${rawValue}, bytes=${finalBuf.toString('hex')}`);
             this.port.write(finalBuf);
             
             setTimeout(() => {
@@ -224,13 +236,13 @@ class TinyBMS {
                 let byteOffset = i * 2;
 
                 if (def.type === 'FLOAT') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatLE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readFloatBE(byteOffset);
                 } else if (def.type === 'UINT32') {
-                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32LE(byteOffset);
+                    if (byteOffset + 4 <= buffer.length) rawValue = buffer.readUInt32BE(byteOffset);
                 } else if (def.type === 'INT16') {
-                    rawValue = buffer.readInt16LE(byteOffset);
+                    rawValue = buffer.readInt16BE(byteOffset);
                 } else {
-                    rawValue = buffer.readUInt16LE(byteOffset);
+                    rawValue = buffer.readUInt16BE(byteOffset);
                 }
 
                 let finalValue = rawValue;
