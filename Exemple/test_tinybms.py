@@ -5,9 +5,20 @@ Usage: python3 test_tinybms.py [port]
 Example: python3 test_tinybms.py /dev/ttyUSB0
 """
 
-import serial
 import time
 import sys
+
+# Vérification de pyserial
+try:
+    import serial
+except ImportError:
+    print("❌ Erreur: Le module 'pyserial' n'est pas installé")
+    print("\n📦 Installation requise:")
+    print("   pip3 install pyserial")
+    print("   OU")
+    print("   python3 -m pip install pyserial")
+    print("\nPuis relancez le script.")
+    sys.exit(1)
 
 def crc16_modbus(data):
     """Calcule le CRC-16 Modbus"""
