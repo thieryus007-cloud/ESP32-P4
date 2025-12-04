@@ -167,16 +167,59 @@ class TinyBMS {
                     // Accumuler les données reçues
                     rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
+                    // Fonction helper pour chercher une trame valide
+                    const searchForValidFrame = () => {
+                        for (let i = 0; i < rxBuffer.length - 5; i++) {
+                            if (rxBuffer[i] === 0xAA && rxBuffer[i + 1] === 0x07) {
+                                const payloadLen = rxBuffer[i + 2];
+                                const frameLen = 3 + payloadLen + 2;
+
+                                if (i + frameLen <= rxBuffer.length) {
+                                    const potentialFrame = rxBuffer.slice(i, i + frameLen);
+                                    // Vérifier le CRC
+                                    const receivedCrc = (potentialFrame[frameLen - 1] << 8) | potentialFrame[frameLen - 2];
+                                    const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, -2));
+
+                                    if (receivedCrc === calculatedCrc) {
+                                        console.log(`[TinyBMS] ✅ Valid frame found at offset ${i}`);
+                                        return potentialFrame;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    };
+
+                    // Si on reçoit plus de 50 bytes (probablement du debug ASCII mélangé), chercher une trame valide
+                    if (rxBuffer.length > 50) {
+                        console.log(`[TinyBMS] Buffer size ${rxBuffer.length} bytes - searching for valid MODBUS frame...`);
+                        const foundFrame = searchForValidFrame();
+
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                        } else {
+                            console.log(`[TinyBMS] ⏳ No complete valid frame yet, waiting for more data...`);
+                            return;
+                        }
+                    }
+
                     // Vérifier si on a au moins le header
                     if (rxBuffer.length < 3) return;
 
                     // Vérification Header AA 07
                     if (rxBuffer[0] !== 0xAA || rxBuffer[1] !== 0x07) {
-                        console.log(`[TinyBMS] Invalid header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`);
-                        console.log(`[TinyBMS] Full buffer: ${rxBuffer.toString('hex')}`);
-                        this.port.removeListener('data', onData);
-                        reject(new Error("Invalid header"));
-                        return;
+                        // Header invalide - probablement du debug ASCII
+                        // Chercher une trame valide dans le buffer
+                        console.log(`[TinyBMS] Invalid header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)} - searching for valid frame...`);
+
+                        const foundFrame = searchForValidFrame();
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                            console.log(`[TinyBMS] Frame recovered from ASCII debug pollution`);
+                        } else {
+                            console.log(`[TinyBMS] No valid frame found yet in ${rxBuffer.length} bytes, waiting...`);
+                            return; // Continue waiting instead of rejecting immediately
+                        }
                     }
 
                     const len = rxBuffer[2];
@@ -243,20 +286,62 @@ class TinyBMS {
                 let rxBuffer = Buffer.alloc(0);
 
                 const onData = (chunk) => {
-                    console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes - hex: ${chunk.toString('hex')}`);
+                    console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes`);
 
                     // Accumuler les données reçues
                     rxBuffer = Buffer.concat([rxBuffer, chunk]);
 
-                    console.log(`[TinyBMS] Write accumulated buffer (${rxBuffer.length} bytes): ${rxBuffer.toString('hex')}`);
+                    // Fonction helper pour chercher une trame ACK/NACK valide
+                    const searchForAckNack = () => {
+                        for (let i = 0; i < rxBuffer.length - 5; i++) {
+                            if (rxBuffer[i] === 0xAA && (rxBuffer[i + 1] === 0x01 || rxBuffer[i + 1] === 0x00)) {
+                                const potentialFrame = rxBuffer.slice(i, i + 5);
+                                // Vérifier le CRC
+                                const receivedCrc = (potentialFrame[4] << 8) | potentialFrame[3];
+                                const calculatedCrc = this.calculateCRC(potentialFrame.slice(0, 3));
+
+                                if (receivedCrc === calculatedCrc) {
+                                    console.log(`[TinyBMS] ✅ Valid ACK/NACK found at offset ${i}`);
+                                    return potentialFrame;
+                                }
+                            }
+                        }
+                        return null;
+                    };
+
+                    // Si buffer > 20 bytes (ACK est 5 bytes), probablement du debug ASCII mélangé
+                    if (rxBuffer.length > 20) {
+                        console.log(`[TinyBMS] Large write buffer (${rxBuffer.length} bytes) - searching for ACK/NACK...`);
+                        const foundFrame = searchForAckNack();
+
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                        } else {
+                            console.log(`[TinyBMS] ⏳ No complete ACK/NACK yet, waiting...`);
+                            return;
+                        }
+                    }
 
                     // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
                     if (rxBuffer.length < 5) {
-                        console.log(`[TinyBMS] Waiting for more data... (need at least 5 bytes)`);
                         return;
                     }
 
-                    console.log(`[TinyBMS] Write full response: ${rxBuffer.toString('hex')}`);
+                    // Vérification Header AA
+                    if (rxBuffer[0] !== 0xAA) {
+                        // Header invalide - probablement du debug ASCII
+                        console.log(`[TinyBMS] Invalid ACK/NACK header - searching for valid frame...`);
+                        const foundFrame = searchForAckNack();
+                        if (foundFrame) {
+                            rxBuffer = foundFrame;
+                            console.log(`[TinyBMS] ACK/NACK recovered from ASCII debug pollution`);
+                        } else {
+                            console.log(`[TinyBMS] No valid ACK/NACK found yet, waiting...`);
+                            return;
+                        }
+                    }
+
+                    console.log(`[TinyBMS] Write response: ${rxBuffer.toString('hex')}`);
 
                     // Réponse pour commande 0x0D: AA 01 0D (ACK) ou AA 00 0D ERROR (NACK)
                     if (rxBuffer[0] === 0xAA) {
