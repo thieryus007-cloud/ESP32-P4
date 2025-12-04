@@ -224,3 +224,31 @@ function parseReadResponse(buffer: Uint8Array): { data: number[], valid: boolean
 ---
 
 **Note** : Cette documentation a été créée pour clarifier l'ordre des octets dans le protocole MODBUS TinyBMS et éviter toute confusion entre Big Endian et Little Endian.
+
+Le protocole « Modbus compatible » du Tiny BMS est 100 % conforme au standard Modbus RTU sur les points suivants :
+Point Modbus classique
+Tiny BMS (Modbus compatible)
+Conforme ?
+Adresse registre (2 octets)
+MSB d’abord, puis LSB
+Oui
+Données 16 bits
+MSB d’abord, puis LSB
+Oui
+CRC-16 Modbus
+LSB d’abord, puis MSB
+Oui
+Fonctions supportées
+0x03 (Read Holding Registers) et 0x10 (Write Multiple Registers)
+Oui
+Trame encapsulée dans 0xAA + fonction
+Oui, mais c’est juste un « wrapper » TinyBMS, le contenu Modbus à l’intérieur est nickel
+Oui
+Donc, si tu utilises une librairie Modbus RTU classique (pymodbus, MinimalModbus, libmodbus, etc.), il te suffit de :
+	1	Ignorer les deux premiers octets de la réponse (0xAA + fonction)
+	2	Prendre tout le reste → c’est une trame Modbus RTU strictement standard
+	3	Vérifier le CRC Modbus normalement
+	4	Parser les données en Big-Endian (registre MSB/LSB et données MSB/LSB)
+Ou, encore plus simple : beaucoup de gens utilisent directement les commandes propriétaires TinyBMS (0x07, 0x0B, etc.) car elles sont plus rapides et riches, mais si tu veux rester 100 % Modbus standard, les commandes 0x03 et 0x10 du Tiny BMS sont parfaitement valides avec n’importe quel maître Modbus classique.
+Bref, tu peux dormir tranquille : oui, c’est du vrai Modbus RTU dedans ! 😄
+

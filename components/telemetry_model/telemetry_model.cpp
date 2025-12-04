@@ -175,16 +175,24 @@ void apply_register_update(const tinybms_register_update_t *update)
         return;
     }
 
-    if (std::strcmp(update->key, "state_of_charge_permille") == 0) {
-        s_state.batt.soc = update->user_value * 0.1f;
-    } else if (std::strcmp(update->key, "state_of_health_permille") == 0) {
-        s_state.batt.soh = update->user_value * 0.1f;
-    } else if (std::strcmp(update->key, "pack_voltage_mv") == 0) {
-        s_state.batt.voltage = update->user_value / 1000.0f;
+    if (std::strcmp(update->key, "state_of_charge_raw") == 0) {
+        // Protocol: UINT32 with scale 0.000001% (value 100000000 = 100%)
+        // Descriptor already applies scale, so user_value is in %
+        s_state.batt.soc = update->user_value;
+    } else if (std::strcmp(update->key, "state_of_health_raw") == 0) {
+        // Protocol: UINT16 with scale 0.002% (value 50000 = 100%)
+        // Descriptor already applies scale, so user_value is in %
+        s_state.batt.soh = update->user_value;
+    } else if (std::strcmp(update->key, "pack_voltage_v") == 0) {
+        // Protocol: FLOAT in Volts
+        s_state.batt.voltage = update->user_value;
         s_state.batt.bms_ok = (update->user_value > 0.0f);
-    } else if (std::strcmp(update->key, "pack_current_ma") == 0) {
-        s_state.batt.current = update->user_value / 1000.0f;
-    } else if (std::strcmp(update->key, "average_temperature_c") == 0) {
+    } else if (std::strcmp(update->key, "pack_current_a") == 0) {
+        // Protocol: FLOAT in Amperes
+        s_state.batt.current = update->user_value;
+    } else if (std::strcmp(update->key, "internal_temperature_decidegc") == 0) {
+        // Protocol: INT16 with scale 0.1°C
+        // Descriptor already applies scale, so user_value is in °C
         s_state.batt.temperature = update->user_value;
     }
 
@@ -194,7 +202,10 @@ void apply_register_update(const tinybms_register_update_t *update)
         const char *end = update->key + std::strlen(update->key);
         const auto result = std::from_chars(ptr, end, idx);
         if (result.ec == std::errc{} && idx > 0 && idx <= PACK_MAX_CELLS) {
-            s_state.pack.cells[idx - 1] = update->user_value;
+            // Protocol: Cell voltages are in mV (UINT16)
+            // Descriptor scale is 1.0, so user_value is in mV
+            // Convert mV to V for pack_stats_t.cells[] which expects V
+            s_state.pack.cells[idx - 1] = update->user_value / 1000.0f;
             if (idx > s_state.pack.cell_count) {
                 s_state.pack.cell_count = static_cast<uint8_t>(idx);
             }
@@ -213,11 +224,11 @@ void poll_tinybms_task(void *arg)
     (void) arg;
 
     constexpr const char *keys_to_poll[] = {
-        "pack_voltage_mv",
-        "pack_current_ma",
-        "state_of_charge_permille",
-        "state_of_health_permille",
-        "average_temperature_c",
+        "pack_voltage_v",
+        "pack_current_a",
+        "state_of_charge_raw",
+        "state_of_health_raw",
+        "internal_temperature_decidegc",
     };
 
     while (true) {

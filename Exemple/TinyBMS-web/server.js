@@ -19,6 +19,12 @@ let currentMode = 'DISCONNECTED';
 let pollTimer = null; // Used for simulation interval
 let isPolling = false; // Flag for real polling loop
 
+// Helper function to send logs to clients
+function sendLog(message, type = 'info') {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    io.emit('log', { message, type });
+}
+
 // --- ROUTES API ---
 app.get('/api/ports', async (req, res) => {
     const ports = await SerialPort.list();
@@ -28,12 +34,13 @@ app.get('/api/ports', async (req, res) => {
 });
 
 app.post('/api/connect', async (req, res) => {
-    const { path } = req.body;
+    const { path, protocol } = req.body; // protocol: 0=MODBUS, 1=ASCII
     stopAll();
 
     if (path === 'SIMULATION') {
         currentMode = 'SIMULATION';
         startSimulation();
+        sendLog('Starting simulation mode', 'system');
         res.json({ success: true, mode: 'SIMULATION' });
         io.emit('status-change', { mode: 'SIMULATION' });
     } else {
@@ -42,12 +49,30 @@ app.post('/api/connect', async (req, res) => {
             if (bms.isConnected && bms.port && bms.port.isOpen) {
                 await new Promise(resolve => bms.port.close(resolve));
             }
+            sendLog(`Connecting to BMS on ${path}...`, 'info');
             await bms.connect();
+
+            // Configuration du protocole si spécifié (par défaut ASCII = 1)
+            const selectedProtocol = protocol !== undefined ? parseInt(protocol) : 1;
+            const protocolName = selectedProtocol === 1 ? 'ASCII' : 'MODBUS';
+            sendLog(`Configuring protocol to ${protocolName}...`, 'info');
+
+            try {
+                await bms.setProtocol(selectedProtocol);
+                sendLog(`Protocol configured to ${protocolName}`, 'success');
+            } catch (protocolError) {
+                sendLog(`Protocol configuration warning: ${protocolError.message}`, 'warning');
+                // Continue même si la configuration du protocole échoue
+                // (le BMS pourrait déjà être sur le bon protocole)
+            }
+
             currentMode = 'CONNECTED';
             startRealPolling();
-            res.json({ success: true, mode: 'CONNECTED' });
+            sendLog(`BMS connected successfully on ${path}`, 'success');
+            res.json({ success: true, mode: 'CONNECTED', protocol: selectedProtocol });
             io.emit('status-change', { mode: 'CONNECTED' });
         } catch (e) {
+            sendLog(`Connection failed: ${e.message}`, 'error');
             res.status(500).json({ error: e.message });
         }
     }
@@ -56,6 +81,7 @@ app.post('/api/connect', async (req, res) => {
 app.post('/api/write-batch', async (req, res) => {
     const { changes } = req.body;
     if (currentMode === 'SIMULATION') {
+        sendLog(`Writing ${changes.length} register(s) in simulation`, 'info');
         changes.forEach(c => simulator.writeSetting(c.id, parseFloat(c.value)));
         io.emit('bms-settings', simulator.getSettings());
         res.json({ success: true });
@@ -72,8 +98,10 @@ app.post('/api/write-batch', async (req, res) => {
             // Wait a bit for current poll to finish (naive approach)
             await new Promise(r => setTimeout(r, 200));
 
+            sendLog(`Writing ${changes.length} register(s) to BMS...`, 'info');
             for (const c of changes) {
                 await bms.writeRegister(parseInt(c.id), parseFloat(c.value));
+                sendLog(`Register ${c.id} written: ${c.value}`, 'success');
                 // Petit délai pour pas saturer le BMS
                 await new Promise(r => setTimeout(r, 100));
             }
@@ -83,8 +111,10 @@ app.post('/api/write-batch', async (req, res) => {
                 startRealPolling();
             }
 
+            sendLog(`All registers written successfully`, 'success');
             res.json({ success: true });
         } catch (e) {
+            sendLog(`Write error: ${e.message}`, 'error');
             // Resume polling even on error
             if (currentMode === 'CONNECTED') {
                 startRealPolling();
@@ -92,6 +122,7 @@ app.post('/api/write-batch', async (req, res) => {
             res.status(500).json({ error: e.message });
         }
     } else {
+        sendLog('Write failed: Not connected', 'error');
         res.status(400).json({ error: "Not connected" });
     }
 });
@@ -102,6 +133,9 @@ function stopAll() {
         pollTimer = null;
     }
     isPolling = false; // Stops the recursive real polling loop
+    if (currentMode !== 'DISCONNECTED') {
+        sendLog('Stopping connection', 'info');
+    }
     currentMode = 'DISCONNECTED';
     io.emit('status-change', { mode: 'DISCONNECTED' });
 }

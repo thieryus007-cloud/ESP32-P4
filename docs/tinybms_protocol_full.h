@@ -97,7 +97,7 @@
 #define STATUS_FAULT                        0x9B
 
 // --- 3.2 Statistics Data [cite: 668] ---
-#define REG_STATS_TOTAL_DISTANCE            101 // UINT32, 0.01km
+#define REG_STATS_TOTAL_DISTANCE            100 // UINT32, 0.01km (occupies registers 100-101)
 #define REG_STATS_MAX_DISCHARGE_CUR         102 // UINT16, 100mA
 #define REG_STATS_MAX_CHARGE_CUR            103 // UINT16, 100mA
 #define REG_STATS_MAX_CELL_DIFF             104 // UINT16, 0.1mV

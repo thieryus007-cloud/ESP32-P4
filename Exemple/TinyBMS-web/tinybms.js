@@ -22,7 +22,7 @@ const REGISTER_MAP = [
     { id: 52, label: 'Real Balancing', type: 'UINT16', category: 'Live' },
 
     // --- STATISTICS (100-199) ---
-    { id: 101, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' },
+    { id: 100, label: 'Total Distance', unit: 'km', type: 'UINT32', scale: 0.01, category: 'Stats' },
     { id: 106, label: 'Over-Voltage Count', type: 'UINT16', category: 'Stats' },
     { id: 105, label: 'Under-Voltage Count', type: 'UINT16', category: 'Stats' },
     { id: 111, label: 'Charging Count', type: 'UINT16', category: 'Stats' },
@@ -88,6 +88,34 @@ class TinyBMS {
                 this.isConnected = false;
             });
         });
+    }
+
+    /**
+     * Configure le protocole de communication du TinyBMS
+     * @param {number} protocolValue - 0 pour MODBUS (défaut), 1 pour ASCII
+     * @returns {Promise<boolean>} true si la configuration a réussi
+     */
+    async setProtocol(protocolValue = 1) {
+        if (!this.isConnected) {
+            throw new Error("Cannot set protocol: not connected");
+        }
+
+        console.log(`Setting TinyBMS protocol to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}...`);
+
+        try {
+            const success = await this.writeRegister(343, protocolValue);
+            if (success) {
+                console.log(`Protocol successfully set to ${protocolValue === 1 ? 'ASCII' : 'MODBUS'}`);
+                // Attendre un peu pour que le BMS applique le changement
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } else {
+                console.warn('Protocol write command sent but no confirmation received');
+            }
+            return success;
+        } catch (error) {
+            console.error('Failed to set protocol:', error.message);
+            throw error;
+        }
     }
 
     // Calcul CRC Modbus (Poly 0xA001)

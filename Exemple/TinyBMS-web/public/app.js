@@ -222,8 +222,8 @@ socket.on('bms-live', (data) => {
 
     const sVal = getVal(50);
     const sEl = document.getElementById('bmsState');
-    sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
-    sEl.style.color = sVal===0x9B?'var(--danger)':(sVal===0x91?'var(--success)':'#fff');
+    sEl.innerText = {0x91:'CHARGING',0x92:'FULL',0x93:'DISCHARGING',0x96:'REGENERATION',0x97:'IDLE',0x9B:'FAULT'}[sVal] || 'UNKNOWN';
+    sEl.style.color = sVal===0x9B?'var(--danger)':(sVal===0x91||sVal===0x96?'var(--success)':'#fff');
 
     // Mise à jour du gauge SOC/SOH
     if(chartSocSoh) {
@@ -578,4 +578,113 @@ socket.on('bms-stats', (d) => {
 });
 
 async function fetchPorts() { try { const r=await fetch('/api/ports'); const p=await r.json(); document.getElementById('portSelect').innerHTML=p.map(x=>`<option value="${x.path}">${x.path==='SIMULATION'?'🛠️ SIMULATION':x.path}</option>`).join(''); } catch(e){} }
-async function connectBMS() { const path=document.getElementById('portSelect').value; await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})}); }
+async function connectBMS() {
+    const path=document.getElementById('portSelect').value;
+    const protocol=document.getElementById('protocolSelect').value;
+    await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path, protocol: parseInt(protocol)})});
+}
+
+// --- LOGS SYSTEM ---
+const MAX_LOGS = 100; // Limite le nombre de logs affichés
+let logCount = 0;
+
+function addLog(message, type = 'info') {
+    const container = document.getElementById('logs-container');
+    if (!container) return;
+
+    const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${type}`;
+    logEntry.innerHTML = `<span class="log-time">${time}</span><span class="log-message">${message}</span>`;
+
+    container.appendChild(logEntry);
+    logCount++;
+
+    // Limiter le nombre de logs
+    if (logCount > MAX_LOGS) {
+        const firstLog = container.firstChild;
+        if (firstLog) container.removeChild(firstLog);
+        logCount--;
+    }
+
+    // Auto-scroll vers le bas
+    container.scrollTop = container.scrollHeight;
+}
+
+function clearLogs() {
+    const container = document.getElementById('logs-container');
+    if (container) {
+        container.innerHTML = '';
+        logCount = 0;
+        addLog('Logs cleared', 'info');
+    }
+}
+
+// Écouter les événements Socket.IO pour logger
+socket.on('connect', () => {
+    addLog('Connected to server', 'success');
+});
+
+socket.on('disconnect', () => {
+    addLog('Disconnected from server', 'warning');
+});
+
+socket.on('status-change', (data) => {
+    const mode = data.mode;
+    let message = '';
+    let type = 'info';
+
+    if (mode === 'CONNECTED') {
+        message = 'BMS connected successfully';
+        type = 'success';
+    } else if (mode === 'SIMULATION') {
+        message = 'Simulation mode started';
+        type = 'system';
+    } else if (mode === 'DISCONNECTED') {
+        message = 'BMS disconnected';
+        type = 'warning';
+    }
+
+    if (message) addLog(message, type);
+});
+
+socket.on('bms-live', (data) => {
+    if (!data) return;
+    // Log uniquement les événements importants (pas chaque lecture de données)
+    // Pour éviter de spammer les logs, on ne log pas chaque mise à jour
+});
+
+socket.on('bms-settings', (data) => {
+    if (data && Object.keys(data).length > 0) {
+        addLog(`Settings updated (${Object.keys(data).length} registers)`, 'info');
+    }
+});
+
+socket.on('bms-stats', (data) => {
+    if (data && Object.keys(data).length > 0) {
+        addLog(`Statistics updated (${Object.keys(data).length} registers)`, 'info');
+    }
+});
+
+// Écouter les événements de log personnalisés envoyés par le serveur
+socket.on('log', (data) => {
+    addLog(data.message, data.type || 'info');
+});
+
+// Surcharger la fonction saveSection pour logger les écritures
+const originalSaveSection = saveSection;
+window.saveSection = async function(groupId) {
+    addLog(`Saving ${groupId} settings...`, 'system');
+    try {
+        await originalSaveSection(groupId);
+        addLog(`${groupId} settings saved successfully`, 'success');
+    } catch (e) {
+        addLog(`Error saving ${groupId} settings: ${e.message}`, 'error');
+        throw e;
+    }
+};
+
+// Log initial au chargement de la page
+document.addEventListener('DOMContentLoaded', () => {
+    addLog('TinyBMS Monitor initialized', 'system');
+});
