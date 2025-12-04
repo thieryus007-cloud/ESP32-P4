@@ -57,6 +57,24 @@ def build_write_frame(address, value):
 
     return frame
 
+def flush_serial_buffer(ser, max_attempts=5, wait_time=0.1):
+    """Vide complètement le buffer série avec plusieurs tentatives"""
+    for attempt in range(max_attempts):
+        ser.reset_input_buffer()
+        time.sleep(wait_time)
+        if ser.in_waiting > 0:
+            junk = ser.read(ser.in_waiting)
+            if len(junk) > 100:  # Beaucoup de données = probablement du debug
+                print(f"⚠️  Données parasites détectées et vidées ({len(junk)} octets)")
+        else:
+            break
+
+    # Attente finale pour s'assurer que le buffer est vide
+    time.sleep(0.2)
+    if ser.in_waiting > 0:
+        junk = ser.read(ser.in_waiting)
+        print(f"⚠️  Encore {len(junk)} octets de données parasites vidés")
+
 def read_register(ser, address, reg_name=""):
     """Lit un registre TinyBMS"""
     # Construction de la trame
@@ -68,20 +86,38 @@ def read_register(ser, address, reg_name=""):
     print(f"   Adresse: 0x{address:04X} ({address})")
     print(f"   Trame: {' '.join(f'{b:02X}' for b in frame)}")
 
-    # Vider le buffer
-    ser.reset_input_buffer()
+    # Vider le buffer complètement
+    flush_serial_buffer(ser)
 
     # Envoi
     ser.write(frame)
+    ser.flush()  # S'assurer que les données sont envoyées
 
     # Attente de la réponse
-    time.sleep(0.15)
+    time.sleep(0.2)
 
     # Lecture de la réponse
     if ser.in_waiting > 0:
         response = ser.read(ser.in_waiting)
+
+        # Si la réponse est trop grande, c'est probablement du debug
+        if len(response) > 100:
+            print(f"\n⚠️  Réponse anormalement grande ({len(response)} octets) - Données de debug détectées")
+            print(f"   Aperçu ASCII: {response[:100].decode('ascii', errors='replace')[:80]}...")
+
+            # Chercher une trame valide dans les données
+            for i in range(len(response) - 9):
+                if response[i] == 0xAA and response[i+1] == 0x09:
+                    print(f"   Trame potentielle trouvée à l'offset {i}")
+                    response = response[i:i+9]
+                    break
+            else:
+                print("❌ Aucune trame Modbus valide trouvée dans les données")
+                return None
+
         print(f"\n📥 Réponse reçue ({len(response)} octets):")
-        print(f"   Hex: {' '.join(f'{b:02X}' for b in response)}")
+        if len(response) <= 50:  # Afficher hex seulement si raisonnable
+            print(f"   Hex: {' '.join(f'{b:02X}' for b in response)}")
 
         # Vérification de la réponse
         if len(response) >= 9 and response[0] == 0xAA and response[1] == 0x09:
@@ -126,20 +162,38 @@ def write_register(ser, address, value, reg_name=""):
     print(f"   Valeur: {value} (0x{value:04X})")
     print(f"   Trame: {' '.join(f'{b:02X}' for b in frame)}")
 
-    # Vider le buffer
-    ser.reset_input_buffer()
+    # Vider le buffer complètement
+    flush_serial_buffer(ser)
 
     # Envoi
     ser.write(frame)
+    ser.flush()  # S'assurer que les données sont envoyées
 
     # Attente de la réponse
-    time.sleep(0.15)
+    time.sleep(0.2)
 
     # Lecture de la réponse (ACK/NACK)
     if ser.in_waiting > 0:
         response = ser.read(ser.in_waiting)
+
+        # Si la réponse est trop grande, c'est probablement du debug
+        if len(response) > 100:
+            print(f"\n⚠️  Réponse anormalement grande ({len(response)} octets) - Données de debug détectées")
+            print(f"   Aperçu ASCII: {response[:100].decode('ascii', errors='replace')[:80]}...")
+
+            # Chercher une trame ACK/NACK dans les données
+            for i in range(len(response) - 3):
+                if response[i] == 0xAA and (response[i+1] == 0x01 or response[i+1] == 0x00):
+                    print(f"   Trame ACK/NACK potentielle trouvée à l'offset {i}")
+                    response = response[i:i+5]  # ACK/NACK fait ~5 octets
+                    break
+            else:
+                print("❌ Aucune trame ACK/NACK valide trouvée dans les données")
+                return False
+
         print(f"\n📥 Réponse reçue ({len(response)} octets):")
-        print(f"   Hex: {' '.join(f'{b:02X}' for b in response)}")
+        if len(response) <= 50:  # Afficher hex seulement si raisonnable
+            print(f"   Hex: {' '.join(f'{b:02X}' for b in response)}")
 
         # Vérification ACK/NACK
         if len(response) >= 3 and response[0] == 0xAA:
@@ -250,11 +304,13 @@ def main():
         with serial.Serial(PORT, BAUDRATE, timeout=1) as ser:
             print("\n✅ Port série ouvert")
 
-            # Attente de stabilisation
+            # Attente de stabilisation initiale
             time.sleep(0.5)
 
-            # Vider le buffer de réception
-            ser.reset_input_buffer()
+            # Vider complètement le buffer au démarrage (important!)
+            print("🔄 Vidage du buffer série initial...")
+            flush_serial_buffer(ser, max_attempts=10, wait_time=0.2)
+            print("✅ Buffer série prêt")
 
             # Tests automatiques
             print("\n" + "=" * 60)
