@@ -15,12 +15,12 @@ async function testSimpleRead() {
     console.log('='.repeat(60));
     console.log();
 
-    const bms = new TinyBMS();
+    const bms = new TinyBMS(PORT);
 
     try {
         // Connexion
         console.log(`[1/4] Connexion au BMS sur ${PORT}...`);
-        await bms.connect(PORT);
+        await bms.connect();
         console.log('✅ Connecté\n');
 
         // Configuration protocole ASCII
