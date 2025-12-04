@@ -217,49 +217,79 @@ class TinyBMS {
             let rawValue = value;
             if (def.scale) rawValue = Math.round(value / def.scale);
 
-            // Préparation données (2 octets) - Little Endian (LSB, MSB) comme test_tinybms.py
-            const dataBytes = Buffer.alloc(2);
-            if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
-            else dataBytes.writeUInt16LE(rawValue);
-
-            // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Adresse en Little Endian)
-            const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
-            const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
-            const crc = this.calculateCRC(cmdNoCrc);
-            const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
-
-            let rxBuffer = Buffer.alloc(0);
-
-            const onData = (chunk) => {
-                console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes`);
-
-                // Accumuler les données reçues
-                rxBuffer = Buffer.concat([rxBuffer, chunk]);
-
-                // Attendre au moins 8 bytes (taille minimale réponse write)
-                if (rxBuffer.length < 8) return;
-
-                console.log(`[TinyBMS] Write full response:`, rxBuffer.toString('hex'));
-
-                // Réponse: AA 10 ...
-                if (rxBuffer[0] === 0xAA && rxBuffer[1] === 0x10) {
-                    this.port.removeListener('data', onData);
-                    console.log(`[TinyBMS] Write successful for register ${regId}`);
-                    resolve(true);
-                } else {
-                    this.port.removeListener('data', onData);
-                    reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+            // Vider le buffer série AVANT l'écriture (comme test_tinybms.py)
+            this.port.flush(async (err) => {
+                if (err) {
+                    console.warn('[TinyBMS] Flush error before write:', err.message);
                 }
-            };
 
-            this.port.on('data', onData);
-            console.log(`[TinyBMS] Sending write command: reg=${regId}, value=${rawValue}, bytes=${finalBuf.toString('hex')}`);
-            this.port.write(finalBuf);
+                // Attendre un peu après le flush
+                await new Promise(r => setTimeout(r, 100));
 
-            setTimeout(() => {
-                this.port.removeListener('data', onData);
-                resolve(false);
-            }, 2000); // Augmenté de 800ms à 2000ms
+                // Préparation données (2 octets) - Little Endian (LSB, MSB) comme test_tinybms.py
+                const dataBytes = Buffer.alloc(2);
+                if (def.type === 'INT16') dataBytes.writeInt16LE(rawValue);
+                else dataBytes.writeUInt16LE(rawValue);
+
+                // Header: AA 10 AddrLSB AddrMSB 00 01 02 (Adresse en Little Endian)
+                const header = [0xAA, 0x10, regId & 0xFF, (regId >> 8) & 0xFF, 0x00, 0x01, 0x02]; // Address LSB, MSB (Little Endian)
+                const cmdNoCrc = Buffer.concat([Buffer.from(header), dataBytes]);
+                const crc = this.calculateCRC(cmdNoCrc);
+                const finalBuf = Buffer.concat([cmdNoCrc, Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])]);
+
+                let rxBuffer = Buffer.alloc(0);
+
+                const onData = (chunk) => {
+                    console.log(`[TinyBMS] Write response chunk: ${chunk.length} bytes - hex: ${chunk.toString('hex')}`);
+
+                    // Accumuler les données reçues
+                    rxBuffer = Buffer.concat([rxBuffer, chunk]);
+
+                    console.log(`[TinyBMS] Write accumulated buffer (${rxBuffer.length} bytes): ${rxBuffer.toString('hex')}`);
+
+                    // Attendre au moins 5 bytes (taille minimale réponse ACK/NACK)
+                    if (rxBuffer.length < 5) {
+                        console.log(`[TinyBMS] Waiting for more data... (need at least 5 bytes)`);
+                        return;
+                    }
+
+                    console.log(`[TinyBMS] Write full response: ${rxBuffer.toString('hex')}`);
+
+                    // Réponse: AA 01 (ACK) ou AA 00 (NACK)
+                    if (rxBuffer[0] === 0xAA) {
+                        this.port.removeListener('data', onData);
+
+                        if (rxBuffer[1] === 0x01) {
+                            // ACK
+                            console.log(`[TinyBMS] ✅ Write ACK received for register ${regId}`);
+                            resolve(true);
+                        } else if (rxBuffer[1] === 0x00) {
+                            // NACK
+                            const errorCode = rxBuffer[3] || 0xFF;
+                            console.error(`[TinyBMS] ❌ Write NACK received for register ${regId}, error code: 0x${errorCode.toString(16)}`);
+                            reject(new Error(`Write failed with NACK, error code: 0x${errorCode.toString(16)}`));
+                        } else if (rxBuffer[1] === 0x10) {
+                            // Réponse MODBUS 0x10
+                            console.log(`[TinyBMS] Write MODBUS response (0x10) for register ${regId}`);
+                            resolve(true);
+                        } else {
+                            reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+                        }
+                    } else {
+                        this.port.removeListener('data', onData);
+                        reject(new Error(`Invalid write response header: ${rxBuffer[0].toString(16)} ${rxBuffer[1].toString(16)}`));
+                    }
+                };
+
+                this.port.on('data', onData);
+                console.log(`[TinyBMS] Sending write command: reg=${regId}, value=${rawValue}, bytes=${finalBuf.toString('hex')}`);
+                this.port.write(finalBuf);
+
+                setTimeout(() => {
+                    this.port.removeListener('data', onData);
+                    resolve(false);
+                }, 2000); // Augmenté de 800ms à 2000ms
+            });
         });
     }
 
