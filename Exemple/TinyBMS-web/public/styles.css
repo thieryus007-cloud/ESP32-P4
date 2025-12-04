@@ -227,3 +227,115 @@ h3 { text-align: center; font-size: 0.6em; color: var(--text-muted); margin-bott
 .logs-container::-webkit-scrollbar-thumb:hover {
     background: #3f3f46;
 }
+
+/* BMS Events Section */
+.bms-events-section {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 12px;
+}
+.events-status-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.status-badge {
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+.status-badge.active {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--primary);
+}
+.status-badge.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: var(--warning);
+}
+.status-badge.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
+}
+.status-icon {
+    font-size: 1.2em;
+}
+.status-label {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    flex: 1;
+}
+.status-value {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--text-main);
+}
+.events-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 4px;
+}
+.event-entry {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border-left: 3px solid;
+    background: rgba(255, 255, 255, 0.02);
+    word-wrap: break-word;
+    animation: fadeIn 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.event-entry .event-icon {
+    font-size: 1.1em;
+}
+.event-entry .event-time {
+    color: var(--text-muted);
+    font-size: 0.75em;
+    min-width: 50px;
+}
+.event-entry .event-message {
+    color: var(--text-main);
+    font-size: 0.85em;
+    flex: 1;
+}
+.event-entry.event-info {
+    border-left-color: var(--info);
+}
+.event-entry.event-success {
+    border-left-color: var(--success);
+}
+.event-entry.event-warning {
+    border-left-color: var(--warning);
+}
+.event-entry.event-error {
+    border-left-color: var(--danger);
+}
+.event-entry.event-alarm {
+    border-left-color: var(--danger);
+    background: rgba(239, 68, 68, 0.05);
+}
+.events-container::-webkit-scrollbar {
+    width: 6px;
+}
+.events-container::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+    border-radius: 3px;
+}
+.events-container::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+.events-container::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+}

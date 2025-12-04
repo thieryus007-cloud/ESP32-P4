@@ -109,10 +109,29 @@
                     </div>
                     <div class="card logs-panel">
                         <div class="logs-header">
-                            <h3>📋 System Logs</h3>
-                            <button class="logs-clear-btn" onclick="clearLogs()">Clear</button>
+                            <h3>⚡ BMS Events & Status</h3>
+                            <button class="logs-clear-btn" onclick="clearEvents()">Clear</button>
                         </div>
-                        <div id="logs-container" class="logs-container"></div>
+                        <div class="bms-events-section">
+                            <div class="events-status-row">
+                                <div class="status-badge" id="status-balancing">
+                                    <span class="status-icon">⚖️</span>
+                                    <span class="status-label">Balancing</span>
+                                    <span class="status-value" id="balancing-cells">--</span>
+                                </div>
+                                <div class="status-badge" id="status-charging">
+                                    <span class="status-icon">🔌</span>
+                                    <span class="status-label">Charging</span>
+                                    <span class="status-value" id="charging-status">--</span>
+                                </div>
+                                <div class="status-badge" id="status-fault">
+                                    <span class="status-icon">⚠️</span>
+                                    <span class="status-label">Faults</span>
+                                    <span class="status-value" id="fault-count">0</span>
+                                </div>
+                            </div>
+                            <div id="events-container" class="events-container"></div>
+                        </div>
                     </div>
                 </div>
             </div>
