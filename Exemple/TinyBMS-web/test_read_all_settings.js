@@ -2,8 +2,12 @@
 
 /**
  * Test de lecture de tous les registres de configuration spécifiés
- * Lit les registres : 300, 301, 303, 304, 305, 306, 307, 308, 310, 311,
- *                     315, 316, 317, 318, 319, 320, 321, 322, 323, 328
+ * Lit 34 registres :
+ * - 300, 301, 303, 304, 305, 306, 307, 308, 310, 311
+ * - 315, 316, 317, 318, 319, 320, 321, 322, 323, 328
+ * - 329, 330, 331, 332, 333, 334, 335, 337, 338, 339
+ * - 340, 341, 342, 343
+ * Note: Le registre 329 (Configuration Bits) affiche aussi la représentation binaire
  */
 
 const TinyBMS = require('./tinybms');
@@ -13,7 +17,9 @@ const PORT = process.argv[2] || '/dev/tty.usbserial-0001';
 // Liste des registres à lire
 const REGISTERS_TO_READ = [
     300, 301, 303, 304, 305, 306, 307, 308, 310, 311,
-    315, 316, 317, 318, 319, 320, 321, 322, 323, 328
+    315, 316, 317, 318, 319, 320, 321, 322, 323, 328,
+    329, 330, 331, 332, 333, 334, 335, 337, 338, 339,
+    340, 341, 342, 343
 ];
 
 // Mapping des registres pour afficher les labels et unités
@@ -37,7 +43,21 @@ const REGISTER_INFO = {
     321: { label: 'Charge Restart Level', unit: '%', scale: 1 },
     322: { label: 'Max Cycles Count', unit: '', scale: 1 },
     323: { label: 'SOH Setting', unit: '%', scale: 0.002 },
-    328: { label: 'Manual SOC Set', unit: '%', scale: 0.002 }
+    328: { label: 'Manual SOC Set', unit: '%', scale: 0.002 },
+    329: { label: 'Configuration Bits', unit: '', scale: 1, type: 'bits' },
+    330: { label: 'Charger Type', unit: '', scale: 1 },
+    331: { label: 'Load Switch Type', unit: '', scale: 1 },
+    332: { label: 'Automatic Recovery', unit: 's', scale: 1 },
+    333: { label: 'Charger Switch Type', unit: '', scale: 1 },
+    334: { label: 'Ignition Input', unit: '', scale: 1 },
+    335: { label: 'Charger Detection Input', unit: '', scale: 1 },
+    337: { label: 'Precharge Pin', unit: '', scale: 1 },
+    338: { label: 'Precharge Duration', unit: '', scale: 1 },
+    339: { label: 'Temp Sensor Type', unit: '', scale: 1 },
+    340: { label: 'Operation Mode', unit: '', scale: 1 },
+    341: { label: 'Single Port Switch Type', unit: '', scale: 1 },
+    342: { label: 'Broadcast Time', unit: '', scale: 1 },
+    343: { label: 'Protocol', unit: '', scale: 1 }
 };
 
 async function testReadAllSettings() {
@@ -85,7 +105,13 @@ async function testReadAllSettings() {
                     success: true
                 });
 
-                console.log(`✅ ${regId.toString().padEnd(4)} ${info.label.padEnd(30)} = ${displayValue.toString().padStart(10)} ${info.unit} (raw: ${rawValue})`);
+                // Affichage spécial pour les registres de type bits
+                if (info.type === 'bits') {
+                    const binaryStr = rawValue.toString(2).padStart(16, '0');
+                    console.log(`✅ ${regId.toString().padEnd(4)} ${info.label.padEnd(30)} = ${displayValue.toString().padStart(10)} ${info.unit} (raw: ${rawValue}, bits: ${binaryStr})`);
+                } else {
+                    console.log(`✅ ${regId.toString().padEnd(4)} ${info.label.padEnd(30)} = ${displayValue.toString().padStart(10)} ${info.unit} (raw: ${rawValue})`);
+                }
                 successCount++;
 
                 // Petit délai entre les lectures
