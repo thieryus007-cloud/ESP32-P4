@@ -42,7 +42,9 @@ class BmsSimulator {
             { id: 312, v: 1000, g: 'hardware', l: 'Pulses Per Unit', u: '' },
             { id: 330, v: 1, g: 'hardware', l: 'Charger Type', u: '' },
             { id: 340, v: 0, g: 'hardware', l: 'Operation Mode', u: '' },
-            { id: 343, v: 1, g: 'hardware', l: 'Protocol', u: '' }
+            { id: 343, v: 1, g: 'hardware', l: 'Protocol', u: '' },
+            // Version (registre 501 = 259 = 0x0103: FW v3, High Power, Internal Resistor)
+            { id: 501, v: 259, g: 'hardware', l: 'Firmware Version', u: '' }
         ];
 
         simRegs.forEach(d => {
