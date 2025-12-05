@@ -265,12 +265,12 @@ class TinyBMS {
     async readConfigurationSettings() {
         if (!this.isConnected) throw new Error("Not connected");
 
-        // Liste des registres de configuration (34 registres)
+        // Liste des registres de configuration (35 registres incluant version)
         const TESTED_REGISTERS = [
             300, 301, 303, 304, 305, 306, 307, 308, 310, 311,
             315, 316, 317, 318, 319, 320, 321, 322, 323, 328,
             329, 330, 331, 332, 333, 334, 335, 337, 338, 339,
-            340, 341, 342, 343
+            340, 341, 342, 343, 501
         ];
 
         console.log(`[TinyBMS] Reading ${TESTED_REGISTERS.length} configuration registers...`);
