@@ -363,6 +363,11 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
     size_t rx_len = 0;
     const size_t min_frame_len = 5; // preamble + len + cmd + CRC
 
+    // Flush UART input buffer before sending request to avoid residual data
+    // This matches the web interface strategy (tinybms.js line 287-289)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(50)); // Short delay after flush (web uses 100ms)
+
     // Build request frame
     esp_err_t ret = tinybms_build_read_frame(tx_frame, address);
     if (ret != ESP_OK) {
@@ -460,6 +465,10 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
     const size_t min_frame_len = 5; // preamble + len + cmd + CRC
+
+    // Flush UART input buffer before sending request to avoid residual data
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(50)); // Short delay after flush
 
     // Build write frame
     esp_err_t ret = tinybms_build_write_frame(tx_frame, address, value);
