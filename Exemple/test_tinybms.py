@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 """
-Test de communication TinyBMS - Lecture et écriture de registres
+Test de communication TinyBMS - Lecture, écriture et gestion du BMS
 Usage: python3 test_tinybms.py [port]
 Example: python3 test_tinybms.py /dev/ttyUSB0
+
+Commandes disponibles:
+  r <addr>       - Lire un registre
+  w <addr> <val> - Écrire un registre
+  e              - Effacer les événements
+  s              - Effacer les statistiques
+  z              - Redémarrer le BMS
+  q              - Quitter
 """
 
 import time
@@ -59,6 +67,27 @@ def build_write_frame(address, value):
         (address >> 8) & 0xFF,   # Address MSB
         value & 0xFF,            # Data LSB
         (value >> 8) & 0xFF,     # Data MSB
+    ])
+
+    # Calcul et ajout du CRC
+    crc = crc16_modbus(frame)
+    frame.append(crc & 0xFF)         # CRC LSB
+    frame.append((crc >> 8) & 0xFF)  # CRC MSB
+
+    return frame
+
+def build_reset_frame(option):
+    """Construit une trame de reset/clear TinyBMS (Cmd 0x02)
+
+    Options:
+    - 0x01: Clear Events
+    - 0x02: Clear Statistics
+    - 0x05: Reset BMS
+    """
+    frame = bytearray([
+        0xAA,    # Preamble
+        0x02,    # Command: Reset/Clear
+        option,  # Option
     ])
 
     # Calcul et ajout du CRC
@@ -254,6 +283,108 @@ def write_register(ser, address, value, reg_name=""):
         print("❌ Aucune réponse reçue (timeout)")
         return False
 
+def send_reset_command(ser, option, action_name):
+    """Envoie une commande de reset/clear au TinyBMS
+
+    Args:
+        ser: Port série
+        option: 0x01 (Clear Events), 0x02 (Clear Statistics), 0x05 (Reset BMS)
+        action_name: Nom de l'action pour l'affichage
+
+    Returns:
+        True si succès, False sinon
+    """
+    # Construction de la trame
+    frame = build_reset_frame(option)
+
+    option_names = {
+        0x01: "Clear Events",
+        0x02: "Clear Statistics",
+        0x05: "Reset BMS"
+    }
+
+    print(f"\n📤 Envoi de la commande: {action_name}")
+    print(f"   Option: 0x{option:02X} ({option_names.get(option, 'Unknown')})")
+    print(f"   Trame: {' '.join(f'{b:02X}' for b in frame)}")
+
+    # Vider le buffer complètement
+    flush_serial_buffer(ser)
+
+    # Envoi
+    ser.write(frame)
+    ser.flush()
+
+    # Attente de la réponse
+    if option == 0x05:  # Reset BMS
+        print("\n⏳ Attente du redémarrage du BMS...")
+        time.sleep(2.0)  # Le BMS redémarre, attendre plus longtemps
+    else:
+        time.sleep(0.5)
+
+    # Lecture de la réponse (ACK/NACK)
+    if ser.in_waiting > 0:
+        response = ser.read(ser.in_waiting)
+
+        # Si la réponse est trop grande, c'est probablement du debug
+        if len(response) > 100:
+            print(f"\n⚠️  Réponse anormalement grande ({len(response)} octets) - Données de debug détectées")
+
+            # Chercher une trame ACK/NACK dans les données
+            found_frame = None
+            for i in range(len(response) - 5):
+                if response[i] == 0xAA and (response[i+1] == 0x01 or response[i+1] == 0x00):
+                    # Trame ACK/NACK potentielle
+                    potential_frame = response[i:i+5]
+                    # Vérifier le CRC
+                    if len(potential_frame) >= 5:
+                        received_crc = (potential_frame[-1] << 8) | potential_frame[-2]
+                        calculated_crc = crc16_modbus(potential_frame[:-2])
+                        if received_crc == calculated_crc:
+                            print(f"   ✅ Trame ACK/NACK valide trouvée à l'offset {i}")
+                            found_frame = potential_frame
+                            break
+
+            if found_frame:
+                response = found_frame
+            else:
+                print("❌ Aucune trame ACK/NACK valide trouvée dans les données de debug")
+                return False
+
+        print(f"\n📥 Réponse reçue ({len(response)} octets):")
+        if len(response) <= 50:
+            print(f"   Hex: {' '.join(f'{b:02X}' for b in response)}")
+
+        # Vérification ACK/NACK
+        if len(response) >= 3 and response[0] == 0xAA:
+            if response[1] == 0x01:  # ACK
+                print(f"✅ {action_name} réussie!")
+                if option == 0x05:
+                    print("   ⚠️  Le BMS a redémarré. Attendez quelques secondes avant d'envoyer d'autres commandes.")
+                return True
+            elif response[1] == 0x00:  # NACK
+                error_code = response[3] if len(response) > 3 else 0xFF
+                print(f"❌ NACK reçu - Code erreur: 0x{error_code:02X}")
+                error_messages = {
+                    0x00: "Command error",
+                    0x01: "CRC error",
+                    0xFF: "Unknown error"
+                }
+                print(f"   Erreur: {error_messages.get(error_code, 'Unknown')}")
+                return False
+        else:
+            print("❌ Réponse invalide")
+            return False
+    else:
+        if option == 0x05:
+            # Pour un reset BMS, l'absence de réponse peut être normale
+            # (le BMS redémarre trop vite)
+            print("ℹ️  Aucune réponse reçue (normal pour un reset BMS)")
+            print("   Le BMS a probablement redémarré avec succès")
+            return True
+        else:
+            print("❌ Aucune réponse reçue (timeout)")
+            return False
+
 def interactive_mode(ser):
     """Mode interactif pour lire/écrire des registres"""
     print("\n" + "=" * 60)
@@ -262,6 +393,9 @@ def interactive_mode(ser):
     print("\nCommandes disponibles:")
     print("  r <addr>       - Lire un registre (ex: r 0x0157)")
     print("  w <addr> <val> - Écrire un registre (ex: w 0x012C 4200)")
+    print("  e              - Effacer les événements (Clear Events)")
+    print("  s              - Effacer les statistiques (Clear Statistics)")
+    print("  z              - Redémarrer le BMS (Reset BMS)")
     print("  q              - Quitter")
     print("\nExemples de registres:")
     print("  0x012C - Fully Charged Voltage (mV)")
@@ -275,9 +409,34 @@ def interactive_mode(ser):
             if cmd == 'q':
                 break
 
+            # Commandes sans paramètres
+            if cmd == 'e':
+                # Clear Events
+                send_reset_command(ser, 0x01, "Clear Events")
+                continue
+            elif cmd == 's':
+                # Clear Statistics
+                send_reset_command(ser, 0x02, "Clear Statistics")
+                continue
+            elif cmd == 'z':
+                # Reset BMS
+                print("\n⚠️  ATTENTION: Cette commande va redémarrer le BMS!")
+                confirm = input("Confirmer le redémarrage? (o/N): ").strip().lower()
+                if confirm == 'o' or confirm == 'y':
+                    send_reset_command(ser, 0x05, "Reset BMS")
+                    print("\n⏳ Attente de la stabilisation du BMS (5 secondes)...")
+                    time.sleep(5)
+                    # Vider le buffer après le reset
+                    flush_serial_buffer(ser)
+                    print("✅ Vous pouvez maintenant envoyer d'autres commandes")
+                else:
+                    print("❌ Reset annulé")
+                continue
+
+            # Commandes avec paramètres
             parts = cmd.split()
             if len(parts) < 2:
-                print("Commande invalide. Utilisez 'r <addr>' ou 'w <addr> <val>'")
+                print("Commande invalide. Utilisez 'r <addr>', 'w <addr> <val>', 'e', 's' ou 'z'")
                 continue
 
             # Parse l'adresse
