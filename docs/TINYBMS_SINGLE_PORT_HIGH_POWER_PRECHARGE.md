@@ -13,7 +13,119 @@ Dans cette configuration, le Tiny BMS ne conduit pas le courant de puissance. Il
 
 ## 2. Schéma de Câblage Détaillé
 
-### A. Circuit de Puissance (Batterie <-> Victron)
+### A. Schéma ASCII - Circuit de Puissance
+
+```
+                                    BATTERIE 48V
+                                    ┌─────────┐
+                           ┌────────┤    +    ├────────────────────────────┐
+                           │        └─────────┘                            │
+                           │                                               │
+                           │ (fil 1mm²)                          (câble puissance)
+                           │                                               │
+                       ┌───▼────┐                                      ┌───▼────┐
+                       │  BMS   │                                      │VICTRON │
+                       │   B+   │                                      │   +    │
+                       └────────┘                                      └────────┘
+
+                                    ┌─────────┐
+                      ┌─────────────┤    -    ├───────┐
+                      │             └─────────┘       │
+                      │ (fil 1mm²)                    │ (câble puissance)
+                  ┌───▼────┐                          │
+                  │  BMS   │                      ┌───▼────────┐
+                  │   B-   │                      │  CAPTEUR   │
+                  └────────┘                      │    LEM     │
+                                                  │   ──>      │
+                                                  └─────┬──────┘
+                                                        │
+                          ┌─────────────────────────────┴──────────────────┐
+                          │                                                │
+                          │         CIRCUIT PARALLÈLE DE PRÉ-CHARGE        │
+                          │                                                │
+                    ┌─────▼─────┐                              ┌───────────▼──────┐
+                    │ RÉSISTANCE│                              │  RELAIS PRINCIPAL│
+                    │  (R_pre)  │                              │  (Main Contactor)│
+                    │  10-100Ω  │                              │                  │
+                    │   10W+    │                              │   Contacts de    │
+                    └─────┬─────┘                              │   Puissance      │
+                          │                                    │                  │
+                    ┌─────▼───────┐                            │   [Bobine A1/A2] │
+                    │RELAIS PRÉ-  │                            └─────────┬────────┘
+                    │  CHARGE     │                                      │
+                    │             │                                      │
+                    │Contacts de  │                                      │
+                    │Puissance    │                                      │
+                    │             │                                      │
+                    │[Bobine A1/A2]│                                     │
+                    └─────┬───────┘                                      │
+                          │                                              │
+                          └──────────────────┬───────────────────────────┘
+                                             │
+                                             │
+                                    ┌────────▼─────────┐
+                                    │   VICTRON / LOAD │
+                                    │        -         │
+                                    └──────────────────┘
+
+
+  Légende:
+  ──>  Sens du courant (flèche LEM : Batterie vers Charge)
+  ┌─┐  Composant / Équipement
+  │   Connexion électrique
+```
+
+### B. Schéma ASCII - Circuit de Commande des Relais
+
+```
+                              TINY BMS s516
+                           ┌──────────────────┐
+                           │                  │
+                           │  +48V (via B+)   │
+                           │        │         │
+                           │        │         │
+                           └────────┼─────────┘
+                                    │
+                        ┌───────────┴──────────────┐
+                        │                          │
+                        │ +48V Batterie            │ +48V Batterie
+                        │                          │
+                   ┌────▼─────┐              ┌─────▼────┐
+                   │    A1    │              │    A1    │
+                   │  (Coil+) │              │  (Coil+) │
+                   │          │              │          │
+              ┌────┤ RELAIS   │         ┌────┤ RELAIS   │
+              │    │ PRÉ-     │         │    │ PRINCIPAL│
+      ┌───────┤    │ CHARGE   │    ┌────┤    │  (MAIN)  │
+      │ DIODE │    │          │    │DIODE    │          │
+      │ 1N4007│    │    A2    │    │1N4007   │    A2    │
+      │  │ ▼  │    │  (Coil-) │    │  │ ▼    │  (Coil-) │
+      └───┼───┘    └────┬─────┘    └──┼──┘   └────┬─────┘
+          │             │               │           │
+          └─────────────┴───────┐       └───────────┴────────┐
+                                │                            │
+                        ┌───────▼────────┐          ┌────────▼───────┐
+                        │   TINY BMS     │          │   TINY BMS     │
+                        │                │          │                │
+                        │   AIDO1 (Pin4) │          │   AIDO2 (Pin6) │
+                        │  Open Drain    │          │  Open Drain    │
+                        │  (Sortie GND)  │          │  (Sortie GND)  │
+                        └────────────────┘          └────────────────┘
+
+
+  Fonctionnement:
+  • AIDO1/AIDO2 = Sorties Open Drain (mise à la masse quand activées)
+  • Diodes de roue libre = Protection contre les surtensions de la bobine
+  • Cathode (│▼) connectée au +, Anode au -
+
+  Séquence:
+  1. Phase PRÉ-CHARGE: AIDO1 ON → Relais Pré-charge fermé (5 sec)
+  2. Phase RUN: AIDO2 ON → Relais Principal fermé
+                AIDO1 OFF → Relais Pré-charge ouvert
+```
+
+### C. Instructions de Câblage - Circuit de Puissance
+
 Le courant fort circule directement de la batterie vers l'équipement sans traverser le PCB du BMS.
 
 1.  **Positif (+48V) :**
@@ -31,7 +143,7 @@ Le courant fort circule directement de la batterie vers l'équipement sans trave
     * Connecter une **Résistance de Puissance** en série avec un **Relais de Pré-charge** (plus petit que le principal).
     * Connecter cet ensemble en parallèle du Relais Principal (c'est-à-dire : une patte avant le contacteur principal, une patte après).
 
-### B. Câblage de Commande et Détection (BMS)
+### D. Instructions de Câblage - Commande et Détection (BMS)
 
 1.  **Pilotage du Relais Principal (Sortie AIDO2) :**
     * Le BMS utilise des sorties "Open Drain" (mise à la masse).
