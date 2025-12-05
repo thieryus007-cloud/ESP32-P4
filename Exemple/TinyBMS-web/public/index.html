@@ -22,6 +22,22 @@
                 <li onclick="switchTab('stats')">📈 Statistics</li>
             </ul>
 
+            <div class="bms-management">
+                <h3>BMS Management</h3>
+                <button class="bms-action-btn" onclick="clearBMSEvents()">
+                    <span class="btn-icon">🗑️</span>
+                    Clear Events
+                </button>
+                <button class="bms-action-btn" onclick="clearBMSStatistics()">
+                    <span class="btn-icon">📊</span>
+                    Clear Statistics
+                </button>
+                <button class="bms-action-btn danger" onclick="resetBMS()">
+                    <span class="btn-icon">🔄</span>
+                    Reset BMS
+                </button>
+            </div>
+
             <div class="port-selector">
                 <label for="portSelect" style="font-size: 0.8em; color: #aaa; margin-bottom: 4px; display: block;">Port</label>
                 <select id="portSelect"><option>Loading...</option></select>
