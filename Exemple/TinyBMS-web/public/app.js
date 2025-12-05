@@ -685,6 +685,99 @@ function clearEvents() {
     addEvent('Events cleared', 'info', 'ℹ️');
 }
 
+// BMS Management Commands
+async function clearBMSEvents() {
+    if (!confirm('Clear all BMS events?\n\nThis will erase the event history stored in the TinyBMS.')) {
+        return;
+    }
+
+    try {
+        addLog('Sending Clear Events command to BMS...', 'info');
+        const response = await fetch('/api/bms-command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'clear-events' })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            addLog('BMS events cleared successfully', 'success');
+            addEvent('BMS Events cleared by user', 'success', '🗑️');
+        } else {
+            addLog(`Failed to clear events: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        addLog(`Error clearing events: ${error.message}`, 'error');
+    }
+}
+
+async function clearBMSStatistics() {
+    if (!confirm('Clear all BMS statistics?\n\nThis will reset all counters (distance, cycles, protection counts, etc.).')) {
+        return;
+    }
+
+    try {
+        addLog('Sending Clear Statistics command to BMS...', 'info');
+        const response = await fetch('/api/bms-command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'clear-statistics' })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            addLog('BMS statistics cleared successfully', 'success');
+            addEvent('BMS Statistics reset by user', 'success', '📊');
+            // Recharger les statistiques
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            addLog(`Failed to clear statistics: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        addLog(`Error clearing statistics: ${error.message}`, 'error');
+    }
+}
+
+async function resetBMS() {
+    if (!confirm('⚠️ WARNING: Reset BMS?\n\nThis will restart the TinyBMS completely.\n\nThe connection will be lost and you will need to reconnect.\n\nContinue?')) {
+        return;
+    }
+
+    try {
+        addLog('Sending Reset command to BMS...', 'warning');
+        addEvent('BMS Reset initiated by user', 'warning', '🔄');
+
+        const response = await fetch('/api/bms-command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'reset-bms' })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            addLog('BMS reset command sent. BMS is restarting...', 'success');
+            addEvent('BMS is restarting...', 'info', '⏳');
+
+            // Afficher un message d'attente
+            setTimeout(() => {
+                addLog('Waiting for BMS to restart (5 seconds)...', 'info');
+            }, 1000);
+
+            // Après 6 secondes, suggérer de reconnecter
+            setTimeout(() => {
+                addLog('BMS should be ready. Please reconnect.', 'success');
+                addEvent('BMS restart complete - Please reconnect', 'success', '✅');
+            }, 6000);
+        } else {
+            addLog(`Failed to reset BMS: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        addLog(`Error resetting BMS: ${error.message}`, 'error');
+    }
+}
+
 function updateBmsStatusBadges(data) {
     if (!data) return;
 

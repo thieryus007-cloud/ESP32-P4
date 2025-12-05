@@ -31,6 +31,59 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-dark); color: var(
 .port-selector select, .port-selector button { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; background: var(--bg-dark); border: 1px solid var(--border); color: white; }
 .port-selector button { background: var(--success); border: none; cursor: pointer; font-weight: bold; margin-top: 10px; }
 
+/* BMS Management Section */
+.bms-management {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+.bms-management h3 {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+.bms-action-btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+.bms-action-btn:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+}
+.bms-action-btn.danger {
+    border-color: rgba(236, 72, 153, 0.3);
+}
+.bms-action-btn.danger:hover {
+    background: rgba(236, 72, 153, 0.1);
+    border-color: var(--danger);
+}
+.bms-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+.btn-icon {
+    font-size: 1.1em;
+}
+
 /* Content */
 .content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
 .tab-content { display: none; height: 100%; flex-direction: column; gap: 20px; }

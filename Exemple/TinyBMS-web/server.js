@@ -153,6 +153,81 @@ app.post('/api/write-batch', async (req, res) => {
     }
 });
 
+app.post('/api/bms-command', async (req, res) => {
+    const { command } = req.body;
+
+    if (currentMode !== 'CONNECTED') {
+        sendLog('BMS command failed: Not connected', 'error');
+        return res.status(400).json({ error: "Not connected to BMS" });
+    }
+
+    try {
+        let option;
+        let actionName;
+
+        switch (command) {
+            case 'clear-events':
+                option = 0x01;
+                actionName = 'Clear Events';
+                break;
+            case 'clear-statistics':
+                option = 0x02;
+                actionName = 'Clear Statistics';
+                break;
+            case 'reset-bms':
+                option = 0x05;
+                actionName = 'Reset BMS';
+                break;
+            default:
+                return res.status(400).json({ error: 'Unknown command' });
+        }
+
+        // Pause polling temporarily
+        isPolling = false;
+        await new Promise(r => setTimeout(r, 200));
+
+        sendLog(`Sending ${actionName} command to BMS...`, 'info');
+
+        const success = await bms.sendResetCommand(option);
+
+        if (success) {
+            sendLog(`${actionName} successful`, 'success');
+
+            // For reset BMS, disconnect and notify client
+            if (command === 'reset-bms') {
+                sendLog('BMS is restarting. Connection will be lost.', 'warning');
+                setTimeout(() => {
+                    stopAll();
+                    if (bms.isConnected) {
+                        bms.disconnect();
+                    }
+                }, 1000);
+            } else {
+                // Resume polling for other commands
+                if (currentMode === 'CONNECTED') {
+                    startRealPolling();
+                }
+            }
+
+            res.json({ success: true });
+        } else {
+            sendLog(`${actionName} failed`, 'error');
+            // Resume polling even on error
+            if (currentMode === 'CONNECTED' && command !== 'reset-bms') {
+                startRealPolling();
+            }
+            res.status(500).json({ error: 'Command failed' });
+        }
+    } catch (error) {
+        sendLog(`BMS command error: ${error.message}`, 'error');
+        // Resume polling even on error
+        if (currentMode === 'CONNECTED') {
+            startRealPolling();
+        }
+        res.status(500).json({ error: error.message });
+    }
+});
+
 function stopAll() {
     if (pollTimer) {
         clearInterval(pollTimer);

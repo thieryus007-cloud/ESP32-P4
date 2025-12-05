@@ -135,6 +135,98 @@ class TinyBMS {
         }
     }
 
+    /**
+     * Envoie une commande de reset/clear au TinyBMS
+     * @param {number} option - 0x01 (Clear Events), 0x02 (Clear Statistics), 0x05 (Reset BMS)
+     * @returns {Promise<boolean>} true si la commande a réussi
+     */
+    async sendResetCommand(option) {
+        if (!this.isConnected) {
+            throw new Error("Cannot send reset command: not connected");
+        }
+
+        const optionNames = {
+            0x01: 'Clear Events',
+            0x02: 'Clear Statistics',
+            0x05: 'Reset BMS'
+        };
+
+        console.log(`Sending ${optionNames[option] || 'Unknown'} command to TinyBMS...`);
+
+        return new Promise((resolve, reject) => {
+            // Vider le buffer série
+            this.port.flush(async (err) => {
+                if (err) console.warn('[TinyBMS] Flush error:', err.message);
+                await new Promise(r => setTimeout(r, 100));
+
+                // Commande 0x02 : AA 02 OPTION CRC_LSB CRC_MSB
+                const cmd = [0xAA, 0x02, option];
+                const crc = this.calculateCRC(Buffer.from(cmd));
+                const finalBuf = Buffer.from([...cmd, crc & 0xFF, (crc >> 8) & 0xFF]);
+
+                console.log(`[TinyBMS] Sending: ${finalBuf.toString('hex').toUpperCase()}`);
+
+                let rxBuffer = Buffer.alloc(0);
+                let timeoutId = null;
+
+                const dataHandler = (data) => {
+                    rxBuffer = Buffer.concat([rxBuffer, data]);
+                    console.log(`[TinyBMS] Received: ${data.toString('hex').toUpperCase()}`);
+
+                    // Chercher trame ACK/NACK de 5 bytes: AA 01/00 02 CRC_LSB CRC_MSB
+                    for (let i = 0; i < rxBuffer.length - 5; i++) {
+                        if (rxBuffer[i] === 0xAA && (rxBuffer[i + 1] === 0x01 || rxBuffer[i + 1] === 0x00)) {
+                            const potentialFrame = rxBuffer.slice(i, i + 5);
+                            const receivedCRC = potentialFrame[3] | (potentialFrame[4] << 8);
+                            const calculatedCRC = this.calculateCRC(potentialFrame.slice(0, 3));
+
+                            if (receivedCRC === calculatedCRC) {
+                                clearTimeout(timeoutId);
+                                this.port.removeListener('data', dataHandler);
+
+                                if (potentialFrame[1] === 0x01) {
+                                    // ACK
+                                    console.log(`[TinyBMS] ${optionNames[option]} successful`);
+                                    resolve(true);
+                                } else {
+                                    // NACK
+                                    const errorCode = potentialFrame[3];
+                                    console.error(`[TinyBMS] ${optionNames[option]} failed - Error: 0x${errorCode.toString(16)}`);
+                                    reject(new Error(`Command failed with error code 0x${errorCode.toString(16)}`));
+                                }
+                                return;
+                            }
+                        }
+                    }
+                };
+
+                this.port.on('data', dataHandler);
+
+                // Timeout adapté selon le type de commande
+                const timeout = option === 0x05 ? 3000 : 1000; // Reset BMS prend plus de temps
+                timeoutId = setTimeout(() => {
+                    this.port.removeListener('data', dataHandler);
+                    if (option === 0x05) {
+                        // Pour reset BMS, l'absence de réponse peut être normale
+                        console.log(`[TinyBMS] Reset command sent (BMS restarting)`);
+                        resolve(true);
+                    } else {
+                        reject(new Error('Timeout waiting for response'));
+                    }
+                }, timeout);
+
+                // Envoyer la commande
+                this.port.write(finalBuf, (err) => {
+                    if (err) {
+                        clearTimeout(timeoutId);
+                        this.port.removeListener('data', dataHandler);
+                        reject(err);
+                    }
+                });
+            });
+        });
+    }
+
     disconnect() {
         return new Promise((resolve) => {
             if (this.port && this.port.isOpen) {
