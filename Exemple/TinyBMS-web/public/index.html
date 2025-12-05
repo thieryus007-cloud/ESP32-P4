@@ -19,7 +19,7 @@
             <ul class="nav-links">
                 <li class="active" onclick="switchTab('dashboard')">📊 Dashboard</li>
                 <li onclick="switchTab('settings')">⚙️ Configuration</li>
-                <li onclick="switchTab('stats')">📈 Statistics</li>
+                <li onclick="switchTab('advanced')">🔧 Advanced Config</li>
             </ul>
 
             <div class="bms-management">
@@ -189,9 +189,67 @@
                 </div>
             </div>
 
-            <div id="stats" class="tab-content">
-                <header><h1>Statistics</h1></header>
-                <div id="stats-container" class="stats-grid">Waiting...</div>
+            <div id="advanced" class="tab-content">
+                <header>
+                    <h1>🔧 Advanced Configuration (Registers 329-343)</h1>
+                    <button onclick="saveAdvancedConfig()" class="save-all-btn">💾 Save All Changes</button>
+                </header>
+
+                <div class="advanced-config-notice">
+                    <div class="notice-icon">⚠️</div>
+                    <div class="notice-content">
+                        <strong>Important:</strong> These are advanced system configuration parameters.
+                        Incorrect values may prevent the BMS from operating correctly.
+                        Make sure you understand each parameter before making changes.
+                    </div>
+                </div>
+
+                <div class="advanced-grid-layout">
+                    <!-- Current Sensor Configuration -->
+                    <div class="card advanced-card">
+                        <div class="group-header">
+                            <h3>⚡ Current Sensor</h3>
+                            <span class="reg-range">Reg 329</span>
+                        </div>
+                        <div id="conf-current-sensor" class="group-inputs">Loading...</div>
+                    </div>
+
+                    <!-- Charger Configuration -->
+                    <div class="card advanced-card">
+                        <div class="group-header">
+                            <h3>🔌 Charger Setup</h3>
+                            <span class="reg-range">Reg 330, 333, 335</span>
+                        </div>
+                        <div id="conf-charger-setup" class="group-inputs">Loading...</div>
+                    </div>
+
+                    <!-- Load & Discharge Configuration -->
+                    <div class="card advanced-card">
+                        <div class="group-header">
+                            <h3>📤 Load & Discharge</h3>
+                            <span class="reg-range">Reg 331, 334</span>
+                        </div>
+                        <div id="conf-load-setup" class="group-inputs">Loading...</div>
+                    </div>
+
+                    <!-- Precharge Configuration -->
+                    <div class="card advanced-card">
+                        <div class="group-header">
+                            <h3>⏱️ Precharge Setup</h3>
+                            <span class="reg-range">Reg 337, 338</span>
+                        </div>
+                        <div id="conf-precharge-setup" class="group-inputs">Loading...</div>
+                    </div>
+
+                    <!-- System Configuration -->
+                    <div class="card advanced-card">
+                        <div class="group-header">
+                            <h3>⚙️ System Settings</h3>
+                            <span class="reg-range">Reg 332, 339, 340, 341, 342, 343</span>
+                        </div>
+                        <div id="conf-system-setup" class="group-inputs">Loading...</div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

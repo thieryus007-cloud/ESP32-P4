@@ -116,7 +116,7 @@ socket.on('bms-settings', (data) => {
         document.getElementById('info-current-sensor').innerText = decoded.currentSensor;
     }
 
-    const groups = ['battery', 'safety', 'balance', 'hardware'];
+    const groups = ['battery', 'safety', 'balance', 'hardware', 'current-sensor', 'charger-setup', 'load-setup', 'precharge-setup', 'system-setup'];
     groups.forEach(gid => {
         const container = document.getElementById(`conf-${gid}`);
         if(container && container.innerHTML.includes("Loading")) container.innerHTML = "";
@@ -149,6 +149,8 @@ socket.on('bms-settings', (data) => {
                     newInputHTML = `<input type="number" id="new-${reg.id}" placeholder="--" step="${step}" ${min} ${max}>`;
                 }
 
+                const helpText = constraints?.help ? `<div class="help-text">${constraints.help}</div>` : '';
+
                 div.innerHTML = `
                     <label>${reg.label} <span style="color:#555; font-size:0.7em">[${reg.id}]</span></label>
                     <div class="dual-input-wrapper">
@@ -159,7 +161,8 @@ socket.on('bms-settings', (data) => {
                             ${newInputHTML}
                             <span class="unit">${reg.unit}</span>
                         </div>
-                    </div>`;
+                    </div>
+                    ${helpText}`;
                 container.appendChild(div);
             } else {
                 const currentInput = document.getElementById(`current-${reg.id}`);
@@ -228,6 +231,90 @@ async function saveSection(groupId) {
         else { alert("Error"); btn.innerText = "Error ❌"; }
     } catch(e) { alert(e.message); btn.innerText = "Error ❌"; }
     setTimeout(() => { btn.innerText = oldText; btn.disabled = false; }, 2000);
+}
+
+async function saveAdvancedConfig() {
+    const advancedGroups = ['current-sensor', 'charger-setup', 'load-setup', 'precharge-setup', 'system-setup'];
+    const allChanges = [];
+
+    // Collecter tous les changements de tous les groupes avancés
+    advancedGroups.forEach(groupId => {
+        const container = document.getElementById(`conf-${groupId}`);
+        if (!container) return;
+
+        const newInputs = container.querySelectorAll('input[id^="new-"], select[id^="new-"]');
+        newInputs.forEach(input => {
+            if (input.value && input.value.trim() !== '' && input.value !== '--') {
+                const id = input.id.replace('new-', '');
+                const numValue = parseFloat(input.value);
+
+                // Validation des contraintes
+                const constraints = REGISTER_CONSTRAINTS[parseInt(id)];
+                if (constraints && constraints.type !== 'select') {
+                    if (constraints.min !== undefined && numValue < constraints.min) {
+                        alert(`Value for register ${id} is below minimum (${constraints.min})`);
+                        return;
+                    }
+                    if (constraints.max !== undefined && numValue > constraints.max) {
+                        alert(`Value for register ${id} is above maximum (${constraints.max})`);
+                        return;
+                    }
+                }
+
+                allChanges.push({ id: id, value: input.value });
+            }
+        });
+    });
+
+    if (allChanges.length === 0) {
+        alert('No changes to save. Please modify at least one parameter.');
+        return;
+    }
+
+    const btn = document.querySelector('.save-all-btn');
+    const oldText = btn.innerText;
+    btn.innerText = "💾 Saving...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/write-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ changes: allChanges })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            btn.innerText = "✅ Saved!";
+            addLog(`Advanced configuration saved (${allChanges.length} registers)`, 'success');
+            addEvent(`Advanced config updated: ${allChanges.length} registers`, 'success', '⚙️');
+
+            // Vider tous les champs "new-" après succès
+            advancedGroups.forEach(groupId => {
+                const container = document.getElementById(`conf-${groupId}`);
+                if (!container) return;
+                const newInputs = container.querySelectorAll('input[id^="new-"], select[id^="new-"]');
+                newInputs.forEach(input => {
+                    if (input.tagName === 'SELECT') {
+                        input.selectedIndex = 0;
+                    } else {
+                        input.value = '';
+                    }
+                });
+            });
+        } else {
+            alert("Error saving configuration");
+            btn.innerText = "❌ Error";
+        }
+    } catch (e) {
+        alert(e.message);
+        btn.innerText = "❌ Error";
+    }
+
+    setTimeout(() => {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }, 3000);
 }
 
 // --- LIVE DATA ---
