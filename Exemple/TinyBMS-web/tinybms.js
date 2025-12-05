@@ -53,25 +53,36 @@ const REGISTER_MAP = [
     { id: 308, label: 'Allowed Disbalance', unit: 'mV', type: 'UINT16', scale: 1, category: 'Settings', group: 'balance' },
     { id: 321, label: 'Charge Restart Level', unit: '%', type: 'UINT16', category: 'Settings', group: 'balance' },
     { id: 323, label: 'SOH Setting', unit: '%', type: 'UINT16', scale: 0.002, category: 'Settings', group: 'balance' },
-    { id: 332, label: 'Automatic Recovery', unit: 's', type: 'UINT16', category: 'Settings', group: 'balance' },
 
     // Groupe 4: Hardware
     { id: 310, label: 'Charger Startup Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 311, label: 'Charger Disable Delay', unit: 's', type: 'UINT16', category: 'Settings', group: 'hardware' },
     { id: 312, label: 'Pulses Per Unit', unit: '', type: 'UINT32', category: 'Settings', group: 'hardware' },
-    { id: 329, label: 'Configuration Bits', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 330, label: 'Charger Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 331, label: 'Load Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 333, label: 'Charger Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 334, label: 'Ignition Input', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 335, label: 'Charger Detection Input', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 337, label: 'Precharge Pin', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 338, label: 'Precharge Duration', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 339, label: 'Temp Sensor Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 340, label: 'Operation Mode', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' }, // 0=Dual, 1=Single
-    { id: 341, label: 'Single Port Switch Type', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 342, label: 'Broadcast Time', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
-    { id: 343, label: 'Protocol', unit: '', type: 'UINT16', category: 'Settings', group: 'hardware' },
+
+    // --- ADVANCED CONFIGURATION (329-343) ---
+    // Current Sensor Group
+    { id: 329, label: 'Invert External Current Sensor', unit: '', type: 'UINT16', category: 'Advanced', group: 'current-sensor' },
+
+    // Charger Setup Group
+    { id: 330, label: 'Charger Type', unit: '', type: 'UINT16', category: 'Advanced', group: 'charger-setup' },
+    { id: 333, label: 'Charger Switch Type', unit: '', type: 'UINT16', category: 'Advanced', group: 'charger-setup' },
+    { id: 335, label: 'Charger Detection Source', unit: '', type: 'UINT16', category: 'Advanced', group: 'charger-setup' },
+
+    // Load & Discharge Group
+    { id: 331, label: 'Load Switch Type', unit: '', type: 'UINT16', category: 'Advanced', group: 'load-setup' },
+    { id: 334, label: 'Ignition Source', unit: '', type: 'UINT16', category: 'Advanced', group: 'load-setup' },
+
+    // Precharge Setup Group
+    { id: 337, label: 'Precharge Output', unit: '', type: 'UINT16', category: 'Advanced', group: 'precharge-setup' },
+    { id: 338, label: 'Precharge Duration', unit: '', type: 'UINT16', category: 'Advanced', group: 'precharge-setup' },
+
+    // System Settings Group
+    { id: 332, label: 'Automatic Recovery Attempts', unit: '', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
+    { id: 339, label: 'Temperature Sensor Type', unit: '', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
+    { id: 340, label: 'BMS Operation Mode', unit: '', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
+    { id: 341, label: 'Single Port Switch Type', unit: '', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
+    { id: 342, label: 'Broadcast Time', unit: 'ms', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
+    { id: 343, label: 'Protocol', unit: '', type: 'UINT16', category: 'Advanced', group: 'system-setup' },
 
     // --- VERSION (500+) ---
     { id: 501, label: 'Firmware Version', type: 'UINT16', category: 'Version' }

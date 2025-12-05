@@ -41,56 +41,169 @@ const REGISTER_CONSTRAINTS = {
             { value: 5, label: 'Yards (yd)' }
         ]
     }, // Distance Unit Name
-    330: { min: 0, max: 65535, step: 1 },       // Charger Type / Dischg Timeout (packed)
-    331: {
+
+    // === ADVANCED CONFIGURATION (329-343) ===
+
+    // Current Sensor (329)
+    329: {
         type: 'select',
         options: [
-            { value: 0, label: 'NO/NC Switch' },
-            { value: 1, label: 'N-Channel MOSFET' },
-            { value: 2, label: 'P-Channel MOSFET' }
-        ]
-    }, // Load Switch Type
+            { value: 0, label: 'Normal' },
+            { value: 1, label: 'Inverted' }
+        ],
+        help: 'Invert external current sensor polarity (for LEM DHAB 133, etc.)'
+    },
+
+    // Charger Setup (330, 333, 335)
+    330: {
+        type: 'select',
+        options: [
+            { value: 0, label: 'Variable (Reserved)' },
+            { value: 1, label: 'Constant Current' }
+        ],
+        help: 'Charger behavior type'
+    },
     333: {
         type: 'select',
         options: [
-            { value: 0, label: 'NO/NC Switch' },
-            { value: 1, label: 'N-Channel MOSFET' },
-            { value: 2, label: 'P-Channel MOSFET' }
-        ]
-    }, // Charger Switch Type
+            { value: 1, label: 'Charge FET (Internal)' },
+            { value: 2, label: 'AIDO1' },
+            { value: 3, label: 'AIDO2' },
+            { value: 4, label: 'DIDO1' },
+            { value: 5, label: 'DIDO2' },
+            { value: 6, label: 'AIHO1 Active Low' },
+            { value: 7, label: 'AIHO1 Active High' },
+            { value: 8, label: 'AIHO2 Active Low' },
+            { value: 9, label: 'AIHO2 Active High' }
+        ],
+        help: 'Output pin controlling the charger switch'
+    },
+    335: {
+        type: 'select',
+        options: [
+            { value: 1, label: 'Internal' },
+            { value: 2, label: 'AIDI1' },
+            { value: 3, label: 'AIDI2' },
+            { value: 4, label: 'DIDI1' },
+            { value: 5, label: 'DIDI2' },
+            { value: 6, label: 'AIHI1' },
+            { value: 7, label: 'AIHI2' }
+        ],
+        help: 'Input pin for charger presence detection'
+    },
+
+    // Load & Discharge (331, 334)
+    331: {
+        type: 'select',
+        options: [
+            { value: 0, label: 'FET (Internal)' },
+            { value: 1, label: 'AIDO1' },
+            { value: 2, label: 'AIDO2' },
+            { value: 3, label: 'DIDO1' },
+            { value: 4, label: 'DIDO2' },
+            { value: 5, label: 'AIHO1 Active Low' },
+            { value: 6, label: 'AIHO1 Active High' },
+            { value: 7, label: 'AIHO2 Active Low' },
+            { value: 8, label: 'AIHO2 Active High' }
+        ],
+        help: 'Output pin controlling the load/discharge switch'
+    },
+    334: {
+        type: 'select',
+        options: [
+            { value: 0, label: 'Disabled' },
+            { value: 1, label: 'AIDI1' },
+            { value: 2, label: 'AIDI2' },
+            { value: 3, label: 'DIDI1' },
+            { value: 4, label: 'DIDI2' },
+            { value: 5, label: 'AIHI1' },
+            { value: 6, label: 'AIHI2' }
+        ],
+        help: 'Input pin for ignition/key detection'
+    },
+
+    // Precharge (337, 338)
+    337: {
+        type: 'select',
+        options: [
+            { value: 0, label: 'Disabled' },
+            { value: 2, label: 'Discharge FET' },
+            { value: 3, label: 'AIDO1' },
+            { value: 4, label: 'AIDO2' },
+            { value: 5, label: 'DIDO1' },
+            { value: 6, label: 'DIDO2' },
+            { value: 7, label: 'AIHO1 Active Low' },
+            { value: 8, label: 'AIHO1 Active High' },
+            { value: 9, label: 'AIHO2 Active Low' },
+            { value: 10, label: 'AIHO2 Active High' }
+        ],
+        help: 'Output pin for precharge resistor control'
+    },
     338: {
         type: 'select',
         options: [
-            { value: 0, label: '0.1 seconds' },
-            { value: 1, label: '0.2 seconds' },
-            { value: 2, label: '0.5 seconds' },
-            { value: 3, label: '1 second' },
-            { value: 4, label: '2 seconds' },
-            { value: 5, label: '5 seconds' },
-            { value: 6, label: '10 seconds' },
-            { value: 7, label: '20 seconds' }
-        ]
-    }, // Precharge Duration
+            { value: 0, label: '0.1 s' },
+            { value: 1, label: '0.2 s' },
+            { value: 2, label: '0.5 s' },
+            { value: 3, label: '1 s' },
+            { value: 4, label: '2 s' },
+            { value: 5, label: '3 s' },
+            { value: 6, label: '4 s' },
+            { value: 7, label: '5 s' }
+        ],
+        help: 'Duration of precharge phase before closing main contactor'
+    },
+
+    // System Settings (332, 339, 340, 341, 342, 343)
+    332: {
+        min: 1,
+        max: 30,
+        step: 1,
+        help: 'Number of automatic recovery attempts (1-30)'
+    },
     339: {
         type: 'select',
         options: [
-            { value: 0, label: 'NTC 10k' },
-            { value: 1, label: 'NTC 100k' },
-            { value: 2, label: 'Dallas DS18B20' }
-        ]
-    }, // Temp Sensor Type
+            { value: 0, label: 'Dual 10K NTC' },
+            { value: 1, label: 'Multipoint Active Sensor' }
+        ],
+        help: 'Temperature sensor type'
+    },
     340: {
         type: 'select',
         options: [
-            { value: 0, label: 'Dual Port Mode' },
-            { value: 1, label: 'Single Port Mode' }
-        ]
-    }, // BMS Operation Mode
+            { value: 0, label: 'Dual Port (Separate Charge/Discharge)' },
+            { value: 1, label: 'Single Port (Combined Charge/Discharge)' }
+        ],
+        help: 'BMS operation mode - Use Single Port for Victron Easysolar II'
+    },
+    341: {
+        type: 'select',
+        options: [
+            { value: 0, label: 'FET (Internal)' },
+            { value: 1, label: 'AIDO1' },
+            { value: 2, label: 'AIDO2' },
+            { value: 3, label: 'DIDO1' },
+            { value: 4, label: 'DIDO2' },
+            { value: 5, label: 'AIHO1 Active Low' },
+            { value: 6, label: 'AIHO1 Active High' },
+            { value: 7, label: 'AIHO2 Active Low' },
+            { value: 8, label: 'AIHO2 Active High' }
+        ],
+        help: 'Output pin for single port switch (only used in Single Port Mode)'
+    },
+    342: {
+        min: 0,
+        max: 65535,
+        step: 1,
+        help: 'CAN broadcast interval in milliseconds'
+    },
     343: {
         type: 'select',
         options: [
-            { value: 0, label: 'UART Protocol' },
-            { value: 1, label: 'CAN Bus Protocol' }
-        ]
-    } // Protocol
+            { value: 0, label: 'MODBUS' },
+            { value: 1, label: 'ASCII (Recommended)' }
+        ],
+        help: 'Communication protocol - ASCII is recommended for most applications'
+    }
 };
