@@ -19,6 +19,28 @@ function switchTab(tabId) {
 
 function resizeCharts() { if(chartSocSoh) chartSocSoh.resize(); if(chartTemps) chartTemps.resize(); if(chartCells) chartCells.resize(); if(chartBattery) chartBattery.resize(); }
 
+// Fonction pour décoder le registre 501 (Firmware Version + BMS Info)
+function decodeRegister501(value) {
+    const fwVersion = value & 0xFF;           // LSB = Version firmware publique
+    const flags = (value >> 8) & 0xFF;        // MSB = Flags (BPT + BCS)
+
+    // Bit 0: BMS Power Type
+    const isHighPower = (flags & 0x01) !== 0;
+    const powerType = isHighPower ? 'High Power' : 'Low Power';
+
+    // Bits 1-2: BMS Current Sensor
+    const sensorType = (flags >> 1) & 0x03;
+    let currentSensor;
+    switch (sensorType) {
+        case 0x00: currentSensor = 'Internal Resistor'; break;
+        case 0x01: currentSensor = 'Internal HALL'; break;
+        case 0x02: currentSensor = 'External'; break;
+        default:   currentSensor = 'Unknown'; break;
+    }
+
+    return { fwVersion, powerType, currentSensor };
+}
+
 // Fonction helper pour calculer les segments de couleur de l'arc
 function getColoredAxisLine(values, min, max, defaultColor = '#2a2a3a') {
     // values: array de {value: number, color: string}
@@ -84,6 +106,14 @@ socket.on('bms-settings', (data) => {
     }
     if(data[305]) {
         document.getElementById('info-peak-discharge').innerText = `${data[305].value} ${data[305].unit}`;
+    }
+
+    // Décodage du registre 501 (Firmware Version + BMS Info)
+    if(data[501]) {
+        const decoded = decodeRegister501(data[501].value);
+        document.getElementById('info-fw-version').innerText = `v${decoded.fwVersion}`;
+        document.getElementById('info-power-type').innerText = decoded.powerType;
+        document.getElementById('info-current-sensor').innerText = decoded.currentSensor;
     }
 
     const groups = ['battery', 'safety', 'balance', 'hardware'];
