@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "tinybms_poller.cpp"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        event_bus
+        tinybms_model
+        tinybms_client
+        freertos
+)
