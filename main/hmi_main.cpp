@@ -27,6 +27,7 @@
 #include "telemetry_model.h"
 #include "tinybms_client.h"
 #include "tinybms_model.h"
+#include "tinybms_poller.h"
 
 static const char *TAG = "HMI_MAIN";
 
@@ -111,6 +112,7 @@ void hmi_main_init(void) {
   // 3b) Init TinyBMS (UART direct)
   tinybms_client_init(&s_event_bus); // Client UART TinyBMS
   tinybms_model_init(&s_event_bus);  // Modèle registres TinyBMS
+  tinybms_poller_init(&s_event_bus, NULL); // Polling périodique (config par défaut)
 
   // 4) Init GUI (LVGL + écrans)
   s_gui_root = std::make_unique<gui::GuiRoot>(&s_event_bus);
@@ -149,6 +151,7 @@ void hmi_main_start(void) {
 
   // 2b) Démarrer TinyBMS
   tinybms_client_start(); // Connexion UART TinyBMS
+  tinybms_poller_start(); // Démarrer le polling périodique des registres Live Data
   mqtt_gateway_start();
 
   if (s_gui_root) {

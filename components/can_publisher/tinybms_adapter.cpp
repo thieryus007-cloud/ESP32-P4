@@ -54,46 +54,50 @@ esp_err_t tinybms_adapter_convert(uart_bms_live_data_t *dst)
     dst->timestamp_ms = esp_timer_get_time() / 1000;
 
     //==========================================================================
-    // NOTE: Real-time measurement registers (0x0000-0x004F) are NOT YET
-    // implemented in tinybms_model. These addresses will need to be added
-    // to tinybms_model in a future phase.
-    //
-    // For now, we use placeholder values for compilation/testing.
-    //
-    // Missing registers:
-    // - 0x0000-0x000F: cell_voltage_mv[16] (UINT16, scale 0.1mV)
-    // - 0x0024 (36): pack_voltage_v (FLOAT)
-    // - 0x0026 (38): pack_current_a (FLOAT)
-    // - 0x002D (45): state_of_health (UINT16, scale 0.002%)
-    // - 0x002E (46): state_of_charge (UINT32, scale 0.000001)
-    // - 0x0030 (48): average_temperature_c (INT16, scale 0.1°C)
-    // - 0x0066 (102): max_discharge_current_a (UINT16, scale 0.1A)
-    // - 0x0067 (103): max_charge_current_a (UINT16, scale 0.1A)
+    // LIVE DATA REGISTERS (0x0000-0x004F)
+    // These registers are now polled periodically by tinybms_poller and
+    // cached in tinybms_model. We read from cache for best performance.
     //==========================================================================
 
-    // Pack measurements (TODO: implement real-time register reading)
-    dst->pack_voltage_v = 0.0f;        // TODO: Read from 0x0024
-    dst->pack_current_a = 0.0f;        // TODO: Read from 0x0026
-    dst->min_cell_mv = 0;              // TODO: Calculate from 0x0000-0x000F
-    dst->max_cell_mv = 0;              // TODO: Calculate from 0x0000-0x000F
+    // Pack measurements (REG 36, 38)
+    dst->pack_voltage_v = get_cached_or_default(0x0024, 0.0f);
+    dst->pack_current_a = get_cached_or_default(0x0026, 0.0f);
 
-    // State (TODO: implement real-time register reading)
-    dst->state_of_charge_pct = 0.0f;   // TODO: Read from 0x002E
-    dst->state_of_health_pct = 100.0f; // TODO: Read from 0x002D
+    // Min/Max cell voltages (REG 40, 41) - stored in mV
+    dst->min_cell_mv = (uint16_t)get_cached_or_default(0x0028, 0.0f);
+    dst->max_cell_mv = (uint16_t)get_cached_or_default(0x0029, 0.0f);
 
-    // Temperatures (TODO: implement real-time register reading)
-    dst->average_temperature_c = 25.0f;  // TODO: Read from 0x0030
-    dst->mosfet_temperature_c = 25.0f;
-    dst->auxiliary_temperature_c = 25.0f;
-    dst->pack_temperature_min_c = 25.0f;
-    dst->pack_temperature_max_c = 25.0f;
+    // State of Charge and Health (REG 45, 46)
+    dst->state_of_health_pct = get_cached_or_default(0x002D, 100.0f);
+    dst->state_of_charge_pct = get_cached_or_default(0x002E, 0.0f);
 
-    // Status bits (TODO: implement)
-    dst->balancing_bits = 0;
-    dst->alarm_bits = 0;
+    // Temperatures (REG 42, 43, 48)
+    float temp_ext1 = get_cached_or_default(0x002A, 25.0f);
+    float temp_ext2 = get_cached_or_default(0x002B, 25.0f);
+    float temp_int = get_cached_or_default(0x0030, 25.0f);
+
+    dst->average_temperature_c = (temp_ext1 + temp_ext2 + temp_int) / 3.0f;
+    dst->mosfet_temperature_c = temp_int;
+    dst->auxiliary_temperature_c = temp_ext1;
+    dst->pack_temperature_min_c = fminf(fminf(temp_ext1, temp_ext2), temp_int);
+    dst->pack_temperature_max_c = fmaxf(fmaxf(temp_ext1, temp_ext2), temp_int);
+
+    // Status bits (REG 50, 52)
+    uint16_t online_status = (uint16_t)get_cached_or_default(0x0032, 0x97); // Default: IDLE
+    uint16_t balancing = (uint16_t)get_cached_or_default(0x0034, 0);
+
+    dst->balancing_bits = balancing;
+
+    // Parse alarm bits from online_status
+    // 0x9B = FAULT, set alarm bit
+    if (online_status == 0x9B) {
+        dst->alarm_bits = 0x0001; // Generic fault alarm
+    } else {
+        dst->alarm_bits = 0;
+    }
     dst->warning_bits = 0;
 
-    // Statistics (TODO: implement)
+    // Statistics (not available in TinyBMS protocol)
     dst->uptime_seconds = 0;
     dst->estimated_time_left_seconds = 0;
     dst->cycle_count = 0;
@@ -131,10 +135,11 @@ esp_err_t tinybms_adapter_convert(uart_bms_live_data_t *dst)
     dst->serial_number[UART_BMS_SERIAL_NUMBER_MAX_LENGTH] = '\0';
     dst->serial_length = strlen(dst->serial_number);
 
-    // Cell data (TODO: implement cell voltage reading from 0x0000-0x000F)
+    // Cell data (REG 0-15) - Individual cell voltages in mV
     for (int i = 0; i < UART_BMS_CELL_COUNT; i++) {
-        dst->cell_voltage_mv[i] = 3300; // Default 3.3V per cell
-        dst->cell_balancing[i] = 0;
+        dst->cell_voltage_mv[i] = (uint16_t)get_cached_or_default(i, 0.0f);
+        // Cell balancing status from balancing_bits (bit i indicates cell i)
+        dst->cell_balancing[i] = (balancing >> i) & 0x01;
     }
 
     // Raw registers (optional - populate from cache if needed)
@@ -148,9 +153,13 @@ esp_err_t tinybms_adapter_convert(uart_bms_live_data_t *dst)
 
 bool tinybms_adapter_is_ready(void)
 {
-    // Check if critical configuration registers are cached
-    // For now, we only require basic configuration to be available
+    // Check if critical live data AND configuration registers are cached
     bool ready = true;
+
+    // Critical live data registers (must be available for real-time telemetry)
+    ready &= is_cached(0x0024); // pack_voltage_v
+    ready &= is_cached(0x0026); // pack_current_a
+    ready &= is_cached(0x002E); // state_of_charge
 
     // Battery configuration
     ready &= is_cached(0x0132); // battery_capacity_ah
@@ -163,7 +172,7 @@ bool tinybms_adapter_is_ready(void)
     ready &= is_cached(0x013E); // charge_overcurrent_a
 
     if (!ready) {
-        ESP_LOGD(TAG, "Adapter not ready - missing configuration registers");
+        ESP_LOGD(TAG, "Adapter not ready - missing critical registers");
     }
 
     return ready;
