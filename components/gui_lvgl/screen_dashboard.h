@@ -29,6 +29,11 @@ void screen_dashboard_update_system(const system_status_t *status);
  */
 void screen_dashboard_update_cells(const pack_stats_t *stats);
 
+/**
+ * @brief Met à jour les informations BMS du registre 501 (version FW, power type, current sensor).
+ */
+void screen_dashboard_update_bms_info(uint16_t reg501_value);
+
 void screen_dashboard_refresh_texts(void);
 
 #ifdef __cplusplus
@@ -43,6 +48,7 @@ public:
     void update_battery(const battery_status_t &status) { screen_dashboard_update_battery(&status); }
     void update_system(const system_status_t &status) { screen_dashboard_update_system(&status); }
     void update_cells(const pack_stats_t &stats) { screen_dashboard_update_cells(&stats); }
+    void update_bms_info(uint16_t reg501_value) { screen_dashboard_update_bms_info(reg501_value); }
     void refresh_texts() { screen_dashboard_refresh_texts(); }
 };
 

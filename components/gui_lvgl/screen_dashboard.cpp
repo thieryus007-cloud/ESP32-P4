@@ -46,6 +46,11 @@ static lv_obj_t *s_label_status_wifi = NULL;
 static lv_obj_t *s_label_status_storage = NULL;
 static lv_obj_t *s_label_status_errors = NULL;
 
+// Labels pour les informations du registre 501
+static lv_obj_t *s_label_fw_version = NULL;
+static lv_obj_t *s_label_power_type = NULL;
+static lv_obj_t *s_label_current_sensor = NULL;
+
 static lv_obj_t *s_title_card_soc = NULL;
 static lv_obj_t *s_title_card_temp = NULL;
 static lv_obj_t *s_title_card_power = NULL;
@@ -174,6 +179,20 @@ void screen_dashboard_create(lv_obj_t *parent)
     lv_label_set_text(s_label_voltage, "--.- V");
     lv_obj_set_style_text_font(s_label_voltage, &lv_font_montserrat_22, 0);
 
+    // Informations du registre 501 (BMS)
+    s_label_fw_version = lv_label_create(card_status);
+    lv_label_set_text(s_label_fw_version, "FW: --");
+    lv_obj_set_style_text_font(s_label_fw_version, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_pad_top(s_label_fw_version, 8, 0);
+
+    s_label_power_type = lv_label_create(card_status);
+    lv_label_set_text(s_label_power_type, "Power: --");
+    lv_obj_set_style_text_font(s_label_power_type, &lv_font_montserrat_12, 0);
+
+    s_label_current_sensor = lv_label_create(card_status);
+    lv_label_set_text(s_label_current_sensor, "Sensor: --");
+    lv_obj_set_style_text_font(s_label_current_sensor, &lv_font_montserrat_12, 0);
+
     create_status_row(card_status);
 }
 
@@ -261,6 +280,46 @@ void screen_dashboard_refresh_texts(void)
     }
     if (s_has_sys) {
         screen_dashboard_update_system(&s_last_sys);
+    }
+}
+
+void screen_dashboard_update_bms_info(uint16_t reg501_value)
+{
+    // Décodage du registre 501
+    uint8_t fw_version = reg501_value & 0xFF;        // LSB = Version firmware publique
+    uint8_t flags = (reg501_value >> 8) & 0xFF;      // MSB = Flags (BPT + BCS)
+
+    // Bit 0: BMS Power Type
+    bool is_high_power = (flags & 0x01) != 0;
+
+    // Bits 1-2: BMS Current Sensor
+    uint8_t sensor_type = (flags >> 1) & 0x03;
+
+    // Mise à jour des labels
+    if (s_label_fw_version) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "FW: v%u", fw_version);
+        lv_label_set_text(s_label_fw_version, buf);
+    }
+
+    if (s_label_power_type) {
+        const char *power_str = is_high_power ? "High Power" : "Low Power";
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Power: %s", power_str);
+        lv_label_set_text(s_label_power_type, buf);
+    }
+
+    if (s_label_current_sensor) {
+        const char *sensor_str;
+        switch (sensor_type) {
+            case 0x00: sensor_str = "Internal Resistor"; break;
+            case 0x01: sensor_str = "Internal HALL"; break;
+            case 0x02: sensor_str = "External"; break;
+            default:   sensor_str = "Unknown"; break;
+        }
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Sensor: %s", sensor_str);
+        lv_label_set_text(s_label_current_sensor, buf);
     }
 }
 
