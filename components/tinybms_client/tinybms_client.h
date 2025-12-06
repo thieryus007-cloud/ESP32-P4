@@ -31,9 +31,15 @@ extern "C" {
 #define TINYBMS_UART_TXD_PIN       26
 #define TINYBMS_UART_BAUD_RATE     115200
 
-// Transaction timeouts
-#define TINYBMS_TIMEOUT_MS         750
+// Transaction timeouts (aligned with web interface: tinybms.js line 358-361)
+// Web interface uses 2000ms read timeout, 800ms write timeout
+#define TINYBMS_TIMEOUT_MS         2000
+#define TINYBMS_WRITE_TIMEOUT_MS   800
 #define TINYBMS_RETRY_COUNT        3
+
+// UART buffer flush delay (aligned with web interface: tinybms.js line 289)
+// Web interface uses 100ms wait after flush before sending commands
+#define TINYBMS_FLUSH_DELAY_MS     100
 
 /**
  * @brief TinyBMS connection state

@@ -294,7 +294,9 @@ static esp_err_t perform_write_with_retry(uint16_t address, uint16_t value)
 
 static esp_err_t verify_write(uint16_t address, uint16_t expected, uint16_t *readback_out)
 {
-    vTaskDelay(pdMS_TO_TICKS(50));
+    // Wait for EEPROM write to complete before verification
+    // Web interface uses 100ms between register writes (server.js line 122)
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
     uint16_t readback = 0;
     esp_err_t ret = perform_read_with_retry(address, &readback);
     if (ret != ESP_OK) {
@@ -366,7 +368,7 @@ static esp_err_t read_register_internal(uint16_t address, uint16_t *value)
     // Flush UART input buffer before sending request to avoid residual data
     // This matches the web interface strategy (tinybms.js line 287-289)
     uart_flush_input(TINYBMS_UART_NUM);
-    vTaskDelay(pdMS_TO_TICKS(50)); // Short delay after flush (web uses 100ms)
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS)); // 100ms delay after flush (aligned with web interface)
 
     // Build request frame
     esp_err_t ret = tinybms_build_read_frame(tx_frame, address);
@@ -467,8 +469,9 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
     const size_t min_frame_len = 5; // preamble + len + cmd + CRC
 
     // Flush UART input buffer before sending request to avoid residual data
+    // Aligned with web interface strategy (tinybms.js lines 469-475)
     uart_flush_input(TINYBMS_UART_NUM);
-    vTaskDelay(pdMS_TO_TICKS(50)); // Short delay after flush
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS)); // 100ms delay after flush (aligned with web interface)
 
     // Build write frame
     esp_err_t ret = tinybms_build_write_frame(tx_frame, address, value);
@@ -485,9 +488,9 @@ static esp_err_t write_register_internal(uint16_t address, uint16_t value)
 
     uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
 
-    // Wait for ACK/NACK
+    // Wait for ACK/NACK (use write-specific timeout, web uses 800ms)
     TickType_t start_time = xTaskGetTickCount();
-    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_WRITE_TIMEOUT_MS);
 
     TickType_t deadline = start_time + timeout_ticks;
     while (xTaskGetTickCount() < deadline) {
@@ -575,6 +578,10 @@ static esp_err_t send_reset_command_internal(void)
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
     const size_t min_frame_len = 5; // preamble + len + cmd + CRC
+
+    // Flush UART input buffer before sending command (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
 
     // Build reset frame
     esp_err_t ret = tinybms_build_reset_frame(tx_frame);
@@ -851,6 +858,10 @@ static esp_err_t read_block_internal(uint16_t start_address, uint8_t count, uint
     size_t rx_len = 0;
     const size_t min_frame_len = 5;
 
+    // Flush UART input buffer before sending request (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
+
     // Build read block frame
     esp_err_t ret = tinybms_build_read_block_frame(tx_frame, start_address, count);
     if (ret != ESP_OK) {
@@ -948,6 +959,10 @@ static esp_err_t write_block_internal(uint16_t start_address, uint8_t count, con
     size_t rx_len = 0;
     const size_t min_frame_len = 5;
 
+    // Flush UART input buffer before sending request (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
+
     // Build write block frame
     esp_err_t ret = tinybms_build_write_block_frame(tx_frame, start_address, values, count);
     if (ret != ESP_OK) {
@@ -966,9 +981,9 @@ static esp_err_t write_block_internal(uint16_t start_address, uint8_t count, con
 
     uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
 
-    // Wait for ACK/NACK
+    // Wait for ACK/NACK (use write-specific timeout)
     TickType_t start_time = xTaskGetTickCount();
-    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_WRITE_TIMEOUT_MS);
     TickType_t deadline = start_time + timeout_ticks;
 
     while (xTaskGetTickCount() < deadline) {
@@ -1052,6 +1067,10 @@ static esp_err_t modbus_read_internal(uint16_t start_address, uint16_t quantity,
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
     const size_t min_frame_len = 5;
+
+    // Flush UART input buffer before sending request (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
 
     // Build MODBUS read frame
     esp_err_t ret = tinybms_build_modbus_read_frame(tx_frame, start_address, quantity);
@@ -1150,6 +1169,10 @@ static esp_err_t modbus_write_internal(uint16_t start_address, uint16_t quantity
     size_t rx_len = 0;
     const size_t min_frame_len = 5;
 
+    // Flush UART input buffer before sending request (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
+
     // Build MODBUS write frame
     esp_err_t ret = tinybms_build_modbus_write_frame(tx_frame, start_address, values, quantity);
     if (ret != ESP_OK) {
@@ -1168,9 +1191,9 @@ static esp_err_t modbus_write_internal(uint16_t start_address, uint16_t quantity
 
     uart_wait_tx_done(TINYBMS_UART_NUM, pdMS_TO_TICKS(20));
 
-    // Wait for ACK/NACK
+    // Wait for ACK/NACK (use write-specific timeout)
     TickType_t start_time = xTaskGetTickCount();
-    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_TIMEOUT_MS);
+    TickType_t timeout_ticks = pdMS_TO_TICKS(TINYBMS_WRITE_TIMEOUT_MS);
     TickType_t deadline = start_time + timeout_ticks;
 
     while (xTaskGetTickCount() < deadline) {
@@ -1387,6 +1410,10 @@ static esp_err_t simple_command_internal(uint8_t command, uint8_t *response_fram
     uint8_t rx_buffer[TINYBMS_MAX_FRAME_LEN];
     size_t rx_len = 0;
     const size_t min_frame_len = 5;
+
+    // Flush UART input buffer before sending command (aligned with web interface)
+    uart_flush_input(TINYBMS_UART_NUM);
+    vTaskDelay(pdMS_TO_TICKS(TINYBMS_FLUSH_DELAY_MS));
 
     esp_err_t ret = tinybms_build_simple_command_frame(tx_frame, command);
     if (ret != ESP_OK) {
